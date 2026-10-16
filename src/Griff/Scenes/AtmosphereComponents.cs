@@ -299,7 +299,7 @@ public sealed class SoundPlayer : Component
 
     /// <summary>Plays its sound now.</summary>
     [Action]
-    private void Play(IGameContext game) => game.Play(this);
+    private void Play(ISounds sounds) => sounds.Play(this);
 
     // Whether it's had its start, so OnStart plays once.
     internal bool Started { get; set; }

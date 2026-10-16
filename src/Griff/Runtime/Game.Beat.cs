@@ -5,8 +5,6 @@ namespace Griff.Runtime;
 // Beat clocks: keeping time with the music, and things that bop to it.
 public sealed partial class Game
 {
-    bool IGameContext.OnBeat(string? clock, int every, int offset) => _beat.OnBeat(clock, every, offset);
-
     /// <summary>
     /// The clock something names (an entity with a Beat Clock), or the scene's first when it names none.
     /// </summary>

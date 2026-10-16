@@ -14,8 +14,6 @@ public sealed partial class Game
     public static void Face(Entity entity, int direction) =>
         LevelSystem.Face(entity, direction);
 
-    void IGameContext.FireVolley(Shooter shooter) => _levels.FireVolley(shooter);
-
     /// <summary>
     /// Who's touching what this frame, for checkpoints, doors and dialogue: the thing touched, and whatever touched it
     /// (the body that owns the collider, so a player's hitbox child counts as the player), with its collider's layer.

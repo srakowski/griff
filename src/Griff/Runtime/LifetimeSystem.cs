@@ -6,8 +6,11 @@ namespace Griff.Runtime;
 /// What comes and goes with no code: entities whose Lifetime runs out, Spawners making more, and what was destroyed
 /// during a step, gone at its end.
 /// </summary>
-internal sealed class LifetimeSystem : GameSystem
+internal sealed class LifetimeSystem : GameSystem, ISpawning
 {
+    // A spawner's spawns: what's made comes and goes here.
+    Entity ISpawning.Spawn(string prefab, System.Numerics.Vector2 position) => Game.Spawn(prefab, position);
+
     private readonly List<Entity> _pendingDestroy = [];
 
     // The batch of destroys being done (those asked for meanwhile wait for the next).
@@ -49,8 +52,9 @@ internal sealed class LifetimeSystem : GameSystem
 
     internal void RunSpawners()
     {
+        var (flags, beats) = (Game.Services.Get<IFlags>()!, Game.Services.Get<IBeats>()!);
         foreach (var spawner in Game.Active<Spawner>())
-            spawner.Advance(Game.Time.Delta, Game);
+            spawner.Advance(Game.Time.Delta, this, flags, beats);
     }
 
     internal void FlushDestroys()

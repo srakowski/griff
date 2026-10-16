@@ -21,7 +21,7 @@ namespace Griff.Runtime;
 /// }
 /// </code>
 /// </example>
-public abstract class Behavior : Component, IHealthListener
+public abstract class Behavior : Component
 {
     [NotState("the game it runs in, set as it starts (or is put back by a rewind)")]
     private Game? _game;
@@ -293,13 +293,13 @@ public abstract class Behavior : Component, IHealthListener
 
     internal void RunClick() => OnClick();
 
-    void IHealthListener.Damaged(float amount, Entity? source)
+    internal void RunDamaged(float amount, Entity? source)
     {
         if (IsStarted)
             OnDamage(amount, source);
     }
 
-    void IHealthListener.Died()
+    internal void RunDied()
     {
         if (IsStarted)
             OnDeath();

@@ -6,13 +6,14 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Griff.Tests.Architecture;
 
 /// <summary>
-/// Guards the core's layers: Scenes is data (entities, components, serialization), Runtime simulates it and Rendering
-/// draws it, so nothing in Griff.Scenes may use Griff.Runtime or Griff.Rendering, and nothing in Griff.Runtime (or a
-/// module) may use Griff.Rendering. What both sides need lives below them, in Griff (Color, Box, Ease, Rand) and
-/// Griff.Input (Key, the built-in actions); a component that needs the game gets an IGameContext; and what the runtime
-/// asks of a view (the main camera, its size, the view's projection, what's drawn on top) it asks Griff.Runtime.Views,
-/// which the renderer reads too. A use counts however far round it goes: every type a type uses is followed through the
-/// layers, so a Scenes type using an Editing type that uses the Runtime uses the Runtime.
+/// Guards the core's layers: Scenes holds entities and components (each holding its own state and advancing it when its
+/// system asks), Runtime runs them and Rendering draws them, so nothing in Griff.Scenes may use Griff.Runtime or
+/// Griff.Rendering, and nothing in Griff.Runtime (or a module) may use Griff.Rendering. What both sides need lives below
+/// them, in Griff (Color, Box, Ease, Rand) and Griff.Input (Key, the built-in actions); a component that needs the game
+/// asks for a service by type (an IGameService), which the one system that owns that part of the game provides, and
+/// keeps none; and what the runtime asks of a view (the main camera, its size, the view's projection, what's drawn on
+/// top) it asks Griff.Runtime.Views, which the renderer reads too. A use counts however far round it goes: every type a
+/// type uses is followed through the layers, so a Scenes type using an Editing type that uses the Runtime uses the Runtime.
 /// </summary>
 public sealed class LayerTests
 {
@@ -22,8 +23,8 @@ public sealed class LayerTests
         var uses = Graph().Reaching(IsScenes, used => InLayer(used, "Griff.Runtime") || InLayer(used, "Griff.Rendering"));
 
         Assert.True(uses.Count == 0,
-            "Griff.Scenes is data and mustn't use Griff.Runtime or Griff.Rendering, by way of another namespace either (pass " +
-            "what a component needs in, or move the code up a layer):\n" + string.Join("\n", uses));
+            "Griff.Scenes holds components, each its own state, and mustn't use Griff.Runtime or Griff.Rendering, by way of another namespace either (ask for " +
+            "the service a component needs, or move the code up a layer):\n" + string.Join("\n", uses));
     }
 
     // The runtime runs a game without knowing how it's drawn: the renderer reads the game, not the other way round.
@@ -38,7 +39,7 @@ public sealed class LayerTests
     }
 
     // A module keeps the same layers: the files its components are declared in (with the types that go with them, such
-    // as a board's rules) are data, and its systems and drawing use them, not the other way round.
+    // as a board's rules) hold their own state, and its systems and drawing use them, not the other way round.
     [Fact]
     public void ModuleComponents_DoNotUseRuntimeOrRendering()
     {
@@ -55,8 +56,104 @@ public sealed class LayerTests
             used => InLayer(used, "Griff.Runtime") || InLayer(used, "Griff.Rendering") || DerivesFrom(used, system));
 
         Assert.True(uses.Count == 0,
-            "A module's components are data and mustn't use Griff.Runtime, Griff.Rendering or its systems, by way of another " +
+            "A module's components hold their own state and mustn't use Griff.Runtime, Griff.Rendering or its systems, by way of another " +
             "namespace either (move the code to its system):\n" + string.Join("\n", uses));
+    }
+
+    // A component reaches the game through services asked for by type, each the one system's that owns that part of the
+    // game: no interface the game implements whole that grows with every action, and nothing provides a service but a system.
+    [Fact]
+    public void Services_AreEachProvidedByTheOneSystemThatOwnsThem()
+    {
+        var compilation = Graph().Compilation;
+        var service = compilation.GetTypeByMetadataName("Griff.Scenes.IGameService")!;
+        var system = compilation.GetTypeByMetadataName("Griff.Runtime.GameSystem")!;
+        var types = AllTypes(compilation.Assembly.GlobalNamespace).ToList();
+        var services = types.Where(t => t.TypeKind == TypeKind.Interface && t.AllInterfaces.Contains(service, SymbolEqualityComparer.Default)).ToList();
+        var wrong = new List<string>();
+        foreach (var each in services)
+        {
+            var providers = types.Where(t => t.TypeKind == TypeKind.Class && t.AllInterfaces.Contains(each, SymbolEqualityComparer.Default)).ToList();
+            if (providers.Count != 1 || !DerivesFrom(providers[0], system))
+                wrong.Add($"{Name(each)}: provided by {(providers.Count == 0 ? "nothing" : string.Join(", ", providers.Select(p => Name(p))))}");
+        }
+
+        Assert.NotEmpty(services);
+        Assert.True(wrong.Count == 0,
+            "Each service a component asks for (an IGameService) is provided by the one system that owns that part of the game " +
+            "(not the Game, not a component):\n" + string.Join("\n", wrong));
+    }
+
+    // A component holds its own state and the steps it advances when its system asks: the game's services are handed to
+    // the action or step that needs one, never kept, so a component (Griff's or a module's) has no field of one.
+    [Fact]
+    public void Components_KeepNoServiceOfTheGame()
+    {
+        var compilation = Graph().Compilation;
+        var component = compilation.GetTypeByMetadataName("Griff.Scenes.Component")!;
+        var service = compilation.GetTypeByMetadataName("Griff.Scenes.IGameService")!;
+        var services = compilation.GetTypeByMetadataName("Griff.Scenes.IGameServices")!;
+        bool IsService(ITypeSymbol type) => type switch
+        {
+            IArrayTypeSymbol array => IsService(array.ElementType),
+            INamedTypeSymbol named => SymbolEqualityComparer.Default.Equals(named.OriginalDefinition, services) ||
+                                      SymbolEqualityComparer.Default.Equals(named.OriginalDefinition, service) ||
+                                      named.AllInterfaces.Contains(service, SymbolEqualityComparer.Default) ||
+                                      named.TypeArguments.Any(IsService),
+            _ => false,
+        };
+        var kept = AllTypes(compilation.Assembly.GlobalNamespace)
+            .Where(t => DerivesFrom(t, component) && (IsScenes(t) || InLayer(t, "Griff.Modules")))
+            .SelectMany(t => t.GetMembers().OfType<IFieldSymbol>().Where(f => !f.IsConst && IsService(f.Type))
+                .Select(f => $"{Name(t)}.{(f.AssociatedSymbol ?? f).Name}"))
+            .ToList();
+
+        Assert.True(kept.Count == 0,
+            "A component holds only its own state: pass the service an action or step needs in (its first parameter, or " +
+            "what its system hands it) rather than keeping it:\n" + string.Join("\n", kept));
+    }
+
+    // No interface of Griff.Scenes serves only to get past these layers to the runtime (a script told of its health's
+    // damage, the save data a carried value is kept in): what a component asks of the game, or tells it, it asks a
+    // service, and the system providing it does the rest. Nor does the game implement one whole.
+    [Fact]
+    public void ScenesInterfaces_ReachTheRuntimeOnlyAsServices()
+    {
+        var compilation = Graph().Compilation;
+        var service = compilation.GetTypeByMetadataName("Griff.Scenes.IGameService")!;
+        var services = compilation.GetTypeByMetadataName("Griff.Scenes.IGameServices")!;
+        var types = AllTypes(compilation.Assembly.GlobalNamespace).ToList();
+        var only = types
+            .Where(i => i.TypeKind == TypeKind.Interface && IsScenes(i) && i.DeclaredAccessibility != Accessibility.Public &&
+                        !i.AllInterfaces.Contains(service, SymbolEqualityComparer.Default))
+            .Select(i => (Interface: i, By: types.Where(t => t.TypeKind != TypeKind.Interface && t.AllInterfaces.Contains(i, SymbolEqualityComparer.Default)).ToList()))
+            .Where(x => x.By.Count > 0 && x.By.All(t => InLayer(t, "Griff.Runtime")))
+            .Select(x => $"{Name(x.Interface)}: implemented only by {string.Join(", ", x.By.Select(t => Name(t)))}")
+            .ToList();
+        var game = compilation.GetTypeByMetadataName("Griff.Runtime.Game")!;
+
+        Assert.True(only.Count == 0,
+            "An interface of Griff.Scenes that only the runtime implements is a way past the layers: make it a service " +
+            "(an IGameService) a system provides:\n" + string.Join("\n", only));
+        Assert.DoesNotContain(game.AllInterfaces, i => IsScenes(i));
+    }
+
+    private static IEnumerable<INamedTypeSymbol> AllTypes(INamespaceSymbol ns)
+    {
+        foreach (var type in ns.GetTypeMembers())
+        {
+            yield return type;
+            foreach (var nested in Nested(type))
+                yield return nested;
+        }
+
+        foreach (var inner in ns.GetNamespaceMembers())
+        {
+            foreach (var type in AllTypes(inner))
+                yield return type;
+        }
+
+        static IEnumerable<INamedTypeSymbol> Nested(INamedTypeSymbol type) => type.GetTypeMembers().SelectMany(t => Nested(t).Prepend(t));
     }
 
     // The rules see through a detour: a type reaching a layer by way of another namespace is caught, however it names it.

@@ -7,8 +7,11 @@ namespace Griff.Runtime;
 /// What's around the player: rooms (their music, and the camera taken over to the next), lights, sounds heard from
 /// where they're played, sound sources and sound players, and the sound's own clock each step.
 /// </summary>
-internal sealed class AtmosphereSystem : GameSystem
+internal sealed class AtmosphereSystem : GameSystem, ISounds
 {
+    // A sound player's Play action.
+    void ISounds.Play(SoundPlayer player) => Play(player);
+
     // The music rooms last started, so walking back into a room with the same music doesn't start it over.
     private string? _roomMusic;
 

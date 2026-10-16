@@ -43,9 +43,9 @@ internal sealed class TriggerSystem : GameSystem
             if (ComponentActions.Find(component, action) is not { } found)
                 continue;
             if (number is { } value)
-                found.Invoke(component, Game, value);
+                found.Invoke(component, Game.Services, value);
             else
-                found.Invoke(component, Game, with);
+                found.Invoke(component, Game.Services, with);
             done++;
         }
 

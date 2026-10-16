@@ -200,7 +200,7 @@ public sealed class Health : Component, ICarried
 
         if (Current > 0)
             Hurt = true;
-        Notify(listener => listener.Damaged(amount, source));
+        News?.Damaged(this, amount, source);
         Damaged?.Invoke(amount, source);
         if (IsDead)
             Die();
@@ -255,7 +255,7 @@ public sealed class Health : Component, ICarried
         _invincibleLeft = 0;
         foreach (var sprite in Sprites())
             sprite.Blink(0);
-        Notify(listener => listener.Died());
+        News?.Died(this);
         Died?.Invoke();
     }
 
@@ -263,14 +263,8 @@ public sealed class Health : Component, ICarried
     private IEnumerable<Sprite> Sprites() =>
         Entity is null ? [] : Entity.SelfAndDescendants().SelectMany(e => e.GetComponents<Sprite>());
 
-    // Tells the entity's scripts (OnDamage, OnDeath).
-    private void Notify(Action<IHealthListener> action)
-    {
-        if (Entity is null)
-            return;
-        foreach (var listener in Entity.Components.OfType<IHealthListener>().ToList())
-            action(listener);
-    }
+    // Who tells the entity's scripts (OnDamage, OnDeath): the game playing its scene, at once, whatever dealt the damage.
+    private IHealthNews? News => Entity?.Scene?.Services?.Get<IHealthNews>();
 
     /// <summary>The health that counts for <paramref name="entity"/>: its own, or its nearest ancestor's (a hitbox child's owner).</summary>
     public static Health? Of(Entity entity)
@@ -839,19 +833,19 @@ public sealed class Spawner : Component
     private float _untilNext = float.NaN;
 
     /// <summary>Counts down and spawns when due. Called by the game.</summary>
-    internal void Advance(float seconds, IGameContext game)
+    internal void Advance(float seconds, ISpawning spawning, IFlags flags, IBeats beats)
     {
-        ForgetGone(game.Scene);
+        ForgetGone();
         if (float.IsNaN(_untilNext))
             _untilNext = Delay;
-        if (IsFinished || !Running || string.IsNullOrWhiteSpace(Prefab) || !game.FlagHolds(NeedsFlag))
+        if (IsFinished || !Running || string.IsNullOrWhiteSpace(Prefab) || !flags.Holds(NeedsFlag))
             return;
 
         // On the beat, the count down is just its Delay, and each spawn waits for a beat it steps on.
         _untilNext -= seconds;
         if (Beats > 0)
             _untilNext = Math.Max(_untilNext, 0);
-        if (_untilNext > 0 || (Beats > 0 && !game.OnBeat(Clock, Beats, BeatOffset)))
+        if (_untilNext > 0 || (Beats > 0 && !beats.OnBeat(Clock, Beats, BeatOffset)))
             return;
 
         // Full: wait for room, then spawn straight away (but just the one, not a burst for all the time spent waiting).
@@ -861,7 +855,7 @@ public sealed class Spawner : Component
             return;
         }
 
-        SpawnOne(game);
+        SpawnOne(spawning);
         _untilNext = Beats > 0 ? 0 : Math.Max(_untilNext + Math.Max(Interval, 0.01f), 0);
     }
 
@@ -870,18 +864,18 @@ public sealed class Spawner : Component
     /// <see cref="Count"/>, or while <see cref="MaxAlive"/> of its spawns are around. Its own timing carries on as it was.
     /// </summary>
     [Action("Spawn")]
-    private void SpawnNow(IGameContext game)
+    private void SpawnNow(ISpawning spawning)
     {
-        ArgumentNullException.ThrowIfNull(game);
-        ForgetGone(game.Scene);
+        ForgetGone();
         if (IsFinished || string.IsNullOrWhiteSpace(Prefab) || (MaxAlive > 0 && _alive.Count >= MaxAlive))
             return;
-        SpawnOne(game);
+        SpawnOne(spawning);
     }
 
-    // Its spawns no longer in the scene make room, without any garbage.
-    private void ForgetGone(Scene scene)
+    // Its spawns no longer in its scene make room, without any garbage.
+    private void ForgetGone()
     {
+        var scene = Entity?.Scene;
         for (var i = _alive.Count - 1; i >= 0; i--)
         {
             if (_alive[i].Scene != scene)
@@ -889,10 +883,10 @@ public sealed class Spawner : Component
         }
     }
 
-    private void SpawnOne(IGameContext game)
+    private void SpawnOne(ISpawning spawning)
     {
         var position = Entity!.Transform.WorldPosition;
-        var entity = game.Spawn(Prefab!, new Vector2(position.X, position.Y) + (Radius > 0 ? Rand.InsideCircle(Radius) : Vector2.Zero));
+        var entity = spawning.Spawn(Prefab!, new Vector2(position.X, position.Y) + (Radius > 0 ? Rand.InsideCircle(Radius) : Vector2.Zero));
         _alive.Add(entity);
         Spawned++;
         EntitySpawned?.Invoke(entity);
@@ -1001,14 +995,6 @@ public sealed class Typewriter : Component
         ',' or ';' or ':' => PunctuationPause / 2,
         _ => 0,
     };
-}
-
-/// <summary>A component told when its entity's <see cref="Health"/> is hurt or dies: scripts are, once started.</summary>
-internal interface IHealthListener
-{
-    void Damaged(float amount, Entity? source);
-
-    void Died();
 }
 
 /// <summary>

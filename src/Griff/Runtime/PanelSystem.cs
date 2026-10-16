@@ -8,8 +8,13 @@ namespace Griff.Runtime;
 /// keyboard back to what was picked as they close; runs a controls screen's rebinding, and fills in input prompts.
 /// Keeps the panels open and those already seen.
 /// </summary>
-internal sealed class PanelSystem : GameSystem
+internal sealed class PanelSystem : GameSystem, IPanels
 {
+    // A panel's Open and Close.
+    void IPanels.Open(Panel panel) => OpenPanel(panel);
+
+    void IPanels.Close(Panel panel) => ClosePanel(panel);
+
     // Open panels, oldest first, each with what was picked before it opened (given back as it closes); those already
     // seen; and the action a controls screen is rebinding, with the button that asked.
     private readonly List<(Panel Panel, Component? FocusBefore)> _open = [];

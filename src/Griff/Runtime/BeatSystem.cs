@@ -5,8 +5,9 @@ namespace Griff.Runtime;
 /// <summary>
 /// Counts the music's beats for beat clocks (BeatClock) and what steps to them.
 /// </summary>
-internal sealed class BeatSystem : GameSystem
+internal sealed class BeatSystem : GameSystem, IBeats
 {
+
     // Beats and bars as the messages' data, boxed once: a beat landing makes no garbage (for a song's first thousand beats).
     private static readonly object[] BoxedBeats = [.. Enumerable.Range(0, 1024).Select(i => (object)i)];
 

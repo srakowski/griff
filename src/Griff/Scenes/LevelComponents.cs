@@ -481,11 +481,7 @@ public sealed class Shooter : Component
 
     /// <summary>Fires one volley now, running or not: at its Target if it has one in the scene, otherwise its way.</summary>
     [Action("Fire")]
-    private void FireNow(IGameContext game)
-    {
-        ArgumentNullException.ThrowIfNull(game);
-        game.FireVolley(this);
-    }
+    private void FireNow(IVolleys volleys) => volleys.Fire(this);
 
     /// <summary>
     /// Counts down; returns true when a volley is due (and resets the count). Stepping to the <see cref="Beats"/>, a volley
@@ -838,7 +834,7 @@ public sealed class Dialogue : Component
 
     /// <summary>Starts saying it now, as if the player had pressed Interact beside it: a cutscene, a boss appearing. Not while another dialogue is being said.</summary>
     [Action("Start")]
-    private void Begin(IGameContext game) => game.StartDialogue(this);
+    private void Begin(IDialogues dialogues) => dialogues.Start(this);
 
     /// <summary>What a row of <see cref="Lines"/> is.</summary>
     internal enum RowKind

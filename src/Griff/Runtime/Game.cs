@@ -11,7 +11,7 @@ namespace Griff.Runtime;
 /// game's <see cref="Frame"/>, phase by phase, from starting new behaviors through physics to sound. Spawning and
 /// destroying during a step are safe; destroys take effect at the end of the step.
 /// </summary>
-public sealed partial class Game : IGameContext
+public sealed partial class Game
 {
     private readonly EntityPairSet _touches = new();
 
@@ -27,6 +27,7 @@ public sealed partial class Game : IGameContext
     public Game(Scene scene, IInput input)
     {
         _input = input;
+        _services = new GameServices(this);
         Scene = scene;
         Net = new NetSession(this);
         Debug = new DebugDraw(Time);
@@ -53,7 +54,28 @@ public sealed partial class Game : IGameContext
     private GameRandom? _random;
 
     [field: NotState("put back with the snapshot's scene")]
-    public Scene Scene { get; internal set; }
+    public Scene Scene
+    {
+        get;
+        internal set
+        {
+            // The scene played reaches the game's services (see Scene.Services); the one it leaves no longer does.
+            if (field is { } left && left.Services == _services)
+                left.Services = null;
+            field = value;
+            value.Services = _services;
+        }
+    }
+
+    // What the game's systems provide its components, asked for by type (see IGameService).
+    [NotState("the systems' own, the same for the game's life")]
+    private readonly GameServices _services;
+
+    /// <summary>
+    /// The services the game's systems provide its components and scripts, asked for by type (see
+    /// <see cref="IGameService"/>): <c>Game.Services.Get&lt;IFlags&gt;()</c>.
+    /// </summary>
+    public IGameServices Services => _services;
 
     /// <summary>Loads scenes by name for <see cref="LoadScene"/>. Set by the host (editor or player).</summary>
     [field: NotState("the host's")]

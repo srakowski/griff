@@ -6,8 +6,9 @@ namespace Griff.Runtime;
 /// Which input a component takes: Game.Focus gives an entity's components the focus of its player, and Game.HasFocus
 /// says whether a component or entity has it.
 /// </summary>
-internal sealed class FocusSystem : GameSystem
+internal sealed class FocusSystem : GameSystem, IInputFocus
 {
+
     public override string Name => "Focus";
 
     public void Focus(Entity entity)

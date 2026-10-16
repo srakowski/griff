@@ -10,8 +10,9 @@ namespace Griff.Scenes;
 /// component's own methods count as soon as they're marked. The method returns nothing and takes at most one value it's
 /// done with: a number (<see cref="float"/>), a whole number (<see cref="int"/>), true or false (<see cref="bool"/>) or a
 /// name (<see cref="string"/>). Its <c>///</c> summary says what it does, in the Inspector and to agents. A script's
-/// action reaches the game through its own <c>Game</c>; one of Griff's components can take the game it runs in as its
-/// first parameter (an IGameContext) when it needs it.
+/// action reaches the game through its own <c>Game</c>; one of Griff's components holds only its own state, so an action
+/// that needs the game takes the service it needs as its first parameter (an IGameService, such as the panels or the
+/// flags), which the system that owns that part of the game provides.
 /// </summary>
 /// <example>
 /// <code>
@@ -56,11 +57,11 @@ public sealed class PoweredAttribute : Attribute
 /// </summary>
 public sealed class ComponentAction
 {
-    private readonly Action<Component, IGameContext?, float, string?> _invoke;
+    private readonly Action<Component, IGameServices?, float, string?> _invoke;
     private readonly object? _default;
 
     internal ComponentAction(Type component, MethodInfo method, string name, Type? valueType, string? valueName, object? fallback, bool takesGame,
-        Action<Component, IGameContext?, float, string?> invoke, IReadOnlyList<string> formerNames)
+        Action<Component, IGameServices?, float, string?> invoke, IReadOnlyList<string> formerNames)
     {
         FormerNames = formerNames;
         ComponentType = component;
@@ -105,7 +106,7 @@ public sealed class ComponentAction
         ? Method.GetParameters().LastOrDefault()?.GetCustomAttribute<NamesAttribute>()
         : null;
 
-    /// <summary>True if it needs the game it runs in (it's set off only while one runs).</summary>
+    /// <summary>True if it needs a service of the game it runs in (it's set off only while one runs).</summary>
     public bool TakesGame { get; }
 
     /// <summary>
@@ -125,7 +126,7 @@ public sealed class ComponentAction
     /// Does it on <paramref name="component"/>, with <paramref name="value"/> read as its value (a number, true or false, or
     /// a name), or its <see cref="DefaultValue"/> when that's empty or doesn't read as one.
     /// </summary>
-    internal void Invoke(Component component, IGameContext? game, string? value)
+    internal void Invoke(Component component, IGameServices? game, string? value)
     {
         if (ValueType is null || ValueType == typeof(string))
         {
@@ -137,7 +138,7 @@ public sealed class ComponentAction
     }
 
     /// <summary>Does it on <paramref name="component"/> with <paramref name="value"/> as its value: a wire's signal, a script's number.</summary>
-    internal void Invoke(Component component, IGameContext? game, float value) =>
+    internal void Invoke(Component component, IGameServices? game, float value) =>
         _invoke(component, game, value, ValueType == typeof(string) ? value.ToString(CultureInfo.InvariantCulture) : null);
 
     // The number a value says (true is 1, false 0), or the default's.
@@ -309,7 +310,7 @@ public static class ComponentActions
 
         // Anything that can have focus can be given it (see FocusAttribute), unless it says for itself what Focus does.
         if (ComponentFocus.Has(type) && !actions.Any(a => SameName(a.Name, FocusName)))
-            actions.Add(new ComponentAction(type, FocusMethod, FocusName, null, null, null, takesGame: true, (c, g, _, _) => ComponentFocus.Focus(c, g), []));
+            actions.Add(new ComponentAction(type, FocusMethod, FocusName, null, null, null, takesGame: true, (c, g, _, _) => ComponentFocus.Focus(c, Need<IInputFocus>(g, FocusMethod)), []));
 
         return (actions, powered);
     }
@@ -327,7 +328,10 @@ public static class ComponentActions
         if (name.Length == 0 || name.Contains('.', StringComparison.Ordinal))
             throw new NotSupportedException($"{type.Name}.{method.Name}'s action needs a name without dots.");
         var parameters = method.GetParameters();
-        var takesGame = parameters.Length > 0 && parameters[0].ParameterType == typeof(IGameContext);
+        var service = parameters.Length > 0 && parameters[0].ParameterType.IsInterface && typeof(IGameService).IsAssignableFrom(parameters[0].ParameterType)
+            ? parameters[0].ParameterType
+            : null;
+        var takesGame = service is not null;
         var values = parameters.Skip(takesGame ? 1 : 0).ToList();
         var valueType = values.Count == 1 ? values[0].ParameterType : null;
         var supported = valueType is null || valueType == typeof(float) || valueType == typeof(int) || valueType == typeof(bool) || valueType == typeof(string);
@@ -345,15 +349,16 @@ public static class ComponentActions
             : valueType == typeof(int) ? 1
             : valueType == typeof(bool) ? true
             : null;
-        return new ComponentAction(type, method, name, valueType, valueType is null ? null : values[0].Name, fallback, takesGame, Bind(method, takesGame, valueType),
+        return new ComponentAction(type, method, name, valueType, valueType is null ? null : values[0].Name, fallback, takesGame, Bind(method, service, valueType),
             [.. method.GetCustomAttributes<FormerNameAttribute>(inherit: false).Select(a => a.Name.Replace(" ", "", StringComparison.Ordinal))]);
     }
 
-    // A call that allocates nothing: the method bound as an open delegate on its declaring type, with the value passed as
-    // a number (or a name) and changed to what the method takes.
-    private static Action<Component, IGameContext?, float, string?> Bind(MethodInfo method, bool takesGame, Type? valueType)
+    // A call that allocates nothing: the method bound as an open delegate on its declaring type, with the service it asks
+    // for found among the game's (when it asks for one) and the value passed as a number (or a name) and changed to what
+    // the method takes.
+    private static Action<Component, IGameServices?, float, string?> Bind(MethodInfo method, Type? service, Type? valueType)
     {
-        var shape = (takesGame, valueType) switch
+        var shape = (service is not null, valueType) switch
         {
             (false, null) => nameof(BindNone),
             (true, null) => nameof(BindGame),
@@ -366,71 +371,75 @@ public static class ComponentActions
             (false, _) => nameof(BindString),
             _ => nameof(BindGameString),
         };
-        var binder = typeof(ComponentActions).GetMethod(shape, BindingFlags.NonPublic | BindingFlags.Static)!.MakeGenericMethod(method.DeclaringType!);
-        return (Action<Component, IGameContext?, float, string?>)binder.Invoke(null, [method])!;
+        var generic = typeof(ComponentActions).GetMethod(shape, BindingFlags.NonPublic | BindingFlags.Static)!;
+        var binder = service is null ? generic.MakeGenericMethod(method.DeclaringType!) : generic.MakeGenericMethod(method.DeclaringType!, service);
+        return (Action<Component, IGameServices?, float, string?>)binder.Invoke(null, [method])!;
     }
 
-    private static IGameContext Need(IGameContext? game, MethodInfo method) =>
-        game ?? throw new InvalidOperationException($"{method.DeclaringType!.Name}.{method.Name} can only be done while the game runs.");
+    // The service an action asks for, from the game running it.
+    private static TService Need<TService>(IGameServices? game, MethodInfo method) where TService : class, IGameService =>
+        game is null ? throw new InvalidOperationException($"{method.DeclaringType!.Name}.{method.Name} can only be done while the game runs.")
+        : game.Get<TService>() ?? throw new InvalidOperationException(
+            $"{method.DeclaringType!.Name}.{method.Name} needs the game's {typeof(TService).Name}, which none of its systems provides.");
 
-    private static Action<Component, IGameContext?, float, string?> BindNone<T>(MethodInfo m) where T : class
+    private static Action<Component, IGameServices?, float, string?> BindNone<T>(MethodInfo m) where T : class
     {
         var d = m.CreateDelegate<Action<T>>();
         return (c, _, _, _) => d((T)(object)c);
     }
 
-    private static Action<Component, IGameContext?, float, string?> BindGame<T>(MethodInfo m) where T : class
+    private static Action<Component, IGameServices?, float, string?> BindGame<T, TService>(MethodInfo m) where T : class where TService : class, IGameService
     {
-        var d = m.CreateDelegate<Action<T, IGameContext>>();
-        return (c, g, _, _) => d((T)(object)c, Need(g, m));
+        var d = m.CreateDelegate<Action<T, TService>>();
+        return (c, g, _, _) => d((T)(object)c, Need<TService>(g, m));
     }
 
-    private static Action<Component, IGameContext?, float, string?> BindFloat<T>(MethodInfo m) where T : class
+    private static Action<Component, IGameServices?, float, string?> BindFloat<T>(MethodInfo m) where T : class
     {
         var d = m.CreateDelegate<Action<T, float>>();
         return (c, _, n, _) => d((T)(object)c, n);
     }
 
-    private static Action<Component, IGameContext?, float, string?> BindGameFloat<T>(MethodInfo m) where T : class
+    private static Action<Component, IGameServices?, float, string?> BindGameFloat<T, TService>(MethodInfo m) where T : class where TService : class, IGameService
     {
-        var d = m.CreateDelegate<Action<T, IGameContext, float>>();
-        return (c, g, n, _) => d((T)(object)c, Need(g, m), n);
+        var d = m.CreateDelegate<Action<T, TService, float>>();
+        return (c, g, n, _) => d((T)(object)c, Need<TService>(g, m), n);
     }
 
-    private static Action<Component, IGameContext?, float, string?> BindInt<T>(MethodInfo m) where T : class
+    private static Action<Component, IGameServices?, float, string?> BindInt<T>(MethodInfo m) where T : class
     {
         var d = m.CreateDelegate<Action<T, int>>();
         return (c, _, n, _) => d((T)(object)c, (int)MathF.Round(n));
     }
 
-    private static Action<Component, IGameContext?, float, string?> BindGameInt<T>(MethodInfo m) where T : class
+    private static Action<Component, IGameServices?, float, string?> BindGameInt<T, TService>(MethodInfo m) where T : class where TService : class, IGameService
     {
-        var d = m.CreateDelegate<Action<T, IGameContext, int>>();
-        return (c, g, n, _) => d((T)(object)c, Need(g, m), (int)MathF.Round(n));
+        var d = m.CreateDelegate<Action<T, TService, int>>();
+        return (c, g, n, _) => d((T)(object)c, Need<TService>(g, m), (int)MathF.Round(n));
     }
 
-    private static Action<Component, IGameContext?, float, string?> BindBool<T>(MethodInfo m) where T : class
+    private static Action<Component, IGameServices?, float, string?> BindBool<T>(MethodInfo m) where T : class
     {
         var d = m.CreateDelegate<Action<T, bool>>();
         return (c, _, n, _) => d((T)(object)c, n != 0);
     }
 
-    private static Action<Component, IGameContext?, float, string?> BindGameBool<T>(MethodInfo m) where T : class
+    private static Action<Component, IGameServices?, float, string?> BindGameBool<T, TService>(MethodInfo m) where T : class where TService : class, IGameService
     {
-        var d = m.CreateDelegate<Action<T, IGameContext, bool>>();
-        return (c, g, n, _) => d((T)(object)c, Need(g, m), n != 0);
+        var d = m.CreateDelegate<Action<T, TService, bool>>();
+        return (c, g, n, _) => d((T)(object)c, Need<TService>(g, m), n != 0);
     }
 
-    private static Action<Component, IGameContext?, float, string?> BindString<T>(MethodInfo m) where T : class
+    private static Action<Component, IGameServices?, float, string?> BindString<T>(MethodInfo m) where T : class
     {
         var d = m.CreateDelegate<Action<T, string?>>();
         return (c, _, _, s) => d((T)(object)c, s);
     }
 
-    private static Action<Component, IGameContext?, float, string?> BindGameString<T>(MethodInfo m) where T : class
+    private static Action<Component, IGameServices?, float, string?> BindGameString<T, TService>(MethodInfo m) where T : class where TService : class, IGameService
     {
-        var d = m.CreateDelegate<Action<T, IGameContext, string?>>();
-        return (c, g, _, s) => d((T)(object)c, Need(g, m), s);
+        var d = m.CreateDelegate<Action<T, TService, string?>>();
+        return (c, g, _, s) => d((T)(object)c, Need<TService>(g, m), s);
     }
 
     private static Action<Component, bool> BindSetter(PropertyInfo property)

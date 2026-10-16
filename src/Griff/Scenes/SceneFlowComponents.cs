@@ -75,14 +75,14 @@ public sealed class Minigame : Component
 
     /// <summary>Plays the minigame (not while it's already being played).</summary>
     [Action]
-    private void Play(IGameContext game) => game.PlayMinigame(Entity!, null);
+    private void Play(IMinigames minigames) => minigames.Play(Entity!, null);
 
     /// <summary>Ends the minigame being played, as lost.</summary>
     [Action]
-    private void Stop(IGameContext game)
+    private void Stop(IMinigames minigames)
     {
         if (MinigameRoot.OpenedBy(Entity) is { } root)
-            game.EndMinigame(root, won: false, score: null);
+            minigames.End(root, won: false, score: null);
     }
 
     public override bool Uses(string property) =>
@@ -153,15 +153,15 @@ public sealed class MinigameRoot : Component
 
     /// <summary>Wins the minigame, with <paramref name="score"/> (0 takes the minigame's own score: its first Score output, or its first counter's count).</summary>
     [Action]
-    private void Win(IGameContext game, int score = 0) => game.EndMinigame(Entity!, won: true, score: score == 0 ? null : score);
+    private void Win(IMinigames minigames, int score = 0) => minigames.End(Entity!, won: true, score: score == 0 ? null : score);
 
     /// <summary>Loses the minigame, with <paramref name="score"/> (0 takes the minigame's own score).</summary>
     [Action]
-    private void Lose(IGameContext game, int score = 0) => game.EndMinigame(Entity!, won: false, score: score == 0 ? null : score);
+    private void Lose(IMinigames minigames, int score = 0) => minigames.End(Entity!, won: false, score: score == 0 ? null : score);
 
     /// <summary>Starts the minigame over.</summary>
     [Action]
-    private void Restart(IGameContext game) => game.RestartMinigame(Entity!);
+    private void Restart(IMinigames minigames) => minigames.Restart(Entity!);
 
     /// <summary>
     /// The open minigame <paramref name="entity"/> is in (its root), or null when it's in none: minigames' roots are top-level
@@ -281,8 +281,11 @@ internal interface ICarried
     bool Save(ICarryStore data, string key, bool always);
 }
 
-/// <summary>Where carried values are kept: the game's save data.</summary>
-internal interface ICarryStore
+/// <summary>
+/// Where carried values are kept: the game's save data, handed to each <see cref="ICarried"/> by the scene system that
+/// carries them between scenes.
+/// </summary>
+internal interface ICarryStore : IGameService
 {
     bool Has(string key);
 

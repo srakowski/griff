@@ -39,6 +39,11 @@ public sealed class Scene
     internal float DrawBlend;
     internal float GlideLimit;
 
+    // The services of the game playing the scene (null while it's only edited), for what a component's own state changes
+    // tell the game at once, whoever changed it (a Health's scripts hear its damage); a component's actions and steps are
+    // handed the services they need instead.
+    internal IGameServices? Services;
+
     // How many of its entities a network game treats specially here (see Entity.NetFlags): while none are, everything in
     // it runs and moves on this machine, and the game needn't look at each entity to know.
     internal int NetFlagged;

@@ -8,8 +8,15 @@ namespace Griff.Runtime;
 /// Plays minigames: opens one over the scene (from a Minigame), gives it the input, pauses what's behind it, and closes
 /// it with its result.
 /// </summary>
-internal sealed class MinigameSystem : GameSystem
+internal sealed class MinigameSystem : GameSystem, IMinigames
 {
+    // A minigame's Play and Stop, and a trigger's or the minigame's end Win, Lose and Restart.
+    void IMinigames.Play(Entity from, string? scene) => PlayMinigameFrom(from, scene);
+
+    void IMinigames.End(Entity inside, bool won, int? score) => EndMinigame(inside, won, score);
+
+    void IMinigames.Restart(Entity inside) => RestartMinigame(inside);
+
     // How far apart a minigame and the rest of the world are kept, in world units, so they never touch or see each other.
     private const float MinigameGap = 64;
 

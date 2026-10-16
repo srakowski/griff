@@ -8,8 +8,17 @@ namespace Griff.Runtime;
 /// Levels with no code: movers, patrols, chasers, shooters, checkpoints and respawning, doors and dialogue, and the
 /// flags dialogue sets. Keeps who just came through a door, the dialogues seen and touched, and the one being said.
 /// </summary>
-internal sealed class LevelSystem : GameSystem
+internal sealed class LevelSystem : GameSystem, IVolleys, IDialogues, IFlags
 {
+    // A shooter's Fire, a dialogue's Start and a trigger's Set Flag, and what Needs Flag asks.
+    void IVolleys.Fire(Shooter shooter) => FireVolley(shooter);
+
+    void IDialogues.Start(Dialogue dialogue) => StartDialogue(dialogue);
+
+    void IFlags.Set(string name, bool on) => SetFlag(name, on);
+
+    bool IFlags.Holds(string? needs) => FlagHolds(needs);
+
     public override string Name => "Levels";
 
     // Teleported by a door and still touching one: it can't use a door again until it has stepped off them all.

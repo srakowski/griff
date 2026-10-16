@@ -76,10 +76,10 @@ public static class ComponentFocus
     /// Gives its entity the player's input: whatever there and inside it has focus, and everything else the same player
     /// plays loses it (a platformer's player stops on the arrow keys while a board takes them).
     /// </summary>
-    internal static void Focus(Component component, IGameContext? game)
+    internal static void Focus(Component component, IInputFocus focus)
     {
         if (component.Entity is { } entity)
-            (game ?? throw new InvalidOperationException("Focus can only be done while the game runs.")).Focus(entity);
+            focus.Focus(entity);
     }
 
     internal static FocusProperty[] Of(Type type) => ComponentModel.Of(type).FocusProperties;

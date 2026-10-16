@@ -6,9 +6,6 @@ namespace Griff.Runtime;
 // Atmosphere: lights in the dark, and rooms the camera moves between.
 public sealed partial class Game
 {
-    // A sound player's Play action.
-    void IGameContext.Play(SoundPlayer player) => _atmosphere.Play(player);
-
     /// <summary>
     /// How lit <paramref name="point"/> is, from 0 (pitch dark) to 1 (fully lit): the camera's
     /// <see cref="Camera.Ambient"/> light plus every <see cref="Light"/> reaching it, as the game is drawn. In a scene

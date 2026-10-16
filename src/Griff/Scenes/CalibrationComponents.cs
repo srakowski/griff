@@ -160,14 +160,14 @@ public sealed class Calibration : Component, IDrawable, IActionReady
 
     /// <summary>Sets the player's offset to what it measured (kept in their save data), once it has measured something.</summary>
     [Action]
-    private void Apply(IGameContext game)
+    private void Apply(IPlayerOffsets offsets)
     {
         if (State != CalibrationState.Measured)
             return;
         if (Measures == CalibrationKind.Visual)
-            game.VisualOffset = Result;
+            offsets.VisualOffset = Result;
         else
-            game.AudioOffset = Result;
+            offsets.AudioOffset = Result;
         (Applied, Current) = (true, Result);
     }
 

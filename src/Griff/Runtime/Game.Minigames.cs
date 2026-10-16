@@ -7,12 +7,6 @@ namespace Griff.Runtime;
 // about it is kept in the scene (the root's component), so rewinds and saved games take it in.
 public sealed partial class Game
 {
-    void IGameContext.PlayMinigame(Entity from, string? scene) => _minigames.PlayMinigameFrom(from, scene);
-
-    void IGameContext.EndMinigame(Entity inside, bool won, int? score) => _minigames.EndMinigame(inside, won, score);
-
-    void IGameContext.RestartMinigame(Entity inside) => _minigames.RestartMinigame(inside);
-
     /// <summary>
     /// The open minigame that has the screen and the player's input (the root entity its scene was loaded under), or null
     /// while none is being played. See <see cref="PlayMinigame"/>.

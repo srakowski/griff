@@ -1,3 +1,4 @@
+using Griff.Scenes;
 
 namespace Griff.Runtime;
 
@@ -5,8 +6,9 @@ namespace Griff.Runtime;
 /// Keeps the player's own settings (volume, full screen, the offsets) and those the systems keep (IPlayerSettings):
 /// read back from the save data as the game starts and written as they change.
 /// </summary>
-internal sealed class SettingsSystem : GameSystem
+internal sealed class SettingsSystem : GameSystem, IPlayerOffsets
 {
+
     [NotState("the player's settings, kept with the save data rather than the game")]
     private Settings? _savedSettings;
 

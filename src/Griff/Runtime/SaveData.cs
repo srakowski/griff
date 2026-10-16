@@ -15,7 +15,7 @@ namespace Griff.Runtime;
 /// </code>
 /// </example>
 [NotState("the game's, kept as one: a snapshot keeps what it holds as text")]
-public sealed class SaveData : Scenes.ICarryStore
+public sealed class SaveData
 {
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 

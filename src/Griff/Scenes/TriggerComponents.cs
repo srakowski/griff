@@ -65,18 +65,18 @@ public sealed class Trigger : Component
 #pragma warning disable CA1822 // An action is done on a component, so it's an instance method even when it needs nothing of it.
     /// <summary>Sets <paramref name="flag"/> in the game's save data, as a dialogue's "[set Flag]" does.</summary>
     [Action]
-    private void SetFlag(IGameContext game, [Names(NameKind.Flag)] string? flag)
+    private void SetFlag(IFlags flags, [Names(NameKind.Flag)] string? flag)
     {
         if (!string.IsNullOrWhiteSpace(flag))
-            game.SetFlag(flag, on: true);
+            flags.Set(flag, on: true);
     }
 
     /// <summary>Clears <paramref name="flag"/> in the game's save data, as a dialogue's "[clear Flag]" does.</summary>
     [Action]
-    private void ClearFlag(IGameContext game, [Names(NameKind.Flag)] string? flag)
+    private void ClearFlag(IFlags flags, [Names(NameKind.Flag)] string? flag)
     {
         if (!string.IsNullOrWhiteSpace(flag))
-            game.SetFlag(flag, on: false);
+            flags.Set(flag, on: false);
     }
 
     /// <summary>
@@ -84,10 +84,10 @@ public sealed class Trigger : Component
     /// does: the end of a story, the next level once a boss is beaten.
     /// </summary>
     [Action]
-    private void LoadScene(IGameContext game, [Names(NameKind.Scene)] string? scene)
+    private void LoadScene(ISceneTravel travel, [Names(NameKind.Scene)] string? scene)
     {
         if (!string.IsNullOrWhiteSpace(scene))
-            game.LoadScene(scene.Trim(), SceneFade);
+            travel.Load(scene.Trim(), SceneFade);
     }
 
     // Seconds the screen fades out (and back in) as its Load Scene goes to another scene.
@@ -99,28 +99,28 @@ public sealed class Trigger : Component
     /// <see cref="Minigame"/> on this entity says how instead (and an empty scene plays its own).
     /// </summary>
     [Action]
-    private void PlayMinigame(IGameContext game, [Names(NameKind.Scene)] string? scene) => game.PlayMinigame(Entity!, scene);
+    private void PlayMinigame(IMinigames minigames, [Names(NameKind.Scene)] string? scene) => minigames.Play(Entity!, scene);
 
     /// <summary>
     /// Wins the minigame this trigger is in, with <paramref name="score"/> (0 takes the minigame's own score: its first Score
     /// output, or its first counter's count): it closes, and what opened it hears it was won.
     /// </summary>
     [Action]
-    private void WinMinigame(IGameContext game, int score = 0) => game.EndMinigame(Entity!, won: true, score: score == 0 ? null : score);
+    private void WinMinigame(IMinigames minigames, int score = 0) => minigames.End(Entity!, won: true, score: score == 0 ? null : score);
 
     /// <summary>Loses the minigame this trigger is in, with <paramref name="score"/> (0 takes the minigame's own score).</summary>
     [Action]
-    private void LoseMinigame(IGameContext game, int score = 0) => game.EndMinigame(Entity!, won: false, score: score == 0 ? null : score);
+    private void LoseMinigame(IMinigames minigames, int score = 0) => minigames.End(Entity!, won: false, score: score == 0 ? null : score);
 
     /// <summary>
     /// Forgets how the scene named <paramref name="scene"/> was left (see <see cref="RememberScene"/>), so it starts as its
     /// file has it next time: the dungeon filling up again once the boss is beaten.
     /// </summary>
     [Action]
-    private void ForgetScene(IGameContext game, [Names(NameKind.Scene)] string? scene)
+    private void ForgetScene(ISceneTravel travel, [Names(NameKind.Scene)] string? scene)
     {
         if (!string.IsNullOrWhiteSpace(scene))
-            game.ForgetScene(scene.Trim());
+            travel.Forget(scene.Trim());
     }
 #pragma warning restore CA1822
 

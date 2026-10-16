@@ -11,8 +11,28 @@ namespace Griff.Runtime;
 /// Changes scenes: loads the one asked for after its fade out (and fades in), carries values and kept entities across,
 /// remembers the scenes left that say so and puts arrivals at their doors; a network game's players load the host's.
 /// </summary>
-internal sealed class SceneSystem : GameSystem
+internal sealed class SceneSystem : GameSystem, ISceneTravel, ICarryStore
 {
+    // A trigger's Load Scene and Forget Scene.
+    void ISceneTravel.Load(string scene, float fade) => LoadScene(scene, fade);
+
+    void ISceneTravel.Forget(string scene) => ForgetScene(scene);
+
+    // What's carried between scenes is kept in the game's save data.
+    bool ICarryStore.Has(string key) => Game.SaveData.Has(key);
+
+    string? ICarryStore.GetString(string key, string? fallback) => Game.SaveData.GetString(key, fallback);
+
+    int ICarryStore.GetInt(string key, int fallback) => Game.SaveData.GetInt(key, fallback);
+
+    float ICarryStore.GetFloat(string key, float fallback) => Game.SaveData.GetFloat(key, fallback);
+
+    void ICarryStore.Set(string key, int value) => Game.SaveData.Set(key, value);
+
+    void ICarryStore.Set(string key, float value) => Game.SaveData.Set(key, value);
+
+    void ICarryStore.Set(string key, string? value) => Game.SaveData.Set(key, value);
+
     // How close to fully covered (or clear) a fade has to get to count as there.
     private const float FadeSnap = 1e-4f;
 
@@ -306,11 +326,11 @@ internal sealed class SceneSystem : GameSystem
         {
             carried.Loaded = true;
             if (!string.IsNullOrEmpty(key))
-                carried.Load(Game.SaveData, key);
+                carried.Load(this, key);
             return;
         }
 
-        if (!string.IsNullOrEmpty(key) && carried.Save(Game.SaveData, key, always))
+        if (!string.IsNullOrEmpty(key) && carried.Save(this, key, always))
             NoteCarriedName(key);
     }
 

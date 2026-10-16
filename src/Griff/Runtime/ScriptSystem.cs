@@ -7,8 +7,24 @@ namespace Griff.Runtime;
 /// Runs the scene's scripts (Behavior): starts those new to it, then runs their Update, FixedUpdate and LateUpdate in
 /// their steps, a kind of script at a time and, for a crowd of one kind, across the cores.
 /// </summary>
-internal sealed class ScriptSystem : GameSystem
+internal sealed class ScriptSystem : GameSystem, IHealthNews
 {
+    // A Health tells its entity's scripts (OnDamage, OnDeath) at once, whatever dealt the damage.
+    void IHealthNews.Damaged(Health health, float amount, Entity? source)
+    {
+        foreach (var script in ScriptsOf(health))
+            script.RunDamaged(amount, source);
+    }
+
+    void IHealthNews.Died(Health health)
+    {
+        foreach (var script in ScriptsOf(health))
+            script.RunDied();
+    }
+
+    // Taken first, so a script that adds or removes components as it hears goes on through those that were there.
+    private static List<Behavior> ScriptsOf(Health health) => health.Entity is { } entity ? [.. entity.Components.OfType<Behavior>()] : [];
+
     // The scripts with an Update, a FixedUpdate and a LateUpdate, split into runs.
     [NotState("worked out again from the scene's scripts")]
     private ScriptRun[] _updatingRuns = [];

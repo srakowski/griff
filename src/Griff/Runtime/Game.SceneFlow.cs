@@ -15,10 +15,6 @@ public sealed partial class Game
     /// <summary>Where each saved game's remembered scenes are kept in <see cref="SaveData"/>: this, then the slot's name.</summary>
     public const string SavedScenesKey = "griff.remembered.";
 
-    void IGameContext.LoadScene(string scene, float fade) => _scenes.LoadScene(scene, fade);
-
-    void IGameContext.ForgetScene(string scene) => _scenes.ForgetScene(scene);
-
     /// <summary>
     /// How much of the screen the scene change's <see cref="FadeColor"/> covers, from 0 (none) to 1 (all of it).
     /// See <see cref="LoadScene"/>.

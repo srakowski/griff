@@ -20,6 +20,9 @@ public sealed partial class Game
     private bool _skipUnread;
     private float _autoSpeed = 0.5f;
     private bool _skipping;
+
+    // Whether the line showing had been read before it was shown this time: skipping stops at one that hadn't.
+    private bool _lineReadBefore;
     private float _skipClock = SkipEvery;
     private float _autoClock;
     private (Dialogue? Dialogue, int Line) _autoLine;
@@ -129,9 +132,9 @@ public sealed partial class Game
     }
 
     // As a line is shown: whether it was read before (for skipping), and now it has been; and it goes in the logs.
-    private void NoteLineShown(Dialogue dialogue, int row, bool said, bool resume)
+    internal void NoteLineShown(Dialogue dialogue, int row, bool said, bool resume)
     {
-        _levels.LineReadBefore = !said || HasRead(dialogue, row);
+        _lineReadBefore = !said || HasRead(dialogue, row);
         if (said && ReadLines().Add(LineId(dialogue, row)))
             _readLinesChanged = true;
         if (!resume && said && dialogue.Said is { } words)
@@ -139,7 +142,7 @@ public sealed partial class Game
     }
 
     // Every log in the scene, open or not, gets the line.
-    private void AddToLogs(string line)
+    internal void AddToLogs(string line)
     {
         foreach (var log in Scene.AllNow<Backlog>())
             log.Add(line);
@@ -159,9 +162,9 @@ public sealed partial class Game
     }
 
     // After the dialogues' step: skipping and reading on by itself move the talk on, in real time.
-    private void RunReading()
+    internal void RunReading()
     {
-        if (_levels.Talking is not { } talking)
+        if (Talking is not { } talking)
         {
             _skipping = false;
             _autoClock = 0;
@@ -178,7 +181,7 @@ public sealed partial class Game
             if (_skipClock < SkipEvery)
                 return;
             _skipClock = 0;
-            if (talking.Choices.Count > 0 || (!_levels.LineReadBefore && !_skipUnread))
+            if (talking.Choices.Count > 0 || (!_lineReadBefore && !_skipUnread))
             {
                 // Here's where the player has to read for themselves.
                 _skipping = false;
@@ -186,7 +189,7 @@ public sealed partial class Game
             }
 
             if (typing)
-                LineText(talking)?.Entity?.GetComponent<Typewriter>()?.Skip();
+                LevelSystem.LineText(talking)?.Entity?.GetComponent<Typewriter>()?.Skip();
             AdvanceDialogue(talking);
             return;
         }
@@ -349,7 +352,7 @@ public sealed partial class Game
     // Each line no wider than `width`, and at most three of them.
     private static string Shorten(string text, float width, float size)
     {
-        var lines = text.Split('\n').SelectMany(l => Wrap(l, MathF.Abs(width), size).Split('\n')).ToList();
+        var lines = text.Split('\n').SelectMany(l => LevelSystem.Wrap(l, MathF.Abs(width), size).Split('\n')).ToList();
         return lines.Count <= 3 ? string.Join('\n', lines) : string.Join('\n', lines.Take(3)) + "...";
     }
 

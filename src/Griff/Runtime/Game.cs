@@ -111,6 +111,9 @@ public sealed partial class Game : IGameContext
     /// <summary>True from <see cref="LoadScene"/> until the scene has switched (including the fade out).</summary>
     public bool IsChangingScene => _fadingOut is { Scene: not null } || _pendingScene is not null;
 
+    // A fade or a scene change under way: a door waits for it rather than starting another trip.
+    internal bool IsFadingOrChangingScene => _fadingOut is not null || _pendingScene is not null;
+
     /// <summary>True once <see cref="Quit"/> has been called.</summary>
     public bool IsQuitting { get; private set; }
 
@@ -367,7 +370,7 @@ public sealed partial class Game : IGameContext
     /// messages this way.
     /// </summary>
     /// <example><code>Game.Send("Opened", data: null, from: Entity);</code></example>
-    public int Send(string message, object? data, Entity? from) => Deliver(message, data, ScopeOf(from));
+    public int Send(string message, object? data, Entity? from) => Deliver(message, data, TriggerSystem.ScopeOf(from));
 
     /// <summary>
     /// Sends <paramref name="message"/> only to <paramref name="to"/> (and with <paramref name="children"/>, everything
@@ -439,7 +442,7 @@ public sealed partial class Game : IGameContext
             }
 
             // And triggers do what they do.
-            done += FireTriggers(message, data, route);
+            done += TriggerSystem.FireTriggers(message, data, route);
 
             // And panels open on theirs (a puzzle's "Solved" screen), if what they're in is showing and they need no flag that
             // isn't set: after the triggers, so one that sets the flag on this message lets it open.
@@ -848,7 +851,7 @@ public sealed partial class Game : IGameContext
         var arrived = PlaceArrivals();
         SystemsSceneChanged();
         if (arrived is not null)
-            _levels.ArrivedByDoor.UnionWith(arrived);
+            _levels.ArrivedThroughDoors(arrived);
         LoadCarried(null);
         Physics.Groups = [];
         StopSoundSources();
@@ -982,67 +985,6 @@ public sealed partial class Game : IGameContext
         }
     }
 
-    private void RunPickupSpin()
-    {
-        foreach (var pickup in Moving<Pickup>())
-        {
-            if (pickup.Spin != 0)
-                pickup.Entity!.Transform.Rotation += new Vector3(0, 0, pickup.Spin * Time.Delta);
-        }
-    }
-
-    // Touches from this frame's physics; each pickup goes to the first thing that reaches it.
-    private void RunPickups()
-    {
-        if (_touches.Count == 0 || Active<Pickup>().Count == 0)
-            return;
-        foreach (var (source, target) in _touches.ToList())
-        {
-            // Nothing paused picks up or is picked up (see Entity.IsPaused).
-            if (source.Scene != Scene || target.Scene != Scene || !Runs(source) || source.GetComponent<Pickup>() is not { IsCollected: false } pickup ||
-                source.IsPaused || target.IsPaused)
-                continue;
-            if (BodyOwner(target) is not { } collector || !pickup.AcceptsLayer(LayerOf(target)) || source.IsSelfOrDescendantOf(collector))
-                continue;
-            if (pickup.Heal > 0 && string.IsNullOrWhiteSpace(pickup.Item) && Health.Of(collector) is { } health && health.Current >= health.Max)
-                continue;
-            if (!string.IsNullOrWhiteSpace(pickup.Price) && !Pay(collector, pickup.Price))
-                continue;
-            Collect(pickup, collector);
-        }
-    }
-
-    private void Collect(Pickup pickup, Entity collector)
-    {
-        pickup.IsCollected = true;
-        var entity = pickup.Entity!;
-        var position = entity.Transform.WorldPosition;
-        if (!string.IsNullOrWhiteSpace(pickup.Sound))
-            PlayShared(pickup.Sound);
-
-        if (!string.IsNullOrWhiteSpace(pickup.Effect))
-        {
-            var effect = Spawn(pickup.Effect.Trim(), new Vector2(position.X, position.Y));
-            if (pickup.TintEffect && entity.GetComponent<Sprite>() is { } sprite)
-            {
-                foreach (var emitter in effect.SelfAndDescendants().SelectMany(e => e.GetComponents<ParticleEmitter>()))
-                {
-                    emitter.StartColor = sprite.Tint;
-                    emitter.EndColor = sprite.Tint with { A = 0 };
-                }
-            }
-        }
-
-        GiveItem(pickup, collector);
-        if (pickup.Heal > 0)
-            Health.Of(collector)?.Heal(pickup.Heal);
-        Notify(collector, behavior => behavior.RunPickup(entity));
-        pickup.RaiseCollected(collector);
-        if (!string.IsNullOrWhiteSpace(pickup.Message))
-            Send(pickup.Message.Trim(), pickup.Amount, from: pickup.Entity);
-        Destroy(entity);
-    }
-
     /// <summary>
     /// What collects for a collider: its own entity's body, or the nearest ancestor's (a player's hitbox child).
     /// </summary>
@@ -1084,7 +1026,7 @@ public sealed partial class Game : IGameContext
             var transform = counter.Entity!.Transform;
             var key = counter.SaveBestAs?.Trim();
             if (!string.IsNullOrWhiteSpace(counter.Item))
-                counter.Change(ItemCount(counter.Item, counter.Entity) - counter.Value);
+                counter.Change(ItemSystem.ItemCount(counter.Item, counter.Entity) - counter.Value);
             if (counter.CountsFromSource)
                 CountFromSource(counter);
             if (!string.IsNullOrWhiteSpace(counter.Output))
@@ -1207,93 +1149,16 @@ public sealed partial class Game : IGameContext
             return;
         var message = counter.ReachMessage.Trim();
         if (Net.IsOnline && NetLocalAttribute.IsOn(counter.Entity!))
-            SendFromNetwork(message, counter.Value, relay: false, ScopeOf(counter.Entity));
+            SendFromNetwork(message, counter.Value, relay: false, TriggerSystem.ScopeOf(counter.Entity));
         else
             Send(message, counter.Value, from: counter.Entity);
     }
-
-    // Each pair that touched this frame (bumped, or overlapping as a trigger) counts once, however many times physics saw it.
-    private void RunTouchDamage()
-    {
-        foreach (var (source, target) in _touches)
-        {
-            // Nothing paused hurts or is hurt by a touch (see Entity.IsPaused).
-            if (source.Scene != Scene || target.Scene != Scene || !Runs(source) || source.GetComponent<DamageOnTouch>() is not { } touch ||
-                source.IsPaused || target.IsPaused)
-                continue;
-            if (touch.DestroyOnWall && IsWall(target) && !(Health.Of(target) is { } struck && struck != Health.Of(source) && touch.Hurts(LayerOf(target))))
-            {
-                Destroy(source);
-                continue;
-            }
-
-            if (Health.Of(target) is not { } health || health == Health.Of(source) || !touch.Hurts(LayerOf(target)) || !CanHurt(source, health.Entity!))
-                continue;
-
-            var hurt = health.Entity!;
-            if (AlreadyStruck(source, hurt, out var swing))
-                continue;
-            var landed = touch.Kill ? !health.IsDead && KillNow(health) : health.Damage(touch.RollAmount(), source);
-            if (landed && touch.Knockback > 0 && hurt.GetComponent<Body>() is { } body)
-            {
-                var away = hurt.Transform.WorldPosition - source.Transform.WorldPosition;
-                var direction = new Vector2(away.X, away.Y);
-                body.Velocity = (direction.LengthSquared() > 1e-8f ? Vector2.Normalize(direction) : Vector2.UnitY) * touch.Knockback;
-            }
-
-            if (landed && swing is not null)
-                Landed(swing, hurt);
-            if (touch.DestroyOnHit)
-                Destroy(source);
-        }
-
-        _touches.Clear();
-
-        static bool KillNow(Health health)
-        {
-            health.Kill();
-            return true;
-        }
-    }
-
-    // Something solid to run into: a solid tilemap, or a collider that isn't a trigger.
-    private static bool IsWall(Entity entity) =>
-        entity.GetComponent<Tilemap>() is { Solid: true } || entity.GetComponents<Collider>().Any(c => !c.IsTrigger);
 
     /// <summary>The layer an entity's Collider (or else its Tilemap) is on, or null.</summary>
     public static string? LayerOf(Entity entity) =>
         entity.GetComponent<Collider>()?.Layer ?? entity.GetComponent<Tilemap>()?.Layer;
 
-    // Deaths from this frame (touches, scripts, triggers) send their message and are destroyed along with everything else.
-    private void RunHealth()
-    {
-        foreach (var health in Active<Health>())
-        {
-            health.Home ??= new Vector2(health.Entity!.Transform.WorldPosition.X, health.Entity.Transform.WorldPosition.Y);
-            health.Advance(Time.Delta);
-            var at = new Vector2(health.Entity!.Transform.WorldPosition.X, health.Entity.Transform.WorldPosition.Y);
-            if (health.Hurt)
-            {
-                health.Hurt = false;
-                if (!string.IsNullOrWhiteSpace(health.HurtSound))
-                    PlaySoundAt(health.HurtSound.Trim(), at);
-            }
-
-            if (!health.TakeDeath())
-                continue;
-            Net.CountDefeat(health.Entity!, health.LastHitBy);
-            if (!string.IsNullOrWhiteSpace(health.DeathSound))
-                PlaySoundAt(health.DeathSound.Trim(), at);
-            if (!string.IsNullOrWhiteSpace(health.DeathMessage))
-                Send(health.DeathMessage, health.Entity, from: health.Entity);
-            if (health.Respawn)
-                health.Entity!.IsEnabled = false;
-            else if (health.DestroyOnDeath)
-                Destroy(health.Entity!);
-        }
-    }
-
-    private void Notify(Entity entity, Action<Behavior> action)
+    internal void Notify(Entity entity, Action<Behavior> action)
     {
         if (entity.Scene != Scene)
             return;
@@ -1337,5 +1202,92 @@ public sealed partial class Game : IGameContext
         var children = entity.ChildList;
         for (var i = 0; i < children.Count; i++)
             RunDestroys(children[i]);
+    }
+
+    /// <summary>
+    /// Fades the screen to <paramref name="color"/> (black by default) over <paramref name="seconds"/> of real time, calls
+    /// <paramref name="then"/> while it's covered, and fades back in just as long: teleports, a jump to the next room, a
+    /// cut in a cutscene. 0 seconds calls it straight away.
+    /// </summary>
+    public void FadeThrough(float seconds, Action then, Color? color = null)
+    {
+        ArgumentNullException.ThrowIfNull(then);
+        if (!(seconds > 0))
+        {
+            then();
+            return;
+        }
+
+        _fadingOut = (null, then, seconds);
+        _fadeInSeconds = 0;
+        FadeColor = color ?? Color.Black;
+    }
+
+    /// <summary>
+    /// What this machine runs: everything offline and on the host; on a player's machine, only its own things (HUD, menus).
+    /// Not what's paused (see Entity.IsPaused): it's held still.
+    /// </summary>
+    public ComponentList<T> Active<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.RunningNow<T>() : Where(Scene.RunningNow<T>(), Runs);
+
+    /// <summary>
+    /// What this machine runs, paused or not: for what reads or shows how things are rather than moving them on.
+    /// </summary>
+    public ComponentList<T> Present<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.ActiveNow<T>() : Where(Scene.ActiveNow<T>(), Runs);
+
+    /// <summary>
+    /// What this machine moves: what it runs, less other players' own characters, plus this player's own; not what's paused.
+    /// </summary>
+    public ComponentList<T> Moving<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.RunningNow<T>() : Where(Scene.RunningNow<T>(), Moves);
+
+    /// <summary>
+    /// Everything showing, wherever it's run: for what only changes how things look.
+    /// </summary>
+    public ComponentList<T> Showing<T>() where T : Component => Scene.ActiveNow<T>();
+
+    /// <summary>
+    /// Everything this machine runs, active or not.
+    /// </summary>
+    public ComponentList<T> RunHere<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.AllNow<T>() : Where(Scene.AllNow<T>(), Runs);
+
+    // Those whose entity passes: the same list when they all do (always, offline), so a frame allocates nothing.
+    private static ComponentList<T> Where<T>(ComponentList<T> components, Func<Entity, bool> test) where T : Component
+    {
+        var all = components.AsSpan();
+        var first = 0;
+        while (first < all.Length && test(all[first].Entity!))
+            first++;
+        if (first == all.Length)
+            return components;
+
+        var kept = new List<T>(all.Length);
+        for (var i = 0; i < all.Length; i++)
+        {
+            if (i < first || (i > first && test(all[i].Entity!)))
+                kept.Add(all[i]);
+        }
+
+        return new ComponentList<T>([.. kept]);
+    }
+
+    /// <summary>A position in 3D without its height: the 2D point the world draws it at.</summary>
+    public static Vector2 Flat(Vector3 v) => new(v.X, v.Y);
+
+    /// <summary>Plays the sound called <paramref name="sound"/> if it names one (a blank or null name plays nothing).</summary>
+    public void PlayIfSet(string? sound)
+    {
+        if (!string.IsNullOrWhiteSpace(sound))
+            PlayShared(sound.Trim());
+    }
+
+    /// <summary>Moves <paramref name="from"/> towards <paramref name="to"/> by at most <paramref name="step"/>, stopping on it.</summary>
+    public static float MoveTowards(float from, float to, float step) =>
+        MathF.Abs(to - from) <= step ? to : from + MathF.Sign(to - from) * step;
+
+    /// <summary>Moves <paramref name="from"/> towards <paramref name="to"/> by at most <paramref name="step"/>, stopping on it.</summary>
+    public static Vector2 MoveTowards(Vector2 from, Vector2 to, float step)
+    {
+        var gap = to - from;
+        var length = gap.Length();
+        return length <= step || length < 1e-6f ? to : from + gap / length * step;
     }
 }

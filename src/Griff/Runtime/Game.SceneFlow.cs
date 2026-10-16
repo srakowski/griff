@@ -45,6 +45,8 @@ public sealed partial class Game
         return _remembered.Remove(SceneNameOf(scene.Trim()));
     }
 
+    void IGameContext.LoadScene(string scene, float fade) => LoadScene(scene, fade);
+
     void IGameContext.ForgetScene(string scene) => ForgetScene(scene);
 
     /// <summary>Forgets every scene remembered, as New Game does.</summary>
@@ -357,7 +359,7 @@ public sealed partial class Game
         }
 
         foreach (var entity in arrivers)
-            PlaceAt(entity, at);
+            LevelSystem.PlaceAt(entity, at);
         return arrivers;
     }
 }

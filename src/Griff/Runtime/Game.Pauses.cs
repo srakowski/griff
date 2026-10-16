@@ -32,7 +32,7 @@ public sealed partial class Game
     // At the start of each step (and as a panel opens or closes or a dialogue starts or ends, so the group stops at once):
     // the pause groups that are paused, and what the open panels (offline) and the dialogue being said pause, if they name
     // a group rather than the whole game. A pause group sends its message as it changes, where the game is run.
-    private void SyncPauses()
+    internal void SyncPauses()
     {
         var groups = _pausing;
         groups.Clear();
@@ -66,7 +66,7 @@ public sealed partial class Game
             }
         }
 
-        if (_levels.Talking is { PauseGame: true } talking && GroupNamed(talking.Entity, talking.Pauses) is { } talked)
+        if (Talking is { PauseGame: true } talking && GroupNamed(talking.Entity, talking.Pauses) is { } talked)
             AddGroup(groups, talked);
 
         // A minigame pauses the rest of the scene while it's played, if it says so.
@@ -77,7 +77,7 @@ public sealed partial class Game
 
     // The group a panel or dialogue names (one inside it first); null for the whole game or one that isn't there.
     private static Entity? GroupNamed(Entity? owner, string? name) =>
-        owner is null || string.IsNullOrWhiteSpace(name) ? null : NamedFrom(owner, name.AsSpan().Trim());
+        owner is null || string.IsNullOrWhiteSpace(name) ? null : TriggerSystem.NamedFrom(owner, name.AsSpan().Trim());
 
     private static void AddGroup(List<Entity> groups, Entity group)
     {
@@ -86,5 +86,5 @@ public sealed partial class Game
     }
 
     // True if a panel or dialogue that pauses stops the whole game, rather than a group of it.
-    private static bool PausesAll(bool pauseGame, string? group) => pauseGame && string.IsNullOrWhiteSpace(group);
+    internal static bool PausesAll(bool pauseGame, string? group) => pauseGame && string.IsNullOrWhiteSpace(group);
 }

@@ -289,7 +289,7 @@ public sealed class PauseGroupTests
         Assert.Equal(held, At(inside.Body));
         Assert.True(At(outside.Body).X > free.X);
 
-        _game.EndDialogue(finished: true);
+        _game.LevelSystem.EndDialogue(finished: true);
         Assert.False(enemies.IsPaused);
     }
 

@@ -127,7 +127,7 @@ public sealed class GameSetup
     /// <paramref name="run"/> is called with the dialogue and what follows the word in the brackets ("Ava left happy" for
     /// "[show Ava left happy]"). A dialogue is said on the machine of the player reading it.
     /// </summary>
-    public void OnDialogueTag(string word, Action<Dialogue, string> run) => Game.OnDialogueTag(word, run);
+    public void OnDialogueTag(string word, Action<Dialogue, string> run) => Game.LevelSystem.OnDialogueTag(word, run);
 
     /// <summary>
     /// Something players' machines in a network game can ask the host to do, by a name unique to the module (e.g.

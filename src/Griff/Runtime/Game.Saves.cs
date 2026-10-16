@@ -359,7 +359,7 @@ public sealed partial class Game
         (SaveData.GetText(FlagNamesKey) ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     // Remembers a flag's name, so a saved game knows to put it back.
-    private void NoteFlagName(string name)
+    internal void NoteFlagName(string name)
     {
         var known = FlagNames().ToList();
         if (known.Contains(name, StringComparer.OrdinalIgnoreCase))

@@ -101,7 +101,7 @@ public sealed partial class Game
 
         // The arrows pick a dialogue's choices while it offers them, not the buttons behind it; but a menu that stops the game
         // (a pause menu over the choices) takes them, the talk being held still under it.
-        var direction = ReadDirection(controls.Count > 0 && (top is { PauseGame: true } || _levels.Talking is not { Choices.Count: > 0 }));
+        var direction = ReadDirection(controls.Count > 0 && (top is { PauseGame: true } || Talking is not { Choices.Count: > 0 }));
         var mouseMoved = MouseMovedOverView();
         foreach (var button in allButtons)
         {
@@ -302,7 +302,7 @@ public sealed partial class Game
                     LoadScene(button.Scene.Trim(), button.Fade);
                 break;
             case ButtonAction.EndTurn:
-                Net.SendCommand(EndTurnCommand, OrderForButton(button)?.Entity);
+                Net.SendCommand(TurnSystem.EndTurnCommand, TurnSystem.OrderForButton(button)?.Entity);
                 break;
             case ButtonAction.Do:
                 ClickDo(button);

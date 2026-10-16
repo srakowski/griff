@@ -23,7 +23,7 @@ public sealed class ExtensionPointTests
     [InlineData("Runtime/Views.cs", new[] { "Transform", "Camera", "Sprite", "Light", "Viewport", "MinigameRoot" })]
     [InlineData("Runtime/FrameDrawing.cs", new[] { "Viewport" })]
     [InlineData("Runtime/Net/NetSchema.cs", new[] { "Transform", "MissingComponent", "Networked" })]
-    [InlineData("Runtime/Game.Triggers.cs", new[] { "Trigger", "MessageScope" })]
+    [InlineData("Runtime/TriggerSystem.cs", new[] { "Trigger", "MessageScope" })]
     [InlineData("Scenes/ComponentActions.cs", new string[0])]
     [InlineData("Editing/ActionNames.cs", new string[0])]
     [InlineData("Scenes/ComponentOutputs.cs", new string[0])]

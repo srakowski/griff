@@ -10,6 +10,36 @@ public sealed partial class Game
 {
     private static readonly FramePhase[] Phases = Enum.GetValues<FramePhase>();
 
+    // Griff's own systems for gameplay with no code, each owning its state and its steps; Game's members for them only
+    // forward to them.
+    private readonly LevelSystem _levels = new();
+    private readonly MovementSystem _movement = new();
+    private readonly GridSystem _gridMoves = new();
+    private readonly TurnSystem _turns = new();
+    private readonly CombatSystem _combat = new();
+    private readonly TriggerSystem _triggers = new();
+    private readonly SwitchSystem _switches = new();
+    private readonly ItemSystem _itemUses = new();
+    private readonly DragSystem _drags = new();
+
+    internal LevelSystem LevelSystem => _levels;
+
+    internal MovementSystem MovementSystem => _movement;
+
+    internal GridSystem GridSystem => _gridMoves;
+
+    internal TurnSystem TurnSystem => _turns;
+
+    internal CombatSystem CombatSystem => _combat;
+
+    internal TriggerSystem TriggerSystem => _triggers;
+
+    internal SwitchSystem SwitchSystem => _switches;
+
+    internal ItemSystem ItemSystem => _itemUses;
+
+    internal DragSystem DragSystem => _drags;
+
     private readonly List<FrameStep> _builtInSteps = [];
     private readonly List<GameSystem> _systems = [];
     private GameSystem[] _builtInSystems = [];
@@ -298,7 +328,7 @@ public sealed partial class Game
     // Griff's own steps, in the order a frame runs them. FrameTests pins this order: change it on purpose.
     private void BuildFrame()
     {
-        GameSystem[] core = [_levels, _switches, _drags, _panels];
+        GameSystem[] core = [_levels, _movement, _gridMoves, _turns, _combat, _triggers, _switches, _itemUses, _drags, _panels];
 
         // Begin. Panels shown or hidden since last frame open or close first, so a pause starts straight away.
         Step(Steps.Panels, SyncPanels, _panels);
@@ -318,31 +348,31 @@ public sealed partial class Game
         Step(Steps.Menus, UpdateMenus);
         Step(Steps.Lobby, RunLobby);
         Step(Steps.Grids, LineUpGrids);
-        Step(Steps.SwitchTargets, ApplySwitches, _switches);
-        Step(Steps.Turns, RunTurns);
+        Step(Steps.SwitchTargets, _switches.ApplySwitches, _switches);
+        Step(Steps.Turns, _turns.RunTurns, _turns);
         Step(Steps.BeatClocks, RunBeatClocks);
         Step(Steps.Calibrations, RunCalibrations);
 
         // No-code enemies and players go before scripts, so a script can still take over a body this frame.
-        Step(Steps.Enemies, RunEnemies);
-        Step(Steps.Movement, RunMovement);
-        Step(Steps.ItemUses, RunItemUses);
+        Step(Steps.Enemies, _levels.RunEnemies, _levels);
+        Step(Steps.Movement, _movement.RunMovement, _movement);
+        Step(Steps.ItemUses, _itemUses.RunItemUses, _itemUses);
 
         Step(Steps.Scripts, UpdateScripts, timesItself: true);
 
         // Whatever systems show on the screen is laid out first, so a click on it isn't taken for one in the world.
         Step(Steps.HUD, LayOutHuds);
         Step(Steps.OtherPlayersTools, RunOtherPlayersTools);
-        Step(Steps.Dragging, RunDragging, _drags);
-        Step(Steps.Attacks, RunAttacks);
-        Step(Steps.IdleGridMovers, PassIdleGridMovers);
+        Step(Steps.Dragging, _drags.RunDragging, _drags);
+        Step(Steps.Attacks, _combat.RunAttacks, _combat);
+        Step(Steps.IdleGridMovers, _turns.PassIdleGridMovers, _turns);
         Step(Steps.Timers, RunTimers);
         Step(Steps.Coroutines, RunCoroutines);
         Step(Steps.Tweens, RunTweens);
         Step(Steps.Lifetimes, RunLifetimes);
         Step(Steps.Spawners, RunSpawners);
-        Step(Steps.Shooters, RunShooters);
-        Step(Steps.Movers, RunMovers);
+        Step(Steps.Shooters, _levels.RunShooters, _levels);
+        Step(Steps.Movers, _levels.RunMovers, _levels);
         Step(Steps.Animations, RunAnimations);
         Step(Steps.AnimatedTiles, RunAnimatedTiles);
         Step(Steps.Particles, RunParticles);
@@ -350,23 +380,23 @@ public sealed partial class Game
         Step(Steps.SpriteEffects, RunSpriteEffects);
         Step(Steps.SimulatePrompts, FillPrompts);
         Step(Steps.Typewriters, RunTypewriters);
-        Step(Steps.PickupSpin, RunPickupSpin);
+        Step(Steps.PickupSpin, _itemUses.RunPickupSpin, _itemUses);
 
         // Scripts push bodies just before they move.
         Step(Steps.FixedScripts, FixedUpdateScripts, timesItself: true);
         Step(Steps.Physics, StepPhysics);
-        Step(Steps.Carrying, CarryHeld, _drags);
+        Step(Steps.Carrying, _drags.CarryHeld, _drags);
 
-        Step(Steps.Pickups, RunPickups);
-        Step(Steps.Checkpoints, RunCheckpoints);
-        Step(Steps.Doors, RunDoors, _levels);
-        Step(Steps.Dialogues, RunDialogues, _levels);
-        Step(Steps.Switches, RunSwitches, _switches);
-        Step(Steps.Bouncers, RunBouncers);
-        Step(Steps.Crumbles, RunCrumbles);
-        Step(Steps.TouchDamage, RunTouchDamage);
-        Step(Steps.Health, RunHealth);
-        Step(Steps.Respawns, RunRespawns);
+        Step(Steps.Pickups, _itemUses.RunPickups, _itemUses);
+        Step(Steps.Checkpoints, _levels.RunCheckpoints, _levels);
+        Step(Steps.Doors, _levels.RunDoors, _levels);
+        Step(Steps.Dialogues, _levels.RunDialogues, _levels);
+        Step(Steps.Switches, _switches.RunSwitches, _switches);
+        Step(Steps.Bouncers, _movement.RunBouncers, _movement);
+        Step(Steps.Crumbles, _movement.RunCrumbles, _movement);
+        Step(Steps.TouchDamage, _combat.RunTouchDamage, _combat);
+        Step(Steps.Health, _combat.RunHealth, _combat);
+        Step(Steps.Respawns, _levels.RunRespawns, _levels);
         Step(Steps.Bars, RunBars);
         Step(Steps.Stars, RunStars);
         Step(Steps.Counters, RunCounters);
@@ -386,7 +416,7 @@ public sealed partial class Game
         Step(Steps.PresentPrompts, FillPrompts);
         Step(Steps.SoundSources, RunSoundSources);
         Step(Steps.SoundPlayers, RunSoundPlayers);
-        Step(Steps.PatrolWalks, CountPatrolWalks);
+        Step(Steps.PatrolWalks, _levels.CountPatrolWalks, _levels);
 
         Step(Steps.Audio, () => Audio.Advance(Time.UnscaledDelta));
         Step(Steps.Settings, SaveSettings);

@@ -317,7 +317,7 @@ public sealed class VisualNovelReadingTests : IDisposable
         Assert.Equal((Game.QuickSlot, "Ava: Three.", "Ava: Two."), (_game.LatestSave?.Slot, _game.LatestSave?.Line, _game.SavedGameIn("2")?.Line));
         Assert.True(button.IsUsable);
 
-        _game.EndDialogue(finished: false);
+        _game.LevelSystem.EndDialogue(finished: false);
         _game.StartDialogue(The<Dialogue>(_scene));
         Run(Frame);
         Assert.Equal("One.", _game.Talking?.Said);
@@ -481,7 +481,7 @@ public sealed class VisualNovelReadingTests : IDisposable
         Assert.Equal(2, dialogue.Line);
 
         // Read again from the start: Skip goes through what was read, and stops at Four.
-        _game.EndDialogue(finished: false);
+        _game.LevelSystem.EndDialogue(finished: false);
         _game.StartDialogue(dialogue);
         Run(Frame);
         Assert.Equal(0, dialogue.Line);

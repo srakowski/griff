@@ -42,7 +42,7 @@ public sealed partial class Game
     internal IInput NoControls => _noInput ??= new NoInput(Input);
 
     // The controls of whoever plays an entity, whether or not it's its turn.
-    private IInput ControlsOf(Entity? entity)
+    internal IInput ControlsOf(Entity? entity)
     {
         if (entity is null)
             return Input;
@@ -392,10 +392,10 @@ public sealed partial class Game
     // What players' machines can ask the host to do for them.
     private void ListenForCommands()
     {
-        OnNetCommand(EndTurnCommand, RunEndTurn);
-        OnNetCommand(GridStepCommand, RunGridStep);
-        OnNetCommand(GridPushCommand, RunGridPush);
-        OnNetCommand(BumpCommand, RunBump);
+        OnNetCommand(TurnSystem.EndTurnCommand, TurnSystem.RunEndTurn);
+        OnNetCommand(TurnSystem.GridStepCommand, TurnSystem.RunGridStep);
+        OnNetCommand(GridSystem.GridPushCommand, GridSystem.RunGridPush);
+        OnNetCommand(GridSystem.BumpCommand, GridSystem.RunBump);
         OnNetCommand(ButtonDoCommand, RunButtonDo);
     }
 }

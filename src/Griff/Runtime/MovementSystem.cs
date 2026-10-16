@@ -3,10 +3,14 @@ using Griff.Scenes;
 
 namespace Griff.Runtime;
 
-// Players with no code (platformer, top-down and grid movement, ladders) and the level pieces they play with: bouncers and
-// crumbling platforms. Pushable crates are physics.
-public sealed partial class Game
+/// <summary>
+/// Players with no code (platformer and top-down movement, ladders; grid movers step through GridSystem) and the level
+/// pieces they play with: bouncers and crumbling platforms. Pushable crates are physics.
+/// </summary>
+internal sealed class MovementSystem : GameSystem
 {
+    public override string Name => "Movement";
+
     // Seconds after leaving a wall that a wall jump still works.
     private const float WallCoyoteTime = 0.12f;
 
@@ -20,36 +24,36 @@ public sealed partial class Game
     private const float LandingSpeed = 2;
 
     // Like enemies, players move before scripts run, so a script can still take over the body this frame.
-    private void RunMovement()
+    internal void RunMovement()
     {
-        if (Time.Delta <= 0 || PausedThisFrame)
+        if (Game.Time.Delta <= 0 || Game.PausedThisFrame)
             return;
 
         // Ropes laid out (or brought back from a rewind) before anyone grabs one.
-        if (Scene.ActiveNow<Rope>().Count > 0)
-            Physics.ReadyRopes(Scene);
-        foreach (var movement in Moving<PlatformerMovement>())
+        if (Game.Scene.ActiveNow<Rope>().Count > 0)
+            Game.Physics.ReadyRopes(Game.Scene);
+        foreach (var movement in Game.Moving<PlatformerMovement>())
             RunPlatformer(movement);
-        foreach (var movement in Moving<TopDownMovement>())
+        foreach (var movement in Game.Moving<TopDownMovement>())
             RunTopDown(movement);
-        foreach (var movement in Moving<GridMovement>())
-            RunGrid(movement);
+        foreach (var movement in Game.Moving<GridMovement>())
+            Game.GridSystem.RunGrid(movement);
     }
 
     private void RunPlatformer(PlatformerMovement m)
     {
         var entity = m.Entity!;
-        var keys = InputOf(entity);
+        var keys = Game.InputOf(entity);
         if (entity.GetComponent<Body>() is not { } body)
             return;
 
-        var dt = Time.Delta;
+        var dt = Game.Time.Delta;
         var control = m.Controllable;
         var x = control ? keys.Horizontal : 0;
         var y = control ? keys.Vertical : 0;
         var v = body.Velocity;
         var grounded = body.IsGrounded;
-        var gravity = -Physics.Gravity.Y * body.GravityScale;
+        var gravity = -Game.Physics.Gravity.Y * body.GravityScale;
         var jumpSpeed = m.JumpSpeedFor(gravity);
         var jumped = false;
 
@@ -64,7 +68,7 @@ public sealed partial class Game
         {
             if (!m.WasGrounded && m.FallSpeed > LandingSpeed)
             {
-                PlayIfSet(m.LandSound);
+                Game.PlayIfSet(m.LandSound);
                 SpawnDust(m, entity);
                 m.RaiseLanded(m.FallSpeed);
             }
@@ -86,15 +90,15 @@ public sealed partial class Game
 
         // Ropes: up grabs one at its hands (in the air too); on one, it climbs up and down it, swings on it left and right,
         // and jumps off it (or, holding down, lets go). The rope moves it.
-        var bounds = entity.GetComponent<Collider>() is { } collider ? Physics.BoundsOf(collider) : new Box(Flat(entity.Transform.WorldPosition), Vector2.Zero);
-        if (body.Climbing is { } rope && (rope.Entity is not { IsActive: true } ropeEntity || ropeEntity.Scene != Scene || !rope.Climbable))
+        var bounds = entity.GetComponent<Collider>() is { } collider ? Physics.BoundsOf(collider) : new Box(Game.Flat(entity.Transform.WorldPosition), Vector2.Zero);
+        if (body.Climbing is { } rope && (rope.Entity is not { IsActive: true } ropeEntity || ropeEntity.Scene != Game.Scene || !rope.Climbable))
             Physics.Release(body);
         if (body.Climbing is null && m.IsOnRope)
             (m.IsOnRope, m.IsClimbing) = (false, false);
         if (body.Climbing is null && y > 0.5f && !m.IsDashing && m.RegrabLeft <= 0 && bounds.HalfSize != Vector2.Zero && !body.Rotates)
         {
             var hands = bounds.Center + new Vector2(0, bounds.HalfSize.Y * 0.6f);
-            if (Physics.RopeNear(Scene, hands, bounds.HalfSize.X + 0.25f, body) is { } grab)
+            if (Physics.RopeNear(Game.Scene, hands, bounds.HalfSize.X + 0.25f, body) is { } grab)
             {
                 Physics.Hold(grab.Rope, body, grab.At);
                 Shift(entity, grab.Point - hands);
@@ -128,11 +132,11 @@ public sealed partial class Game
 
         // Ladders: up grabs one it's in front of, down one under its feet (below the one-way floor it stands on, if that's
         // what it's on). It stays on while any of it is on the ladder, or it's still climbing up through the floor at the top.
-        var oneWayFloor = grounded ? Physics.OneWayFloorBottom(Scene, body) : null;
+        var oneWayFloor = grounded ? Physics.OneWayFloorBottom(Game.Scene, body) : null;
         var reach = bounds.HalfSize.X / 2;
         var front = LadderAt(bounds.Center, reach);
         var under = LadderAt(new Vector2(bounds.Center.X, (oneWayFloor ?? bounds.Min.Y) - 0.05f), reach);
-        if (m.IsClimbing && front is null && under is null && !Physics.FeetInOneWay(Scene, body))
+        if (m.IsClimbing && front is null && under is null && !Physics.FeetInOneWay(Game.Scene, body))
             m.IsClimbing = false;
         if (m.IsClimbing && grounded && y < -0.5f && under is null)
             m.IsClimbing = false;
@@ -175,7 +179,7 @@ public sealed partial class Game
             m.DashCooldownLeft = m.DashLeft + Math.Max(0, m.DashCooldown);
             m.AirDashUsed |= !grounded;
             m.IsJumping = false;
-            PlayIfSet(m.DashSound);
+            Game.PlayIfSet(m.DashSound);
             m.RaiseDashed();
         }
 
@@ -198,7 +202,7 @@ public sealed partial class Game
             var rate = MathF.Abs(target) > 1e-3f ? m.Acceleration : m.Deceleration;
             var air = Math.Clamp(m.AirControl, 0, 1);
             if (grounded || air > 0)
-                v.X = rate > 0 ? MoveTowards(v.X, target, rate * (grounded ? 1 : air) * dt) : target;
+                v.X = rate > 0 ? Game.MoveTowards(v.X, target, rate * (grounded ? 1 : air) * dt) : target;
         }
 
         // Jumping: from the ground (a moment after leaving it, too), off a wall, or in the air; or down through the floor.
@@ -259,9 +263,9 @@ public sealed partial class Game
             body.Velocity = v;
             m.FallSpeed = grounded && !jumped ? 0 : Math.Max(0, -v.Y);
             if (m.FlipSprite)
-                Face(entity, m.Facing);
+                Game.Face(entity, m.Facing);
 
-            if (entity.GetComponent<Animation>() is not { } animation || IsPlayingAttack(entity, animation))
+            if (entity.GetComponent<Animation>() is not { } animation || CombatSystem.IsPlayingAttack(entity, animation))
                 return;
             var onGround = grounded && !jumped;
             if (m.IsDashing)
@@ -286,27 +290,27 @@ public sealed partial class Game
         jumped = true;
         m.IsJumping = true;
         if (sound)
-            PlayIfSet(m.JumpSound);
+            Game.PlayIfSet(m.JumpSound);
         m.RaiseJumped();
     }
 
     // A puff at its feet.
     private void SpawnDust(PlatformerMovement m, Entity entity)
     {
-        if (string.IsNullOrWhiteSpace(m.DustEffect) || PrefabLoader is null)
+        if (string.IsNullOrWhiteSpace(m.DustEffect) || Game.PrefabLoader is null)
             return;
-        var bounds = entity.GetComponent<Collider>() is { } collider ? Physics.BoundsOf(collider) : new Box(Flat(entity.Transform.WorldPosition), Vector2.Zero);
-        Spawn(m.DustEffect.Trim(), new Vector2(bounds.Center.X, bounds.Min.Y));
+        var bounds = entity.GetComponent<Collider>() is { } collider ? Physics.BoundsOf(collider) : new Box(Game.Flat(entity.Transform.WorldPosition), Vector2.Zero);
+        Game.Spawn(m.DustEffect.Trim(), new Vector2(bounds.Center.X, bounds.Min.Y));
     }
 
     private void RunTopDown(TopDownMovement m)
     {
         var entity = m.Entity!;
-        var keys = InputOf(entity);
+        var keys = Game.InputOf(entity);
         if (entity.GetComponent<Body>() is not { } body)
             return;
 
-        var dt = Time.Delta;
+        var dt = Game.Time.Delta;
         var control = m.Controllable;
         var raw = control ? keys.Move : Vector2.Zero;
         var input = raw;
@@ -340,7 +344,7 @@ public sealed partial class Game
             m.DashDirection = m.Facing;
             m.DashLeft = Math.Max(0, m.DashTime);
             m.DashCooldownLeft = m.DashLeft + Math.Max(0, m.DashCooldown);
-            PlayIfSet(m.DashSound);
+            Game.PlayIfSet(m.DashSound);
             m.RaiseDashed();
         }
 
@@ -354,15 +358,15 @@ public sealed partial class Game
         {
             var target = OnGround(m, input) * m.Speed;
             var rate = target != Vector2.Zero ? m.Acceleration : m.Deceleration;
-            v = rate > 0 ? MoveTowards(v, target, rate * dt) : target;
+            v = rate > 0 ? Game.MoveTowards(v, target, rate * dt) : target;
         }
 
         body.Velocity = v;
         body.FloatThisStep = true;
         if (m.FlipSprite && MathF.Abs(m.Facing.X) > 0.1f)
-            Face(entity, MathF.Sign(m.Facing.X));
+            Game.Face(entity, MathF.Sign(m.Facing.X));
 
-        if (entity.GetComponent<Animation>() is not { } animation || IsPlayingAttack(entity, animation))
+        if (entity.GetComponent<Animation>() is not { } animation || CombatSystem.IsPlayingAttack(entity, animation))
             return;
         var moving = m.IsDashing || (input != Vector2.Zero && v.LengthSquared() > 0.01f);
         // On an isometric map, going up the screen at all is seen from behind, and down it from the front.
@@ -381,7 +385,7 @@ public sealed partial class Game
     private static Vector2 OnGround(TopDownMovement m, Vector2 way) => m.Isometric ? way with { Y = way.Y / 2 } : way;
 
     // The first of the clips the animation has, if any.
-    private static void PlayFirst(Animation animation, params string[] clips)
+    internal static void PlayFirst(Animation animation, params string[] clips)
     {
         foreach (var clip in clips)
         {
@@ -401,7 +405,7 @@ public sealed partial class Game
     private LadderSpot? LadderAt(Vector2 point, float reach)
     {
         var span = new Box(point, new Vector2(reach, 0));
-        foreach (var ladder in Showing<Ladder>())
+        foreach (var ladder in Game.Showing<Ladder>())
         {
             foreach (var collider in ladder.Entity!.GetComponents<Collider>())
             {
@@ -411,7 +415,7 @@ public sealed partial class Game
             }
         }
 
-        foreach (var tilemap in Showing<Tilemap>())
+        foreach (var tilemap in Game.Showing<Tilemap>())
         {
             if ((tilemap.LadderAt(point) ?? tilemap.LadderAt(point - new Vector2(reach, 0)) ?? tilemap.LadderAt(point + new Vector2(reach, 0))) is { } x)
                 return new LadderSpot(x);
@@ -421,7 +425,7 @@ public sealed partial class Game
     }
 
     // Moves by a world-space offset, whatever its parent.
-    private static void Shift(Entity entity, Vector2 world)
+    internal static void Shift(Entity entity, Vector2 world)
     {
         var delta = new Vector3(world, 0);
         if (entity.Parent is { } parent && Matrix4x4.Invert(parent.Transform.WorldMatrix, out var inverse))
@@ -429,37 +433,18 @@ public sealed partial class Game
         entity.Transform.Position += delta;
     }
 
-    /// <summary>Plays the sound called <paramref name="sound"/> if it names one (a blank or null name plays nothing).</summary>
-    public void PlayIfSet(string? sound)
-    {
-        if (!string.IsNullOrWhiteSpace(sound))
-            PlayShared(sound.Trim());
-    }
-
-    /// <summary>Moves <paramref name="from"/> towards <paramref name="to"/> by at most <paramref name="step"/>, stopping on it.</summary>
-    public static float MoveTowards(float from, float to, float step) =>
-        MathF.Abs(to - from) <= step ? to : from + MathF.Sign(to - from) * step;
-
-    /// <summary>Moves <paramref name="from"/> towards <paramref name="to"/> by at most <paramref name="step"/>, stopping on it.</summary>
-    public static Vector2 MoveTowards(Vector2 from, Vector2 to, float step)
-    {
-        var gap = to - from;
-        var length = gap.Length();
-        return length <= step || length < 1e-6f ? to : from + gap / length * step;
-    }
-
     // Touches from this frame's physics: whatever touches a bouncer from its launching side is sent off that way. In a
     // network game, each machine launches what it moves, so a player's own character springs off at once.
-    private void RunBouncers()
+    internal void RunBouncers()
     {
-        foreach (var bouncer in Showing<Bouncer>())
+        foreach (var bouncer in Game.Showing<Bouncer>())
         {
             // A paused bouncer launches nothing, and nothing paused is launched (see Entity.IsPaused).
             if (bouncer.Entity!.IsPaused)
                 continue;
             foreach (var key in bouncer.Recent.Keys.ToList())
             {
-                bouncer.Recent[key] += Time.Delta;
+                bouncer.Recent[key] += Game.Time.Delta;
                 if (bouncer.Recent[key] > 0.15f)
                     bouncer.Recent.Remove(key);
             }
@@ -467,10 +452,10 @@ public sealed partial class Game
             var entity = bouncer.Entity!;
             var way = bouncer.Way;
             var collider = entity.GetComponent<Collider>();
-            var box = collider is null ? new Box(Flat(entity.Transform.WorldPosition), Vector2.Zero) : Physics.BoundsOf(collider);
-            foreach (var (by, layer) in TouchersOf(entity).ToList())
+            var box = collider is null ? new Box(Game.Flat(entity.Transform.WorldPosition), Vector2.Zero) : Physics.BoundsOf(collider);
+            foreach (var (by, layer) in Game.TouchersOf(entity).ToList())
             {
-                if (!bouncer.AcceptsLayer(layer) || by.GetComponent<Body>() is not { } body || bouncer.Recent.ContainsKey(by) || !Moves(by) || by.IsPaused)
+                if (!bouncer.AcceptsLayer(layer) || by.GetComponent<Body>() is not { } body || bouncer.Recent.ContainsKey(by) || !Game.Moves(by) || by.IsPaused)
                     continue;
                 if (!OnLaunchingSide(by, box, way, collider is { IsTrigger: false }))
                     continue;
@@ -478,7 +463,7 @@ public sealed partial class Game
                 body.Velocity = body.Velocity - Vector2.Dot(body.Velocity, way) * way + way * bouncer.Strength;
                 by.GetComponent<PlatformerMovement>()?.Launch();
                 bouncer.Recent[by] = 0;
-                PlayIfSet(bouncer.Sound);
+                Game.PlayIfSet(bouncer.Sound);
                 if (bouncer.Squash)
                 {
                     var transform = entity.Transform;
@@ -486,7 +471,7 @@ public sealed partial class Game
                     var along = new Vector2(MathF.Abs(way.X), MathF.Abs(way.Y));
                     var squash = Vector2.One + (Vector2.One - along) * 0.3f - along * 0.3f;
                     transform.Scale = new Vector3(rest.X * squash.X, rest.Y * squash.Y, rest.Z);
-                    ScaleTo(entity, new Vector2(rest.X, rest.Y), 0.3f, Ease.OutElastic);
+                    Game.ScaleTo(entity, new Vector2(rest.X, rest.Y), 0.3f, Ease.OutElastic);
                 }
 
                 bouncer.RaiseBounced(by);
@@ -498,7 +483,7 @@ public sealed partial class Game
     // be against the launching face (standing on a spring, not walking into its side).
     private static bool OnLaunchingSide(Entity by, Box box, Vector2 way, bool solid)
     {
-        var them = by.GetComponent<Collider>() is { } collider ? Physics.BoundsOf(collider) : new Box(Flat(by.Transform.WorldPosition), Vector2.Zero);
+        var them = by.GetComponent<Collider>() is { } collider ? Physics.BoundsOf(collider) : new Box(Game.Flat(by.Transform.WorldPosition), Vector2.Zero);
         if (!solid)
             return Vector2.Dot(them.Center - box.Center, way) > 0;
         var face = Vector2.Dot(box.Center, way) + Extent(box, way);
@@ -510,9 +495,9 @@ public sealed partial class Game
 
     // Crumbling platforms shake once stood on, fall away, and come back once nothing's in the way. Gone ones are hidden, so
     // all of them are looked at, not just the active ones.
-    private void RunCrumbles()
+    internal void RunCrumbles()
     {
-        foreach (var crumble in RunHere<Crumble>())
+        foreach (var crumble in Game.RunHere<Crumble>())
         {
             var entity = crumble.Entity!;
             if (entity.IsPaused)
@@ -526,7 +511,7 @@ public sealed partial class Game
                     continue;
                 if (float.IsNaN(crumble.Left))
                     crumble.Left = crumble.Respawn;
-                crumble.Left -= Time.Delta;
+                crumble.Left -= Game.Time.Delta;
                 if (crumble.Left > 0 || SomethingInside(entity))
                     continue;
                 crumble.Crumbled = false;
@@ -550,8 +535,8 @@ public sealed partial class Game
                 crumble.Age = 0;
             }
 
-            crumble.Left -= Time.Delta;
-            crumble.Age += Time.Delta;
+            crumble.Left -= Game.Time.Delta;
+            crumble.Age += Game.Time.Delta;
             crumble.ShakeOffset = new Vector2(MathF.Sin(crumble.Age * 70) * 0.06f, MathF.Cos(crumble.Age * 55) * 0.02f);
             if (crumble.Left > 0)
                 continue;
@@ -560,16 +545,16 @@ public sealed partial class Game
             crumble.Left = float.NaN;
             crumble.ShakeOffset = Vector2.Zero;
             entity.IsEnabled = false;
-            PlayIfSet(crumble.Sound);
-            if (!string.IsNullOrWhiteSpace(crumble.Effect) && PrefabLoader is not null)
-                Spawn(crumble.Effect.Trim(), Flat(entity.Transform.WorldPosition));
+            Game.PlayIfSet(crumble.Sound);
+            if (!string.IsNullOrWhiteSpace(crumble.Effect) && Game.PrefabLoader is not null)
+                Game.Spawn(crumble.Effect.Trim(), Game.Flat(entity.Transform.WorldPosition));
             crumble.RaiseFell();
         }
     }
 
     // A body it accepts is standing on it (or on something inside it).
     private bool StoodOn(Crumble crumble) =>
-        Active<Body>().Any(b => b.Ground is { } ground && ground.IsSelfOrDescendantOf(crumble.Entity!) &&
+        Game.Active<Body>().Any(b => b.Ground is { } ground && ground.IsSelfOrDescendantOf(crumble.Entity!) &&
             crumble.AcceptsLayer(b.Entity!.GetComponent<Collider>()?.Layer));
 
     // A body overlaps where its solid colliders would be, so it can't come back yet.
@@ -577,7 +562,7 @@ public sealed partial class Game
         entity.SelfAndDescendants().SelectMany(e => e.GetComponents<Collider>()).Where(c => !c.IsTrigger).Any(c =>
         {
             var box = Physics.BoundsOf(c);
-            return Physics.OverlapBox(Scene, box.Center, box.HalfSize * 2).Any(e => BodyOwner(e) is { } owner && !owner.IsSelfOrDescendantOf(entity));
+            return Game.Physics.OverlapBox(Game.Scene, box.Center, box.HalfSize * 2).Any(e => Game.BodyOwner(e) is { } owner && !owner.IsSelfOrDescendantOf(entity));
         });
 
     private readonly record struct LadderSpot(float? SnapX);

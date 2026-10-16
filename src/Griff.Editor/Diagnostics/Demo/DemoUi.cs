@@ -770,7 +770,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     }
 
     /// <summary>
-    /// A part of the open Add Component list: <c>addlist</c> (all of it), <c>search</c>, <c>list</c>, <c>plan</c>,
+    /// A part of the open Add Component list: <c>addlist</c> (all of it), <c>search</c>, <c>list</c>, <c>plan</c>, <c>blurb</c>,
     /// <c>browse</c>, or <c>item:Patrol</c> (a row).
     /// </summary>
     public static FrameworkElement AddListPart(string name)
@@ -785,11 +785,12 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
             "search" => (FrameworkElement)Inspector.FindName("AddSearch"),
             "list" => (FrameworkElement)Inspector.FindName("AddList"),
             "plan" => (FrameworkElement)Inspector.FindName("AddPlan"),
+            "blurb" => (FrameworkElement)Inspector.FindName("AddBlurb"),
             "browse" => (FrameworkElement)Inspector.FindName("AddBrowseButton"),
             "item" => Descendants<ListBoxItem>((FrameworkElement)Inspector.FindName("AddList"))
                 .FirstOrDefault(i => i.DataContext is CatalogItem c && (c.Name == item.Replace(" ", "") || InspectorPanel.Humanize(c.Name) == item))
                 ?? throw new InvalidOperationException($"No {item} showing in the Add Component list."),
-            _ => throw new FormatException($"Unknown part of the Add Component list \"{name}\" (search, list, plan, browse, item:)."),
+            _ => throw new FormatException($"Unknown part of the Add Component list \"{name}\" (search, list, plan, blurb, browse, item:)."),
         };
     }
 

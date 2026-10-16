@@ -472,6 +472,14 @@
                                         Content="Browse Catalog..."
                                         DockPanel.Dock="Bottom" />
 
+                                <!-- What the selected component is -->
+                                <TextBlock x:Name="AddBlurb"
+                                           Margin="10,6,10,0"
+                                           DockPanel.Dock="Bottom"
+                                           Style="{StaticResource Style.Text.Caption}"
+                                           Text="{Binding SelectedBlurb}"
+                                           TextWrapping="Wrap" />
+
                                 <!-- What Enter does: the component, with what it needs -->
                                 <TextBlock x:Name="AddPlan"
                                            Margin="10,6,10,6"
@@ -504,12 +512,20 @@
                                         <ListBox.ItemContainerStyle>
                                             <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
                                                 <Setter Property="Focusable" Value="False" />
-                                                <Setter Property="ToolTip" Value="{Binding Blurb}" />
                                             </Style>
                                         </ListBox.ItemContainerStyle>
                                         <ListBox.ItemTemplate>
                                             <DataTemplate DataType="inspector:CatalogItem">
                                                 <DockPanel Margin="2,1">
+                                                    <!-- The description comes when asked for: hover this, or select the row (it shows under the list) -->
+                                                    <TextBlock Margin="8,0,2,0"
+                                                               DockPanel.Dock="Right"
+                                                               Foreground="{DynamicResource Brush.Status.Info}"
+                                                               Style="{StaticResource Style.Icon}"
+                                                               Tag="info"
+                                                               Text="{x:Static theme:Icons.Info}"
+                                                               ToolTip="{Binding Blurb}"
+                                                               ToolTipService.ShowDuration="60000" />
                                                     <TextBlock Margin="8,0,0,0"
                                                                VerticalAlignment="Center"
                                                                DockPanel.Dock="Right"

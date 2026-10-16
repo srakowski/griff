@@ -118,7 +118,6 @@
                                 <ListBox.ItemContainerStyle>
                                     <Style BasedOn="{StaticResource {x:Type ListBoxItem}}" TargetType="ListBoxItem">
                                         <Setter Property="Focusable" Value="False" />
-                                        <Setter Property="ToolTip" Value="{Binding Description}" />
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding CanCreate}" Value="False">
                                                 <Setter Property="Opacity" Value="0.5" />
@@ -129,6 +128,16 @@
                                 <ListBox.ItemTemplate>
                                     <DataTemplate DataType="hierarchy:EntityPaletteItem">
                                         <DockPanel Margin="2,2">
+                                            <!-- The full description comes when asked for: hover this, or select the row (it shows under the list) -->
+                                            <TextBlock Margin="8,1,2,0"
+                                                       VerticalAlignment="Top"
+                                                       DockPanel.Dock="Right"
+                                                       Foreground="{DynamicResource Brush.Status.Info}"
+                                                       Style="{StaticResource Style.Icon}"
+                                                       Tag="info"
+                                                       Text="{x:Static theme:Icons.Info}"
+                                                       ToolTip="{Binding Description}"
+                                                       ToolTipService.ShowDuration="60000" />
                                             <TextBlock Width="18"
                                                        Margin="2,1,8,0"
                                                        VerticalAlignment="Top"

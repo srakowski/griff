@@ -1,6 +1,17 @@
-title: Close Project
-intro: File, Close Project returns the editor to the start.
+title: Close Project and quieter pickers
+intro: File, Close Project returns to the start; Add Component describes a component only when asked.
 project: Platformer | Quick Close
+
+chapter: Describing a component | The list stays readable
+create: Sprite
+rename: Slime
+say: Here's a new sprite. Let's look at what it could become.
+addlist
+explain: addlist:list | Names, uncovered | Hovering a component's name no longer pops a tooltip over the rows below it, so the list stays easy to read.
+explain: addlist:item:Patrol | The info mark | Each row has a small info mark on its right. Rest the mouse on it, and the description appears.
+type: patr
+explain: addlist:blurb | Or select it | The selected component is also described in a line under the list, so the keyboard gets it too.
+key: Escape
 
 chapter: Closing the project | Back to the start
 say: Done with this project? File, Close Project puts the editor back as it was before any project was open.

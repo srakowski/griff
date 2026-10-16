@@ -107,7 +107,11 @@ public sealed class ComponentCatalogViewModel : ObservableObject
         OnPropertyChanged(nameof(CanAdd));
         OnPropertyChanged(nameof(AddLabel));
         OnPropertyChanged(nameof(PlanText));
+        OnPropertyChanged(nameof(SelectedBlurb));
     }
+
+    /// <summary>What the selected component is, in a sentence (the Add Component list shows it under the list).</summary>
+    public string SelectedBlurb => Selected?.Blurb ?? "";
 
     public CatalogDetails? Details
     {

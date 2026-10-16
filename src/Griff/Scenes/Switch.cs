@@ -142,7 +142,7 @@ public sealed class Switch : Component
     /// </summary>
     public static IEnumerable<Entity> Named(Entity owner, string? names)
     {
-        foreach (var name in (names ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var name in Formats.Names(names))
         {
             var found = EntityNames.All(owner, name);
             foreach (var entity in found)

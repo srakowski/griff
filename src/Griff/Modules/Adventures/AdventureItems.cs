@@ -323,7 +323,7 @@ public sealed class UseWith : Component
         set
         {
             _item = value;
-            _items = (value ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+            _items = Formats.Names(value).ToList();
         }
     }
 

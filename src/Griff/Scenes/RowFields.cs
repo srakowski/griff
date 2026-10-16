@@ -194,23 +194,14 @@ public abstract class RowsAttribute : FieldEditorAttribute
     }
 
     /// <summary>"Coin 3" read as a name and how many after it (1 when it doesn't say); "Coin" is ("Coin", 1).</summary>
-    public static (string Name, int Count) NameCount(string text)
-    {
-        text = text.Trim();
-        var space = text.LastIndexOf(' ');
-        if (space > 0 && int.TryParse(text[(space + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var count))
-            return (text[..space].Trim(), count);
-        return (text, 1);
-    }
+    public static (string Name, int Count) NameCount(string text) => Items.ReadOne(text);
 }
 
 /// <summary>Names and how many of each joined with "+" ("Wood + Coal 2"), as a <see cref="CellKind.Amounts"/> cell holds them.</summary>
 public static class Amounts
 {
     /// <summary>The names and counts in <paramref name="text"/>, a count of 1 where it doesn't say.</summary>
-    public static IReadOnlyList<(string Name, int Count)> Read(string? text) =>
-        [.. (text ?? "").Split(['+', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(RowsAttribute.NameCount).Where(a => a.Name.Length > 0)];
+    public static IReadOnlyList<(string Name, int Count)> Read(string? text) => [.. Items.Parse(text).Select(i => (i.Item, i.Count))];
 
     /// <summary>Written back: "Wood + Coal 2", a count of 1 left out.</summary>
     public static string Write(IEnumerable<(string Name, int Count)> amounts) =>

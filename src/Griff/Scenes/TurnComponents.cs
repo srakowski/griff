@@ -139,7 +139,7 @@ public sealed class TurnOrder : Component
     }
 
     /// <summary>The teams in order, from <see cref="Teams"/>.</summary>
-    public IReadOnlyList<string> TeamList => Parsed(Teams, ref _sidesFrom, ref _sides);
+    public IReadOnlyList<string> TeamList => Formats.Names(Teams);
 
     /// <summary>What <see cref="TeamList"/> was called before every genre's teams were one idea. Kept for scripts.</summary>
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
@@ -181,7 +181,7 @@ public sealed class TurnOrder : Component
     /// <summary>True if the computer plays <paramref name="team"/> (see <see cref="ComputerTeams"/>).</summary>
     public bool IsComputer(string? team)
     {
-        var computers = Parsed(ComputerTeams, ref _computersFrom, ref _computers);
+        var computers = Formats.Names(ComputerTeams);
         for (var i = 0; i < computers.Length; i++)
         {
             if (Scenes.Teams.Same(computers[i], team))
@@ -220,20 +220,6 @@ public sealed class TurnOrder : Component
     internal void RaiseTurnStarted(string side) => TurnStarted?.Invoke(side);
 
     internal void RaiseTurnEnded(string side) => TurnEnded?.Invoke(side);
-
-    // Names separated by commas, split again only when the text changes.
-    private static string[] Parsed(string? names, ref string? from, ref string[] parsed)
-    {
-        if (ReferenceEquals(names, from))
-            return parsed;
-        (from, parsed) = (names, (names ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-        return parsed;
-    }
-
-    private string? _sidesFrom;
-    private string[] _sides = [];
-    private string? _computersFrom;
-    private string[] _computers = [];
 
     // Where it was as the turns were last taken (the frame -1 before), and the turn takers taking turns in it then.
     internal Scope ScopeNow { get; set; }

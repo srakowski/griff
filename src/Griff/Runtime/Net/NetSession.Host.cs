@@ -431,7 +431,7 @@ public sealed partial class NetSession
 
     /// <summary>The team names the host's Multiplayer settings give, in order.</summary>
     public List<string> TeamNames() =>
-        ((IsClient ? _hostSettings?.Teams : null) ?? Settings?.Teams ?? "").Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        [.. Formats.Names((IsClient ? _hostSettings?.Teams : null) ?? Settings?.Teams)];
 
     // The host's Multiplayer settings that players' machines go by, whatever their own copy of the scene says.
     private void WriteSettings(NetWriter w)

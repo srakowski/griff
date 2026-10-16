@@ -192,7 +192,7 @@ public sealed class Blocks : Component, ILightSource
         {
             _dropsText = value;
             _drops = [];
-            foreach (var part in (value ?? "").Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            foreach (var part in Formats.Names(value))
             {
                 var space = part.IndexOf(' ');
                 if (space > 0 && int.TryParse(part[..space], NumberStyles.Integer, CultureInfo.InvariantCulture, out var tile))
@@ -215,7 +215,7 @@ public sealed class Blocks : Component, ILightSource
         {
             _hardness = value;
             _hardnessRuns = [];
-            foreach (var part in (value ?? "").Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            foreach (var part in Formats.Names(value))
             {
                 var space = part.LastIndexOf(' ');
                 if (space > 0 && float.TryParse(part[(space + 1)..], NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds))

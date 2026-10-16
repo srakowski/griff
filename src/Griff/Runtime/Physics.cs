@@ -832,7 +832,7 @@ public sealed partial class Physics : IKeepsState
             var cells = tilemap.SlopeCells();
             if (cells.Count == 0)
                 continue;
-            var (placing, filter) = (TilePlacing.Of(tilemap), new LayerFilter(tilemap.Layer, CollisionLayers.ParseKept(tilemap.IgnoreLayers)));
+            var (placing, filter) = (TilePlacing.Of(tilemap), new LayerFilter(tilemap.Layer, CollisionLayers.Parse(tilemap.IgnoreLayers)));
             for (var i = 0; i < cells.Count; i++)
                 into.Add(new Slope(tilemap.Entity!, placing.Cell(cells[i].X, cells[i].Y), cells[i].Rising, filter));
         }
@@ -845,7 +845,7 @@ public sealed partial class Physics : IKeepsState
         {
             if (!tilemap.Solid || (only is not null && !CollisionLayers.Contains(only, tilemap.Layer)))
                 continue;
-            var filter = new LayerFilter(tilemap.Layer, CollisionLayers.ParseKept(tilemap.IgnoreLayers));
+            var filter = new LayerFilter(tilemap.Layer, CollisionLayers.Parse(tilemap.IgnoreLayers));
             foreach (var (cell, rising) in SlopeShapes(tilemap))
                 yield return new Slope(tilemap.Entity!, cell, rising, filter);
         }
@@ -1056,7 +1056,7 @@ public sealed partial class Physics : IKeepsState
             var tilemap = tilemaps[t++];
             if (!tilemap.Solid || tilemap.Shape != TileShape.Square || (only is not null && !CollisionLayers.Contains(only, tilemap.Layer)))
                 continue;
-            var filter = new LayerFilter(tilemap.Layer, CollisionLayers.ParseKept(tilemap.IgnoreLayers));
+            var filter = new LayerFilter(tilemap.Layer, CollisionLayers.Parse(tilemap.IgnoreLayers));
             var placing = TilePlacing.Of(tilemap);
             var runs = tilemap.CollisionRuns();
             for (var i = 0; i < runs.Count; i++)
@@ -1222,7 +1222,7 @@ public sealed partial class Physics : IKeepsState
     // A shape's layer and the layers it passes through.
     private readonly record struct LayerFilter(string? Layer, string[] Ignores)
     {
-        public static LayerFilter Of(Collider collider) => new(collider.Layer, CollisionLayers.ParseKept(collider.IgnoreLayers));
+        public static LayerFilter Of(Collider collider) => new(collider.Layer, CollisionLayers.Parse(collider.IgnoreLayers));
 
         public bool IgnoresEachOther(LayerFilter other) =>
             (Ignores.Length > 0 && CollisionLayers.Contains(Ignores, other.Layer)) ||

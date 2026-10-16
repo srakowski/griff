@@ -120,7 +120,14 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
     /// scene, so a rewind takes them back.
     /// </summary>
     [PlainText("how many of each gem have been cleared: the game counts it")]
-    public string? Cleared { get; set; }
+    public string? Cleared
+    {
+        get => _cleared.Count == 0 ? null : Formats.WriteKindCounts(_cleared);
+        set => _cleared = new Dictionary<int, int>(Formats.KindCounts(value));
+    }
+
+    // The count of each kind cleared: the board counts in numbers and writes them out as text only for the scene's file.
+    private Dictionary<int, int> _cleared = [];
 
     /// <summary>A swap that lines nothing up slides back. Untick it to let any two neighbors swap.</summary>
     [Group("Rules")]
@@ -223,11 +230,10 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
     {
         get
         {
-            var collect = ParseCounts(Collect);
+            var collect = CollectCounts;
             if (TargetScore <= 0 && collect.Count == 0)
                 return false;
-            var cleared = ParseCounts(Cleared);
-            return Score >= TargetScore && collect.All(c => cleared.GetValueOrDefault(c.Key) >= c.Value);
+            return Score >= TargetScore && collect.All(c => _cleared.GetValueOrDefault(c.Key) >= c.Value);
         }
     }
 
@@ -266,10 +272,10 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
     public event Action<bool>? Finished;
 
     /// <summary>How many gems of kind <paramref name="kind"/> (a tile number) have been cleared.</summary>
-    public int ClearedOf(int kind) => ParseCounts(Cleared).GetValueOrDefault(kind);
+    public int ClearedOf(int kind) => _cleared.GetValueOrDefault(kind);
 
     /// <summary>How many gems of kind <paramref name="kind"/> <see cref="Collect"/> asks for: 0 if none.</summary>
-    public int ToCollect(int kind) => ParseCounts(Collect).GetValueOrDefault(kind);
+    public int ToCollect(int kind) => CollectCounts.GetValueOrDefault(kind);
 
     /// <summary>How many gems of the kind named <paramref name="kind"/> (a tile number, e.g. "1") have been cleared. Read as "Cleared:1", out of how many <see cref="Collect"/> asks for.</summary>
     [Output("Cleared", Example = "1", OutOf = nameof(ToCollectOf))]
@@ -339,27 +345,10 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
     internal void RaiseFinished(bool won) => Finished?.Invoke(won);
 
     // Adds gems cleared of a kind to Cleared.
-    internal void AddCleared(int kind, int count)
-    {
-        var counts = ParseCounts(Cleared);
-        counts[kind] = counts.GetValueOrDefault(kind) + count;
-        Cleared = string.Join(", ", counts.OrderBy(c => c.Key).Select(c => $"{c.Key}:{c.Value}"));
-    }
+    internal void AddCleared(int kind, int count) => _cleared[kind] = _cleared.GetValueOrDefault(kind) + count;
 
-    // "0:20, 3:15" as kind to count; pairs that don't read are skipped, and a kind named twice adds up.
-    internal static Dictionary<int, int> ParseCounts(string? text)
-    {
-        var counts = new Dictionary<int, int>();
-        foreach (var pair in (text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var parts = pair.Split(':', StringSplitOptions.TrimEntries);
-            if (parts.Length == 2 && int.TryParse(parts[0], System.Globalization.CultureInfo.InvariantCulture, out var kind) &&
-                int.TryParse(parts[1], System.Globalization.CultureInfo.InvariantCulture, out var count))
-                counts[kind] = counts.GetValueOrDefault(kind) + count;
-        }
-
-        return counts;
-    }
+    /// <summary>How many of each kind <see cref="Collect"/> asks for (read once, shared: don't change it).</summary>
+    internal IReadOnlyDictionary<int, int> CollectCounts => Formats.KindCounts(Collect);
 
     // ----- What the game keeps while it runs (not saved with the scene, but kept with rewind snapshots) -----
 

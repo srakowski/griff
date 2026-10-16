@@ -1,0 +1,19 @@
+title: Small formats, read one way
+intro: A field typed in a small format, like the gems a Match-3 level asks for, reads the same in the editor and the game, and a part that doesn't read is flagged.
+project: Empty | Formats
+
+chapter: A goal that doesn't read | The game says so
+create: Empty
+rename: Board
+add: MatchBoard
+set: MatchBoard.Collect = 0:3, oops
+say: A Match-3 board's Collect field is typed as tile and count pairs. Here the second pair is not a pair.
+play
+expectproblem: MatchBoard = oops
+explain: component:MatchBoard | The flag | The game reads Collect the same way the Inspector's rows do, so the part that doesn't read is flagged on the board while the game plays, once, rather than skipped without a word.
+stop
+set: MatchBoard.Collect = 0:3, 2:5
+play
+expectproblem: MatchBoard = none
+say: Written as pairs, both read, and nothing is flagged.
+stop

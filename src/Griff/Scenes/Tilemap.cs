@@ -1151,7 +1151,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
     public static IReadOnlyList<TileAnimation> ParseAnimations(string? text)
     {
         var runs = new List<TileAnimation>();
-        foreach (var part in (text ?? "").Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var part in Formats.Names(text))
         {
             var at = part.IndexOf('@');
             var range = (at >= 0 ? part[..at] : part).Trim();
@@ -1178,7 +1178,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
     public static IReadOnlyList<int> ParseAutoTiles(string? text)
     {
         var firsts = new List<int>();
-        foreach (var part in (text ?? "").Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var part in Formats.Names(text))
         {
             var dash = part.IndexOf('-', 1);
             if (!int.TryParse(dash < 0 ? part : part[..dash].Trim(), out var first))

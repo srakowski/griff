@@ -217,7 +217,7 @@ public sealed class Match3Template : ProjectTemplate
         (moves.Track, moves.Output) = ("*", "Moves");
         moves.Format = "Moves: {3}";
 
-        var collect = MatchBoard.ParseCounts(board.Collect);
+        var collect = board.CollectCounts;
         if (collect.Count > 0)
         {
             top -= 0.2f;

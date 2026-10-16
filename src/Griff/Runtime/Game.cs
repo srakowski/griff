@@ -271,8 +271,8 @@ public sealed partial class Game : IGameContext
         _namesChecked = Scene;
         if (Components is not { } components)
             return;
-        foreach (var line in NameChecks.Lines(Scene, components))
-            Warn(line);
+        foreach (var (component, label, problem) in NameChecks.In(Scene, components))
+            Warn(component, $"{component.Entity!.Name}: {label}: {problem}");
     }
 
     /// <summary>

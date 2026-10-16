@@ -75,17 +75,8 @@ public static class CollisionLayers
     public static string NameOf(string? layer) => string.IsNullOrWhiteSpace(layer) ? Default : layer.Trim();
 
     /// <summary>Reads a list of layer names like "Bullet, Enemy" (commas or semicolons between them).</summary>
-    public static string[] Parse(string? list) => string.IsNullOrWhiteSpace(list)
-        ? []
-        : list.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-    // Lists already read, by the very string they were read from (a collider's Ignore Layers, as long as it isn't changed).
-    private static readonly ConditionalWeakTable<string, string[]> s_read = new();
-
-    // Parse, kept for the same string, for physics, which reads every collider's list each step: the array is shared, so
-    // it's never changed.
-    internal static string[] ParseKept(string? list) =>
-        string.IsNullOrWhiteSpace(list) ? [] : s_read.TryGetValue(list, out var layers) ? layers : s_read.GetValue(list, Parse);
+    /// <remarks>Read once for the same string (see <see cref="Formats.Names"/>), shared: don't change the array.</remarks>
+    public static string[] Parse(string? list) => Formats.Names(list);
 
     /// <summary>True if <paramref name="layer"/> is one of <paramref name="layers"/>.</summary>
     public static bool Contains(IEnumerable<string> layers, string? layer)

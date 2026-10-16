@@ -238,21 +238,11 @@ internal static class ItemEffects
         var uses = new List<(string, IReadOnlyList<(string, string)>)>();
         foreach (var line in lines)
         {
-            var colon = line.IndexOf(':');
-            if (colon <= 0)
+            if (ItemUsesAttribute.Read(line) is not { } use)
                 continue;
-            var effects = new List<(string, string)>();
-            foreach (var part in line[(colon + 1)..].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                var space = part.IndexOf(' ');
-                var verb = (space > 0 ? part[..space] : part).ToLowerInvariant();
-                var argument = space > 0 ? part[(space + 1)..].Trim() : "";
-                if (Verbs.Contains(verb) && argument.Length > 0)
-                    effects.Add((verb, argument));
-            }
-
+            var effects = use.Effects.Where(e => Verbs.Contains(e.Verb) && e.Argument.Length > 0).ToList();
             if (effects.Count > 0)
-                uses.Add((line[..colon].Trim(), effects));
+                uses.Add((use.Item, effects));
         }
 
         return uses;

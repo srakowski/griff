@@ -90,21 +90,7 @@ internal sealed class PolygonParts
     public Vector2 Max { get; }
 
     /// <summary>Reads "x y; x y; x y" (commas work between the numbers too); anything that isn't a pair of numbers is skipped.</summary>
-    public static List<Vector2> Parse(string? text)
-    {
-        var points = new List<Vector2>();
-        foreach (var part in (text ?? "").Split([';', '|', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var numbers = part.Split([',', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
-            if (numbers.Length == 2 &&
-                float.TryParse(numbers[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x) &&
-                float.TryParse(numbers[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y) &&
-                float.IsFinite(x) && float.IsFinite(y))
-                points.Add(new Vector2(x, y));
-        }
-
-        return points;
-    }
+    public static List<Vector2> Parse(string? text) => [.. Formats.Points(text)];
 
     /// <summary>"x y; x y; x y", on hundredths, as <see cref="Parse"/> reads it.</summary>
     public static string Format(IEnumerable<Vector2> points) =>

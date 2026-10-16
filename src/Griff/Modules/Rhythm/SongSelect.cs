@@ -85,7 +85,7 @@ public sealed class SongSelect : Component, IPlaytestReport
         set
         {
             _playActions = value;
-            PlayList = (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            PlayList = Formats.Names(value);
         }
     }
 

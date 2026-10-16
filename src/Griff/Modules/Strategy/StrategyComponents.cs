@@ -522,7 +522,7 @@ public sealed class Producer : Component, INetState
 
     /// <summary>The prefab names in <see cref="Trains"/>.</summary>
     public IReadOnlyList<string> Options() =>
-        (Trains ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        Formats.Names(Trains);
 
     internal List<string> QueueList { get; } = [];
 
@@ -582,7 +582,7 @@ public sealed class Worker : Component
 
     /// <summary>The building prefabs in <see cref="Builds"/>.</summary>
     public IReadOnlyList<string> Options() =>
-        (Builds ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        Formats.Names(Builds);
 
     /// <summary>Sends it to gather from <paramref name="resource"/>.</summary>
     public void Gather(Entity resource)

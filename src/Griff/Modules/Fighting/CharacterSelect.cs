@@ -32,7 +32,7 @@ public sealed class CharacterSelect : Component, IPlaytestReport
         set
         {
             _characters = value;
-            _list = (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            _list = Formats.Names(value);
         }
     }
 
@@ -75,7 +75,7 @@ public sealed class CharacterSelect : Component, IPlaytestReport
         set
         {
             _pickActions = value;
-            _pickList = (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            _pickList = Formats.Names(value);
         }
     }
 

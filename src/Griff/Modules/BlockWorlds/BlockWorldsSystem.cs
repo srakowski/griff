@@ -221,7 +221,7 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
     // Stands the generator's Spawn entities on the ground in the middle of the world.
     private void PlaceOnSurface(WorldGenerator generator, Tilemap map)
     {
-        var names = (generator.Spawn ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var names = Formats.Names(generator.Spawn);
         if (names.Length == 0)
             return;
         var column = Math.Max(0, map.Width / 2);

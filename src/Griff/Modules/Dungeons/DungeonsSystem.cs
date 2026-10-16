@@ -70,7 +70,7 @@ internal sealed class DungeonsSystem : GameSystem
     }
 
     private IEnumerable<Entity> PlayersOf(DungeonGenerator dungeon) =>
-        (dungeon.Players ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        Formats.Names(dungeon.Players)
             .SelectMany(Game.FindAll).Distinct();
 
     // Lays the floor's tiles, clears the last floor's spawns and spawns this one's, and puts the players and the exit in place.

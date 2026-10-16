@@ -189,7 +189,7 @@ public static class WorldGen
     public static IReadOnlyList<(int Tile, float Share)> ParseOres(string? text)
     {
         var ores = new List<(int, float)>();
-        foreach (var part in (text ?? "").Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var part in Formats.Names(text))
         {
             var bits = part.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (bits.Length != 2 || !int.TryParse(bits[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var tile) ||

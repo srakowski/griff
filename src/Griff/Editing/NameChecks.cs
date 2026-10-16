@@ -8,7 +8,9 @@ namespace Griff.Editing;
 /// done on can't do, an output a counter, bar or wire reads that what it reads hasn't got, and a name picked from what its
 /// component lists that isn't listed. The Inspector flags them, <c>scene_tree</c> lists them, the loader reports them and a
 /// game says so in Output as it starts, so a renamed action or output (see <see cref="FormerNameAttribute"/>) never leaves
-/// a trigger silently doing nothing.
+/// a trigger silently doing nothing. A text in a small format (points, counts, rows, items; see <see cref="Formats"/>) that
+/// has a part which doesn't read is the same kind of mistake, said the same way, since the field's editor and the game
+/// read it one way and a part that doesn't read is left out.
 /// </summary>
 public static class NameChecks
 {
@@ -37,7 +39,7 @@ public static class NameChecks
             foreach (var property in registry.Get(component.GetType()).Properties)
             {
                 var problem = Problem(component, property) ??
-                    (property.Editor is ChoiceOfAttribute choice ? choice.Problem(component, property.GetValue(component)) : null);
+                    property.Editor?.Problem(component, property.GetValue(component));
                 if (problem is not null)
                     yield return (component, $"{component.GetType().Name}.{property.Name}", problem);
             }

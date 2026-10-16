@@ -88,7 +88,7 @@ public sealed class Goal : Component
     /// <summary>True if crates of kind <paramref name="kind"/> (a pushable's Kind) cover it.</summary>
     public bool AcceptsKind(string? kind)
     {
-        var kinds = (Accepts ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var kinds = Formats.Names(Accepts);
         return kinds.Length == 0 || kinds.Contains((kind ?? "").Trim(), StringComparer.OrdinalIgnoreCase);
     }
 

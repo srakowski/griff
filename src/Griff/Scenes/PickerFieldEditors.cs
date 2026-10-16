@@ -88,7 +88,7 @@ public sealed class ChoicesOfAttribute(string member) : FieldEditorAttribute
 
     /// <summary>The names <paramref name="value"/> holds, in order.</summary>
     public static IReadOnlyList<string> Read(object? value) =>
-        (value as string ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        Formats.Names(value as string);
 
     public override string? Problem(Component component, object? value)
     {

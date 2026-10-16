@@ -168,7 +168,7 @@ public sealed class NameListAttribute : FieldEditorAttribute
     /// <summary>The names a value holds, in order, blank ones left out.</summary>
     public static IReadOnlyList<string> Read(object? value) => value switch
     {
-        string text => [.. text.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)],
+        string text => Formats.Names(text),
         IReadOnlyList<string> lines => [.. lines.Select(l => l.Trim()).Where(l => l.Length > 0)],
         _ => [],
     };
@@ -308,18 +308,14 @@ public sealed class TileCountsAttribute : FieldEditorAttribute
     public static IReadOnlyList<(int Tile, int Count)> Read(string? text) =>
         [.. Parts(text).Select(ReadPair).OfType<(int, int)>()];
 
+    /// <summary>How many of each tile the string says, a tile named twice adding up: what the game counts against (see <see cref="Formats.KindCounts"/>).</summary>
+    public static IReadOnlyDictionary<int, int> Totals(string? text) => Formats.KindCounts(text);
+
     /// <summary>Pairs written: "0:20, 3:15".</summary>
     public static string Write(IEnumerable<(int Tile, int Count)> pairs) =>
         string.Join(", ", pairs.Select(p => string.Create(CultureInfo.InvariantCulture, $"{p.Tile}:{p.Count}")));
 
-    private static (int, int)? ReadPair(string part)
-    {
-        var colon = part.IndexOf(':');
-        return colon > 0 && int.TryParse(part[..colon].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var tile) &&
-            int.TryParse(part[(colon + 1)..].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
-            ? (tile, count)
-            : null;
-    }
+    private static (int, int)? ReadPair(string part) => Formats.KindCount(part);
 }
 
 /// <summary>

@@ -88,7 +88,7 @@ internal sealed partial class StrategySystem
     {
         if (buildings.Any(b => !b.IsBuilt))
             return;
-        var wanted = (opponent.Builds ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var wanted = Formats.Names(opponent.Builds);
         foreach (var name in wanted)
         {
             if (buildings.Any(b => b.Entity!.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
@@ -134,7 +134,7 @@ internal sealed partial class StrategySystem
     // Takes turns training each kind of soldier it fields, one every TrainEvery seconds (or as fast as it can pay).
     private void TrainArmy(Opponent opponent, List<Producer> producers, float elapsed)
     {
-        var army = (opponent.Army ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var army = Formats.Names(opponent.Army);
         opponent.TrainLeft -= elapsed;
         if (army.Length == 0 || opponent.TrainLeft > 0)
             return;

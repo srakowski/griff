@@ -261,20 +261,7 @@ public sealed class Mover : Component
     private float LegSeconds((Vector2 From, Vector2 To) leg) => Speed > 0 ? Vector2.Distance(leg.From, leg.To) / Speed : 0;
 
     /// <summary>Reads "x y; x y" (commas work between the numbers too). Anything that isn't a pair of numbers is skipped.</summary>
-    public static IReadOnlyList<Vector2> ParsePoints(string? text)
-    {
-        var points = new List<Vector2>();
-        foreach (var part in (text ?? "").Split([';', '|', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var numbers = part.Split([',', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
-            if (numbers.Length == 2 &&
-                float.TryParse(numbers[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x) &&
-                float.TryParse(numbers[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y))
-                points.Add(new Vector2(x, y));
-        }
-
-        return points;
-    }
+    public static IReadOnlyList<Vector2> ParsePoints(string? text) => Formats.Points(text);
 }
 
 /// <summary>

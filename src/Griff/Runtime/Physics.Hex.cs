@@ -247,7 +247,7 @@ public sealed partial class Physics
             var world = map.Entity!.Transform.WorldMatrix;
             if (!Matrix4x4.Invert(world, out var toLocal))
                 return null;
-            return new HexWalls(map, world, toLocal, new LayerFilter(map.Layer, CollisionLayers.ParseKept(map.IgnoreLayers)));
+            return new HexWalls(map, world, toLocal, new LayerFilter(map.Layer, CollisionLayers.Parse(map.IgnoreLayers)));
         }
 
         public bool Blocked(int x, int y) => Map.IsBlocked(x, y);

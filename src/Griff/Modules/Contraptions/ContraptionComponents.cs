@@ -95,13 +95,13 @@ public sealed class SandboxTools : Component
 
     /// <summary>The tools as listed in <see cref="Tools"/>; anything that isn't a tool is skipped.</summary>
     public IReadOnlyList<SandboxTool> ToolList =>
-        (Tools ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        Formats.Names(Tools)
             .Select(t => Enum.TryParse<SandboxTool>(t, ignoreCase: true, out var tool) ? (SandboxTool?)tool : null)
             .OfType<SandboxTool>().Distinct().ToList();
 
     /// <summary>The props as listed in <see cref="Props"/>.</summary>
     public IReadOnlyList<string> PropList =>
-        (Props ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        Formats.Names(Props);
 
     /// <summary>The tool in hand, or null if it has none.</summary>
     public SandboxTool? Current => ToolList is { Count: > 0 } tools ? tools[Math.Clamp(Selected, 0, tools.Count - 1)] : null;

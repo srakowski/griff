@@ -60,7 +60,7 @@ public sealed class GenerateDungeonAction : EntityAction
         var map = entity.GetComponent<Tilemap>()!;
         var layout = DungeonGen.Generate(dungeon, dungeon.Seed != 0 ? dungeon.Seed : Random.Shared.Next(1, int.MaxValue));
         var moves = new List<(Entity Entity, (int X, int Y) Cell)>();
-        var players = (dungeon.Players ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        var players = Formats.Names(dungeon.Players)
             .SelectMany(name => EntityNames.Every(scene, name)).Distinct().ToList();
         for (var i = 0; i < players.Count; i++)
             moves.Add((players[i], layout.Players[Math.Min(i, layout.Players.Count - 1)]));

@@ -6,6 +6,7 @@
                        xmlns:art="clr-namespace:Griff.Editor.Features.Art"
                        xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
                        xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters"
+                       xmlns:modules="clr-namespace:Griff.Editor.Core.Modules"
                        xmlns:theme="clr-namespace:Griff.Editor.Themes"
                        mc:Ignorable="d"
                        d:DataContext="{d:DesignInstance Type=art:ClipEditor}"
@@ -18,21 +19,23 @@
                        WindowStartupLocation="CenterOwner">
 
     <Window.Resources>
-        <converters:BoolToVisibilityConverter x:Key="Visible" />
+        <ResourceDictionary>
+            <!-- The overlays' templates: each genre's Templates.xaml -->
+            <ResourceDictionary.MergedDictionaries>
+                <modules:GenreTemplates />
+            </ResourceDictionary.MergedDictionaries>
 
-        <Style x:Key="Heading" TargetType="TextBlock" BasedOn="{StaticResource Style.Text.Overline}">
-            <Setter Property="Margin" Value="0,0,0,6" />
-        </Style>
-        <Style x:Key="Tool" TargetType="RadioButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
-            <Setter Property="Height" Value="26" />
-            <Setter Property="Margin" Value="0,0,3,0" />
-            <Setter Property="Padding" Value="4,0" />
-        </Style>
-        <Style x:Key="Small" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Height" Value="26" />
-            <Setter Property="Margin" Value="0,0,4,4" />
-            <Setter Property="Padding" Value="8,0" />
-        </Style>
+            <converters:BoolToVisibilityConverter x:Key="Visible" />
+
+            <Style x:Key="Heading" TargetType="TextBlock" BasedOn="{StaticResource Style.Text.Overline}">
+                <Setter Property="Margin" Value="0,0,0,6" />
+            </Style>
+            <Style x:Key="Small" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                <Setter Property="Height" Value="26" />
+                <Setter Property="Margin" Value="0,0,4,4" />
+                <Setter Property="Padding" Value="8,0" />
+            </Style>
+        </ResourceDictionary>
     </Window.Resources>
 
     <Grid Background="{DynamicResource Brush.Surface.Panel}">
@@ -76,84 +79,18 @@
                 <ColumnDefinition Width="240" />
                 <ColumnDefinition Width="16" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="16" />
-                <ColumnDefinition Width="220" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <!-- The frame's hitboxes and hurtboxes -->
-            <DockPanel x:Name="BoxesPanel" Grid.Column="4" IsEnabled="{Binding CanEditBoxes}">
-                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Heading}" Text="Boxes" />
-                <UniformGrid x:Name="BoxTools" Columns="3" DockPanel.Dock="Top">
-                    <RadioButton x:Name="SelectTool" Content="Select" GroupName="BoxTool" IsChecked="{Binding IsSelectTool}" Style="{StaticResource Tool}" ToolTip="Pick a box to move it, or drag its corners (S)" />
-                    <RadioButton x:Name="HitboxTool" Content="Hitbox" GroupName="BoxTool" IsChecked="{Binding IsHitboxTool}" Style="{StaticResource Tool}" ToolTip="Drag over the picture to draw a hitbox: where it hits (H)" />
-                    <RadioButton x:Name="HurtboxTool" Content="Hurtbox" GroupName="BoxTool" IsChecked="{Binding IsHurtboxTool}" Style="{StaticResource Tool}" ToolTip="Drag over the picture to draw a hurtbox: where it can be hit (U)" />
-                </UniformGrid>
-                <CheckBox x:Name="CirclesBox" Margin="0,6,0,0" Content="Draw circles" DockPanel.Dock="Top" IsChecked="{Binding DrawCircles}" ToolTip="Draw circles instead of boxes (C)" />
-                <CheckBox x:Name="OnionBox" Margin="0,4,0,0" Content="Onion skin" DockPanel.Dock="Top" IsChecked="{Binding OnionSkin}" ToolTip="Show the frame before, and its boxes, faintly underneath (O)" />
-                <Button x:Name="CopyPreviousButton"
-                        Margin="0,6,0,0"
-                        HorizontalAlignment="Stretch"
-                        Command="{Binding CopyPreviousFrameCommand}"
-                        Content="Copy From Previous Frame"
-                        DockPanel.Dock="Top"
-                        Style="{StaticResource Small}"
-                        ToolTip="Give this frame the boxes of the frame before it (Ctrl+D)" />
-                <TextBlock x:Name="BoxesSummary" Margin="0,4,0,6" DockPanel.Dock="Top" Style="{StaticResource Style.Text.Secondary}" Text="{Binding BoxesSummary}" TextWrapping="Wrap" />
-
-                <!-- The box picked -->
-                <StackPanel x:Name="BoxSettings" Margin="0,8,0,0" DockPanel.Dock="Bottom" Visibility="{Binding HasSelectedBox, Converter={StaticResource Visible}}">
-                    <TextBlock x:Name="BoxLabel" Margin="0,0,0,6" FontWeight="SemiBold" Text="{Binding SelectedBox.Label}" TextWrapping="Wrap" />
-                    <StackPanel x:Name="HitSettings" Visibility="{Binding IsHitboxSelected, Converter={StaticResource Visible}}">
-                        <DockPanel Margin="0,0,0,4">
-                            <TextBlock Width="80" VerticalAlignment="Center" Text="Damage" />
-                            <controls:CommitTextBox x:Name="DamageBox" Text="{Binding BoxDamage, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0.###}}" ToolTip="Hit points it takes, before the hurtbox multiplies it" />
-                        </DockPanel>
-                        <DockPanel Margin="0,0,0,4">
-                            <TextBlock Width="80" VerticalAlignment="Center" Text="Knockback" />
-                            <controls:CommitTextBox x:Name="KnockbackYBox" Width="56" DockPanel.Dock="Right" Text="{Binding BoxKnockbackY, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0.###}}" ToolTip="Up, in units a second" />
-                            <controls:CommitTextBox x:Name="KnockbackXBox" Margin="0,0,4,0" Text="{Binding BoxKnockbackX, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0.###}}" ToolTip="Away, in units a second" />
-                        </DockPanel>
-                        <DockPanel Margin="0,0,0,4">
-                            <TextBlock Width="80" VerticalAlignment="Center" Text="Stun" />
-                            <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" DockPanel.Dock="Right" Style="{StaticResource Style.Text.Secondary}" Text="frames" />
-                            <controls:CommitTextBox x:Name="StunBox" Text="{Binding BoxStun, UpdateSourceTrigger=LostFocus}" ToolTip="Steps of hitstun (frames, at 60 a second)" />
-                        </DockPanel>
-                        <DockPanel Margin="0,0,0,4">
-                            <TextBlock Width="80" VerticalAlignment="Center" Text="Group" />
-                            <controls:CommitTextBox x:Name="GroupBox" Text="{Binding BoxGroup, UpdateSourceTrigger=LostFocus}" ToolTip="A swing hits each thing once per group" />
-                        </DockPanel>
-                    </StackPanel>
-                    <DockPanel x:Name="HurtSettings" Margin="0,0,0,4" Visibility="{Binding IsHurtboxSelected, Converter={StaticResource Visible}}">
-                        <TextBlock Width="80" VerticalAlignment="Center" Text="Multiplier" />
-                        <controls:CommitTextBox x:Name="MultiplierBox" Text="{Binding BoxMultiplier, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0.###}}" ToolTip="Hits here deal this many times their damage: 1.5 for a head" />
-                    </DockPanel>
-                    <Button x:Name="RemoveBoxButton" Margin="0,4,0,0" HorizontalAlignment="Left" Command="{Binding RemoveBoxCommand}" Style="{StaticResource Small}" ToolTip="Remove this box (Delete)">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Margin="0,0,6,0" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
-                            <TextBlock Text="Remove Box" />
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-
-                <ListBox x:Name="BoxList" ItemsSource="{Binding Boxes}" SelectedItem="{Binding SelectedBox}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate DataType="art:FrameBoxRow">
-                            <DockPanel Margin="2,3">
-                                <Border x:Name="Swatch" Width="10" Height="10" Margin="0,3,6,0" VerticalAlignment="Top" Background="#4DA3FF" CornerRadius="2" DockPanel.Dock="Left" />
-                                <StackPanel>
-                                    <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-                                    <TextBlock Style="{StaticResource Style.Text.Secondary}" Text="{Binding Place}" TextWrapping="Wrap" />
-                                </StackPanel>
-                            </DockPanel>
-                            <DataTemplate.Triggers>
-                                <DataTrigger Binding="{Binding IsHit}" Value="True">
-                                    <Setter TargetName="Swatch" Property="Background" Value="#FF4D54" />
-                                </DataTrigger>
-                            </DataTemplate.Triggers>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-            </DockPanel>
+            <!-- What the modules add for the frame (a fighting game's hitboxes and hurtboxes): each overlay's panel, by its template -->
+            <ItemsControl x:Name="OverlayPanels" Grid.Column="4" Focusable="False" ItemsSource="{Binding Overlays}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Rows="1" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
 
             <!-- The clips -->
             <DockPanel>
@@ -361,6 +298,7 @@
                     <Button x:Name="StepForwardButton" Command="{Binding StepForwardCommand}" Style="{StaticResource Style.Button.Toolbar}" ToolTip="On a frame (Right)">
                         <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Step}" />
                     </Button>
+                    <CheckBox x:Name="OnionBox" Margin="10,0,0,0" VerticalAlignment="Center" Content="Onion skin" DockPanel.Dock="Right" IsChecked="{Binding OnionSkin}" ToolTip="Show the frame before faintly underneath, and what's drawn on it (O)" />
                     <TextBlock x:Name="FrameText" Margin="10,0,0,0" VerticalAlignment="Center" Style="{StaticResource Style.Text.Mono}" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="{Binding FrameText}" />
                 </DockPanel>
 
@@ -384,13 +322,14 @@
                                RenderOptions.BitmapScalingMode="NearestNeighbor"
                                Source="{Binding FrameImage}"
                                Stretch="Uniform" />
-                        <Canvas x:Name="BoxCanvas"
-                                Background="Transparent"
-                                ClipToBounds="True"
-                                LostMouseCapture="OnBoxesLostCapture"
-                                MouseLeftButtonDown="OnBoxesDown"
-                                MouseLeftButtonUp="OnBoxesUp"
-                                MouseMove="OnBoxesMove" />
+                        <!-- What the overlays draw over the frame, each by its template -->
+                        <ItemsControl x:Name="OverlayLayer" Focusable="False" ItemsSource="{Binding OverlayDrawings}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Grid />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
                     </Grid>
                 </Border>
             </DockPanel>

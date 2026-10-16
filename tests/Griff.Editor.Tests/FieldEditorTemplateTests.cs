@@ -35,7 +35,7 @@ public sealed partial class FieldEditorTemplateTests
         var drawn = new List<Type>();
         foreach (var (attribute, editorType) in FieldEditor.Kinds)
         {
-            Assert.True(templates.Contains(new DataTemplateKey(editorType)), $"{editorType.Name} has no DataTemplate in FieldEditors/*.xaml.");
+            Assert.True(templates.Contains(new DataTemplateKey(editorType)), $"{editorType.Name} has no DataTemplate in FieldEditors/*.xaml or a genre's Templates.xaml.");
             var found = registry.All.Concat(Scripted.All).SelectMany(d => d.Properties.Select(p => (Descriptor: d, Property: p)))
                 .FirstOrDefault(x => x.Property.Editor?.GetType() == attribute);
             if (found.Descriptor is null)
@@ -95,6 +95,20 @@ public sealed partial class FieldEditorTemplateTests
             all.MergedDictionaries.Add((ResourceDictionary)XamlReader.Parse(xaml));
         }
 
+        // Each genre's templates (Genres/<Genre>/Templates.xaml, merged by GenreTemplates), read as they are, with the theme.
+        foreach (var file in Directory.GetFiles(Path.Combine(RepositoryRoot(), "src", "Griff.Editor", "Genres"), "Templates.xaml", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
+        {
+            var text = ClrNamespace().Replace(File.ReadAllText(file), "clr-namespace:$1;assembly=Griff.Editor\"");
+            var root = text.IndexOf('>', text.IndexOf("<ResourceDictionary", StringComparison.Ordinal)) + 1;
+            text = text[..root] + """
+
+                    <ResourceDictionary.MergedDictionaries>
+                        <ResourceDictionary Source="pack://application:,,,/Griff.Editor;component/Themes/Theme.xaml" />
+                    </ResourceDictionary.MergedDictionaries>
+                """ + text[root..];
+            all.MergedDictionaries.Add((ResourceDictionary)XamlReader.Parse(text));
+        }
+
         return all;
     }
 
@@ -118,6 +132,9 @@ public sealed partial class FieldEditorTemplateTests
     });
 
     private static Griff.Scenes.Serialization.ComponentRegistry Scripted => ScriptedRegistry.Value;
+
+    [GeneratedRegex(@"clr-namespace:([A-Za-z0-9.]+)""")]
+    private static partial Regex ClrNamespace();
 
     [GeneratedRegex(@"<ResourceDictionary\s+Source=""([^""]+)""")]
     private static partial Regex MergedSource();

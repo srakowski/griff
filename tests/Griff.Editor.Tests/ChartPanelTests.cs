@@ -6,7 +6,7 @@ using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Panels;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Data;
-using Griff.Editor.Features.Rhythm;
+using Griff.Editor.Genres.Rhythm;
 using Griff.Modules.Rhythm;
 using Griff.Runtime;
 using Griff.Scenes;

@@ -183,6 +183,8 @@ if (path.Count > 0)
 Debug.Path(path, Color.Yellow);
 Debug.Circle(Transform.Position, SightRange, Color.Red);
 Debug.Text(Transform.Position + new Vector3(0, 1, 0), state);
+// A module's drawings to debug with, by name (a fighting game's hitboxes); a system of your own can make one (IDebugDrawing).
+Game.ShowDebugDrawing("Hitboxes", true);
 
 // Line of sight that sees through other enemies: only walls (the Default layer) and the player block it.
 var seen = Game.Physics.Raycast(eye, toPlayer, 10, ignore: Entity, layers: "Default, Player");

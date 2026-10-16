@@ -155,6 +155,19 @@ public sealed partial class Game
     /// <summary>The systems running: Griff's that keep track of something while a scene plays, then those scripts added.</summary>
     public IReadOnlyList<GameSystem> Systems => _systems;
 
+    /// <summary>The drawings to debug with that this game's systems make (see <see cref="IDebugDrawing"/>): a fighting game's hitboxes.</summary>
+    public IEnumerable<IDebugDrawing> DebugDrawings => _systems.OfType<IDebugDrawing>();
+
+    /// <summary>Shows (or hides) the drawing to debug with called <paramref name="name"/>, if a system of this game makes one.</summary>
+    public void ShowDebugDrawing(string name, bool show)
+    {
+        foreach (var drawing in DebugDrawings)
+        {
+            if (string.Equals(drawing.DrawingName, name, StringComparison.OrdinalIgnoreCase))
+                drawing.Show = show;
+        }
+    }
+
     /// <summary>
     /// Runs <paramref name="system"/> every frame from now on (from this frame, if its phase hasn't started), after
     /// Griff's own steps in its <see cref="GameSystem.Phase"/>. A system of the same type is replaced. A script's

@@ -46,12 +46,18 @@ public sealed class InSceneAttribute(string scene) : FieldEditorAttribute
 
 /// <summary>
 /// Marks a string property as a number of a target's components to change, "Value" or "Health.Max" (a component's name and
-/// its property's): the Inspector lists the number properties of what's in the scene to pick from.
+/// its property's): the Inspector lists the number properties of what's in the scene to pick from, those of the things
+/// its targets are first (the components on any entity with one of <paramref name="targets"/>, and those).
 /// </summary>
-public sealed class StatAttribute : FieldEditorAttribute
+/// <param name="targets">The kinds of component its targets have, e.g. a card's buff's Card and Health; none lists every component's.</param>
+public sealed class StatAttribute(params Type[] targets) : FieldEditorAttribute
 {
+    /// <summary>The kinds of component its targets have (a card's buff's: Card and Health); empty when it can be anything.</summary>
+    public IReadOnlyList<Type> Targets { get; } = targets;
+
     public override string Describe() =>
-        "A number of its target's components, by its property's name (\"Value\": any component's) or a component's and its property's (\"Health.Max\"). The Inspector lists the numbers of the components in the scene.";
+        "A number of its target's components, by its property's name (\"Value\": any component's) or a component's and its property's (\"Health.Max\"). The Inspector lists the numbers of the components in the scene" +
+        (Targets.Count == 0 ? "." : $" on things with a {string.Join(" or ", Targets.Select(t => t.Name))}.");
 }
 
 /// <summary>

@@ -26,7 +26,7 @@ chapter: Draw the boxes | Hitbox, Hurtbox, onion skin
 click: clips:frame:7
 expectboxes: Frame 4: 2 hurtboxes
 click: clips:onion
-explain: clips:preview | Onion skin | Onion skin shows the frame before underneath, with its boxes dashed, to line new ones up with.
+explain: clips:preview | Onion skin | Onion skin, under the preview, shows the frame before underneath, with its boxes dashed, to line new ones up with.
 click: clips:tool:Hitbox
 clipbox: 0.28, 0.06 > 0.6, 0.38
 expectboxes: Frame 4: 1 hitbox, 2 hurtboxes

@@ -34,8 +34,7 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<HideEntityCommand>()
             .AddCommand<FitPolygonColliderCommand>()
             .AddCommand<AddHingeCommand>()
-            .AddCommand<AddRopeCommand>()
-            .AddCommand<AddBreakableCommand>();
+            .AddCommand<AddRopeCommand>();
 
         // The modules' presets (Create Match Board, Create Tactics Unit) and actions (Generate Dungeon), each a command of its own.
         foreach (var preset in EntityPreset.All)
@@ -138,10 +137,15 @@ public sealed class EntityActionCommand(EntityAction action, IProjectSession pro
         if (sceneDocuments.Scene is not { } document || selection.Entity is not { } entity || !action.AppliesTo(entity))
             throw new InvalidOperationException(action.NotApplicable);
 
+        // Each selected entity it applies to, or the primary one alone; each one's edits made before the next is looked at.
+        var entities = action.EachSelected ? selection.Entities.Where(action.AppliesTo).ToList() : [entity];
         using (document.History.BeginGroup(action.Text.Replace("_", "")))
         {
-            foreach (var edit in action.Edits(entity, document.Scene, projectSession.Components))
-                document.Execute(edit);
+            foreach (var one in entities)
+            {
+                foreach (var edit in action.Edits(one, document.Scene, projectSession.Components))
+                    document.Execute(edit);
+            }
         }
 
         document.History.Seal();

@@ -176,8 +176,8 @@ public sealed class ProjectTemplateTests : IDisposable
             entities.AddRange(serializer.LoadPrefabFromString(await File.ReadAllTextAsync(path)).SelfAndDescendants());
 
         var sounds = entities.SelectMany(e => e.Components)
-            .SelectMany(c => c.GetType().GetProperties()
-                .Where(p => p.PropertyType == typeof(string) && (p.Name.EndsWith("Sound", StringComparison.Ordinal) || p.Name == "Music"))
+            .SelectMany(c => ComponentModel.Of(c).Saved
+                .Where(p => p.Kind == FieldKind.Sound)
                 .Select(p => (Component: c.GetType().Name, Field: p.Name, Path: p.GetValue(c) as string)))
             .ToList();
 
@@ -1133,7 +1133,7 @@ public sealed class ProjectTemplateTests : IDisposable
             entities.AddRange(serializer.LoadPrefabFromString(await File.ReadAllTextAsync(path)).SelfAndDescendants());
 
         var images = entities.SelectMany(e => e.Components)
-            .SelectMany(c => c.GetType().GetProperties().Where(p => p.PropertyType == typeof(string) && p.Name.EndsWith("Image", StringComparison.Ordinal)).Select(p => p.GetValue(c) as string))
+            .SelectMany(c => ComponentModel.Of(c).Saved.Where(p => p.Kind == FieldKind.Image).Select(p => p.GetValue(c) as string))
             .Where(i => !string.IsNullOrEmpty(i))
             .Distinct()
             .ToList();

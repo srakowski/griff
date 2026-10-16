@@ -12,9 +12,6 @@ using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Agent;
 using Griff.Editor.Features.Art;
 using Griff.Editor.Features.Assets;
-using Griff.Editor.Features.Story;
-using Griff.Editor.Features.Fighting;
-using Griff.Editor.Features.Rhythm;
 using Griff.Editor.Features.Audio;
 using Griff.Editor.Features.Build;
 using Griff.Editor.Features.Controls;
@@ -44,7 +41,7 @@ namespace Griff.Editor;
 /// <summary>Composition root: builds the host, loads modules and shows the shell.</summary>
 public partial class App : Application
 {
-    // Add new feature modules here.
+    // Add new feature modules here; a genre's (Genres/<Genre>) is found by itself (see GenreEditors).
     internal static readonly IEditorModule[] Modules =
     [
         new ProjectsModule(),
@@ -66,9 +63,7 @@ public partial class App : Application
         new OutputModule(),
         new ProfilerModule(),
         new DataModule(),
-        new StoryModule(),
-        new FightingEditorModule(),
-        new RhythmEditorModule(),
+        .. GenreEditors.Modules,
         new DesignSystemModule(),
         new UpdatesModule(),
         new AgentModule(),

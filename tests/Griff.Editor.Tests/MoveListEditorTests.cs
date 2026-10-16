@@ -3,7 +3,7 @@ using System.Windows.Threading;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Data;
-using Griff.Editor.Features.Fighting;
+using Griff.Editor.Genres.Fighting;
 using Griff.Modules.Fighting;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;

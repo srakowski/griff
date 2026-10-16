@@ -6,6 +6,7 @@ using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Agent;
 using Griff.Editor.Features.Art;
 using Griff.Editor.Features.Play;
+using Griff.Editor.Genres.Fighting;
 using Griff.Modules.Fighting;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,10 +42,10 @@ public sealed class ClipEditorBoxTests
 
     private static IReadOnlyList<string> Lines(Entity fighter) => fighter.GetComponent<Hitboxes>()!.Boxes;
 
-    // A list box bound to one of the Clip Editor's lists and what it has picked, both ways, as its window's are.
-    private static System.Windows.Controls.ListBox Bound(ClipEditor clips, string items, string picked)
+    // A list box bound to one of the Clip Editor's (or its boxes') lists and what it has picked, both ways, as its window's are.
+    private static System.Windows.Controls.ListBox Bound(object model, string items, string picked)
     {
-        var list = new System.Windows.Controls.ListBox { DataContext = clips };
+        var list = new System.Windows.Controls.ListBox { DataContext = model };
         list.SetBinding(System.Windows.Controls.ItemsControl.ItemsSourceProperty, new System.Windows.Data.Binding(items));
         list.SetBinding(System.Windows.Controls.Primitives.Selector.SelectedItemProperty,
             new System.Windows.Data.Binding(picked) { Mode = System.Windows.Data.BindingMode.TwoWay });
@@ -55,55 +56,56 @@ public sealed class ClipEditorBoxTests
     public void DrawingTheFirstBoxAddsAHitboxes_AndEveryChangeIsOneUndoStep() => EditorHost.Run(services =>
     {
         var (document, fighter, clips) = Open(services);
-        Assert.True(clips.CanEditBoxes);
-        Assert.Null(clips.Hitboxes);
-        Assert.Equal("Punch", clips.BoxClip);
+        var boxes = clips.Overlay<HitboxOverlay>()!;
+        Assert.True(boxes.CanEditBoxes);
+        Assert.Null(boxes.Hitboxes);
+        Assert.Equal("Punch", boxes.BoxClip);
         Assert.Equal(new Vector2(1.5f, 2), clips.FrameSize);
-        Assert.Equal("Frame 2: no boxes. Pick Hitbox or Hurtbox and drag over the picture.", clips.BoxesSummary);
+        Assert.Equal("Frame 2: no boxes. Pick Hitbox or Hurtbox and drag over the picture.", boxes.BoxesSummary);
 
-        clips.AddBox(FrameBoxKind.Hit, 0.5f, 0.2f, 0.4f, 0.3f);
+        boxes.AddBox(FrameBoxKind.Hit, 0.5f, 0.2f, 0.4f, 0.3f);
         Assert.Equal(["Punch 1 hit at 0.5,0.2 size 0.4x0.3"], Lines(fighter));
         Assert.Equal("Add Hitbox to Punch Frame 2", document.History.UndoDescription);
-        Assert.Equal(0, clips.SelectedBox!.Index);
-        Assert.Equal("Hitbox 1: 1 damage", clips.SelectedBox.Label);
+        Assert.Equal(0, boxes.SelectedBox!.Index);
+        Assert.Equal("Hitbox 1: 1 damage", boxes.SelectedBox.Label);
         Assert.False(clips.IsPlaying);
 
-        clips.AddCircle(FrameBoxKind.Hurt, 0, 0.55f, 0.28f);
+        boxes.AddCircle(FrameBoxKind.Hurt, 0, 0.55f, 0.28f);
         Assert.Equal("Punch 1 hurt at 0,0.55 radius 0.28", Lines(fighter)[1]);
-        Assert.Equal(1, clips.SelectedBox!.Index);
-        Assert.Equal("Frame 2: 1 hitbox, 1 hurtbox", clips.BoxesSummary);
-        clips.BoxMultiplier = 1.5f;
+        Assert.Equal(1, boxes.SelectedBox!.Index);
+        Assert.Equal("Frame 2: 1 hitbox, 1 hurtbox", boxes.BoxesSummary);
+        boxes.BoxMultiplier = 1.5f;
         Assert.Equal("Set Hurtbox Multiplier to 1.5", document.History.UndoDescription);
-        Assert.Equal("Hurtbox 1 (circle), takes ×1.5", clips.SelectedBox!.Label);
+        Assert.Equal("Hurtbox 1 (circle), takes ×1.5", boxes.SelectedBox!.Label);
 
-        clips.SelectBox(0);
-        clips.BoxDamage = 3;
-        clips.BoxKnockbackX = 4;
-        clips.BoxKnockbackY = 2;
-        clips.BoxStun = 12;
-        clips.BoxGroup = 2;
+        boxes.SelectBox(0);
+        boxes.BoxDamage = 3;
+        boxes.BoxKnockbackX = 4;
+        boxes.BoxKnockbackY = 2;
+        boxes.BoxStun = 12;
+        boxes.BoxGroup = 2;
         Assert.Equal("Set Hitbox Group to 2", document.History.UndoDescription);
         Assert.Equal("Punch 1 hit at 0.5,0.2 size 0.4x0.3 damage 3 knockback 4,2 stun 12 group 2", Lines(fighter)[0]);
-        Assert.Equal("Hitbox 1: 3 damage, knockback 4, 2, 12 stun, group 2", clips.SelectedBox!.Label);
-        Assert.Throws<InvalidOperationException>(() => clips.BoxStun = -1);
-        Assert.Throws<InvalidOperationException>(() => clips.AddBox(FrameBoxKind.Hit, 0, 0, 0, 1));
+        Assert.Equal("Hitbox 1: 3 damage, knockback 4, 2, 12 stun, group 2", boxes.SelectedBox!.Label);
+        Assert.Throws<InvalidOperationException>(() => boxes.BoxStun = -1);
+        Assert.Throws<InvalidOperationException>(() => boxes.AddBox(FrameBoxKind.Hit, 0, 0, 0, 1));
 
-        clips.MoveBox(0, 0.6f, 0.25f);
+        boxes.MoveBox(0, 0.6f, 0.25f);
         Assert.Equal("Move Hitbox on Punch Frame 2", document.History.UndoDescription);
-        clips.ResizeBox(0, 0.5f, 0.5f);
+        boxes.ResizeBox(0, 0.5f, 0.5f);
         Assert.StartsWith("Punch 1 hit at 0.6,0.25 size 0.5x0.5", Lines(fighter)[0]);
-        clips.SetBoxBounds(1, 0.1f, 0.6f, 0.8f, 0.4f);
+        boxes.SetBoxBounds(1, 0.1f, 0.6f, 0.8f, 0.4f);
         Assert.Equal("Punch 1 hurt at 0.1,0.6 radius 0.4 multiplier 1.5", Lines(fighter)[1]);
-        clips.RemoveBox(0);
+        boxes.RemoveBox(0);
         Assert.Equal("Remove Hitbox from Punch Frame 2", document.History.UndoDescription);
         Assert.Single(Lines(fighter));
-        Assert.Null(clips.SelectedBox);
+        Assert.Null(boxes.SelectedBox);
 
         // Undoing it all takes the Hitboxes away again, one step at a time.
         while (document.History.CanUndo)
             document.History.Undo();
         Assert.Null(fighter.GetComponent<Hitboxes>());
-        Assert.Empty(clips.Boxes);
+        Assert.Empty(boxes.Boxes);
         Assert.Contains("scene", EditorHost.AgentRedo(services));
         Assert.Equal(["Punch 1 hit at 0.5,0.2 size 0.4x0.3"], Lines(fighter));
         Assert.True(EditorHost.Undo(services, clips));
@@ -118,16 +120,17 @@ public sealed class ClipEditorBoxTests
             "a line that doesn't read",
             "Punch 1 hit at 0.5,0.2 size 0.4x0.3",
             "Punch 2 hurt   at 0,0 size 0.5x1.2");
-        Assert.Equal(["Hitbox 1: 1 damage"], clips.Boxes.Select(b => b.Label));
+        var boxes = clips.Overlay<HitboxOverlay>()!;
+        Assert.Equal(["Hitbox 1: 1 damage"], boxes.Boxes.Select(b => b.Label));
         clips.Step(1);
-        Assert.Equal(["Hurtbox 1"], clips.Boxes.Select(b => b.Label));
+        Assert.Equal(["Hurtbox 1"], boxes.Boxes.Select(b => b.Label));
         clips.SelectClip("Idle");
-        Assert.Equal("Idle", clips.BoxClip);
-        Assert.Single(clips.Boxes);
+        Assert.Equal("Idle", boxes.BoxClip);
+        Assert.Single(boxes.Boxes);
 
         clips.SelectClip("Punch");
         clips.ShowFrame(1);
-        clips.AddBox(FrameBoxKind.Hurt, 0, 0, 0.5f, 1.2f);
+        boxes.AddBox(FrameBoxKind.Hurt, 0, 0, 0.5f, 1.2f);
         Assert.Equal(
         [
             "Idle 0 hurt at 0,0 size 0.5x1.2",
@@ -136,39 +139,41 @@ public sealed class ClipEditorBoxTests
             "Punch 1 hurt at 0,0 size 0.5x1.2",
             "Punch 2 hurt   at 0,0 size 0.5x1.2",
         ], Lines(fighter));
-        Assert.Equal(2, clips.Boxes.Count);
+        Assert.Equal(2, boxes.Boxes.Count);
     });
 
     [Fact]
     public void CopiesTheFrameBefore_AndShowsItUnderOnionSkin() => EditorHost.Run(services =>
     {
         var (document, fighter, clips) = Open(services, "Punch 0 hurt at 0,0 size 0.5x1.2", "Punch 1 hit at 0.5,0.2 size 0.4x0.3 damage 2");
+        var boxes = clips.Overlay<HitboxOverlay>()!;
         clips.ShowFrame(0);
-        Assert.False(clips.CopyPreviousFrameCommand.CanExecute(null));
-        Assert.Throws<InvalidOperationException>(clips.CopyPreviousFrame);
+        Assert.False(boxes.CopyPreviousFrameCommand.CanExecute(null));
+        Assert.Throws<InvalidOperationException>(boxes.CopyPreviousFrame);
 
         clips.ShowFrame(2);
-        Assert.Empty(clips.OnionBoxes);
+        Assert.Empty(boxes.OnionBoxes);
         clips.OnionSkin = true;
-        Assert.Equal(["Hitbox 1: 2 damage"], clips.OnionBoxes.Select(b => b.Label));
-        Assert.True(clips.CopyPreviousFrameCommand.CanExecute(null));
-        clips.CopyPreviousFrame();
+        Assert.Equal(["Hitbox 1: 2 damage"], boxes.OnionBoxes.Select(b => b.Label));
+        Assert.True(boxes.CopyPreviousFrameCommand.CanExecute(null));
+        boxes.CopyPreviousFrame();
         Assert.Equal("Copy Boxes from Frame 2 to Punch Frame 3", document.History.UndoDescription);
         Assert.Equal("Punch 2 hit at 0.5,0.2 size 0.4x0.3 damage 2", Lines(fighter)[2]);
-        Assert.Equal(["Hitbox 1: 2 damage"], clips.Boxes.Select(b => b.Label));
+        Assert.Equal(["Hitbox 1: 2 damage"], boxes.Boxes.Select(b => b.Label));
 
         // Stepping on, the onion skin shows the frame before that one.
         clips.Step(1);
-        Assert.Equal(["Hitbox 1: 2 damage"], clips.OnionBoxes.Select(b => b.Label));
-        Assert.Empty(clips.Boxes);
+        Assert.Equal(["Hitbox 1: 2 damage"], boxes.OnionBoxes.Select(b => b.Label));
+        Assert.Empty(boxes.Boxes);
         clips.OnionSkin = false;
-        Assert.Empty(clips.OnionBoxes);
+        Assert.Empty(boxes.OnionBoxes);
     });
 
     [Fact]
     public void ClipsRenamedOrRemovedTakeTheirBoxesAlong_InTheSameUndoStep() => EditorHost.Run(services =>
     {
         var (document, fighter, clips) = Open(services, "Idle 0 hurt at 0,0 size 0.5x1.2", "Punch 1 hit at 0.5,0.2 size 0.4x0.3");
+        var boxes = clips.Overlay<HitboxOverlay>()!;
         clips.RenameClip("Jab");
         Assert.Equal(["Idle 0 hurt at 0,0 size 0.5x1.2", "Jab 1 hit at 0.5,0.2 size 0.4x0.3"], Lines(fighter));
         clips.RemoveClip();
@@ -183,15 +188,16 @@ public sealed class ClipEditorBoxTests
     public void AgentsDrawAndSetBoxes_ThroughTheClipEditor() => EditorHost.Run(services =>
     {
         var (document, fighter, clips) = Open(services);
+        var boxes = clips.Overlay<HitboxOverlay>()!;
         var tools = services.GetRequiredService<AgentServer>().Tools;
 
         // What ui_invoke runs (on the UI thread), then ui_set.
-        EditorHost.Pump(ObjectSurface.InvokeAsync(clips, "AddBox", System.Text.Json.JsonDocument.Parse("""["Hit", 0.5, 0.2, 0.4, 0.3]""").RootElement));
-        tools["ui_set"].Invoke(ToolArgs.Parse("""{"target": "ClipEditor", "path": "BoxDamage", "value": 4}""")).GetAwaiter().GetResult();
+        EditorHost.Pump(ObjectSurface.InvokeAsync(clips, "Overlays[Boxes].AddBox", System.Text.Json.JsonDocument.Parse("""["Hit", 0.5, 0.2, 0.4, 0.3]""").RootElement));
+        tools["ui_set"].Invoke(ToolArgs.Parse("""{"target": "ClipEditor", "path": "Overlays[Boxes].BoxDamage", "value": 4}""")).GetAwaiter().GetResult();
         tools["ui_set"].Invoke(ToolArgs.Parse("""{"target": "ClipEditor", "path": "OnionSkin", "value": true}""")).GetAwaiter().GetResult();
         Assert.Equal(["Punch 1 hit at 0.5,0.2 size 0.4x0.3 damage 4"], Lines(fighter));
         Assert.True(clips.OnionSkin);
-        var seen = tools["ui_inspect"].Invoke(ToolArgs.Parse("""{"target": "ClipEditor", "path": "Boxes"}""")).GetAwaiter().GetResult();
+        var seen = tools["ui_inspect"].Invoke(ToolArgs.Parse("""{"target": "ClipEditor", "path": "Overlays[Boxes].Boxes"}""")).GetAwaiter().GetResult();
         Assert.Contains("Hitbox 1: 4 damage", seen.Text);
         Assert.Equal("Set Hitbox Damage to 4", document.History.UndoDescription);
     });
@@ -200,20 +206,21 @@ public sealed class ClipEditorBoxTests
     public void WithItsWindowOpen_AChangeKeepsTheFrameAndTheBoxPicked() => EditorHost.Run(services =>
     {
         var (_, fighter, clips) = Open(services, "Punch 2 hurt at 0,0 size 0.5x1.2");
+        var boxes = clips.Overlay<HitboxOverlay>()!;
         // The window's lists (bound as its list boxes are) let go of what they show picked as they're made again; that
         // mustn't move the preview or lose the box picked.
-        var lists = new[] { Bound(clips, nameof(ClipEditor.Clips), nameof(ClipEditor.Selected)), Bound(clips, nameof(ClipEditor.Boxes), nameof(ClipEditor.SelectedBox)) };
+        var lists = new[] { Bound(clips, nameof(ClipEditor.Clips), nameof(ClipEditor.Selected)), Bound(boxes, nameof(HitboxOverlay.Boxes), nameof(HitboxOverlay.SelectedBox)) };
         try
         {
             clips.ShowFrame(2);
-            clips.SelectBox(0);
-            clips.MoveBox(0, 0.1f, 0);
+            boxes.SelectBox(0);
+            boxes.MoveBox(0, 0.1f, 0);
             Assert.Equal(2, clips.Frame);
             Assert.Equal("Punch", clips.Selected!.Name);
-            Assert.Equal(0, clips.SelectedBox!.Index);
-            clips.AddBox(FrameBoxKind.Hit, 0.5f, 0.2f, 0.3f, 0.3f);
+            Assert.Equal(0, boxes.SelectedBox!.Index);
+            boxes.AddBox(FrameBoxKind.Hit, 0.5f, 0.2f, 0.3f, 0.3f);
             Assert.Equal(2, clips.Frame);
-            Assert.Equal(1, clips.SelectedBox!.Index);
+            Assert.Equal(1, boxes.SelectedBox!.Index);
             Assert.Equal(["Punch 2 hurt at 0.1,0 size 0.5x1.2", "Punch 2 hit at 0.5,0.2 size 0.3x0.3"], Lines(fighter));
         }
         finally
@@ -231,9 +238,11 @@ public sealed class ClipEditorBoxTests
         Assert.False(command.IsChecked);
 
         EditorHost.Pump(command.ExecuteAsync());
-        Assert.True(play.ShowHitboxes);
+        Assert.True(play.IsDrawing("Hitboxes"));
+        Assert.Equal(["Hitboxes"], play.Drawings);
         Assert.True(command.IsChecked);
         EditorHost.Pump(command.ExecuteAsync());
-        Assert.False(play.ShowHitboxes);
+        Assert.False(play.IsDrawing("Hitboxes"));
+        Assert.Empty(play.Drawings);
     });
 }

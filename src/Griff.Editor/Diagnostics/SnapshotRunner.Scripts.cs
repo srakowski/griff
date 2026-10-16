@@ -124,7 +124,7 @@ internal static partial class SnapshotRunner
         editors.Close(document);
     }
 
-    private static async Task Settle(Window main, int ms)
+    internal static async Task Settle(Window main, int ms)
     {
         await Task.Delay(ms);
         main.UpdateLayout();
@@ -132,7 +132,7 @@ internal static partial class SnapshotRunner
     }
 
     // A popup's content: hover info, signature help.
-    private static void RenderElement(FrameworkElement element, string path)
+    internal static void RenderElement(FrameworkElement element, string path)
     {
         element.UpdateLayout();
         var width = Math.Max(1, (int)Math.Ceiling(element.ActualWidth + element.Margin.Left + element.Margin.Right));

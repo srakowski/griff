@@ -6,7 +6,7 @@ using System.Windows.Threading;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.SceneView;
-using Griff.Editor.Features.Story;
+using Griff.Editor.Genres.VisualNovels;
 using Griff.Modules.Contraptions;
 using Griff.Modules.FallingBlocks;
 using Griff.Modules.Match3;

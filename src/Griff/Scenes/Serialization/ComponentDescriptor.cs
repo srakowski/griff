@@ -231,16 +231,56 @@ public sealed class PropertyDescriptor
         OutputName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<OutputNameAttribute>() : null;
         Editor = property.GetCustomAttribute<FieldEditorAttribute>()
             ?? (property.PropertyType == typeof(System.Numerics.Vector2) && PlainText is null && property.Name.EndsWith("Direction", StringComparison.Ordinal) ? Way : null);
-        File = property.GetCustomAttribute<AssetFileAttribute>();
+        var unmarked = EntityName is null && ActionName is null && OutputName is null && Editor is null && PlainText is null &&
+            !property.IsDefined(typeof(NamesAttribute), true);
+        File = property.PropertyType != typeof(string) ? null
+            : property.GetCustomAttribute<AssetFileAttribute>() ?? (unmarked ? FileByName(property.Name) : null);
         Names = property.PropertyType != typeof(string) ? null
-            : property.GetCustomAttribute<NamesAttribute>() ?? (EntityName is null && ActionName is null && OutputName is null && Editor is null &&
-                File is null && PlainText is null ? NamesByName(property.Name) : null);
+            : property.GetCustomAttribute<NamesAttribute>() ?? (unmarked && File is null ? NamesByName(property.Name) : null);
         Offset = property.PropertyType == typeof(System.Numerics.Vector2) ? property.GetCustomAttribute<OffsetAttribute>() : null;
         Resizable = property.PropertyType == typeof(System.Numerics.Vector2) ? property.GetCustomAttribute<ResizableAttribute>() : null;
+        Kind = KindOf(property.PropertyType);
     }
 
-    /// <summary>For a string marked <see cref="AssetFileAttribute"/>: the kind of file in Assets it names, which its name doesn't say.</summary>
+    /// <summary>
+    /// What kind of field it is, worked out once here from its type, attributes and name, and read by everything that shows
+    /// or describes it: the Inspector gives it this kind's editor, <c>component_describe</c> names it, and the tests check
+    /// against it. A field with an editor of its own (<see cref="Editor"/>), or a list of strings without one or
+    /// <see cref="PlainTextAttribute"/> (which gets rows, see <see cref="GenericFields"/>), is <see cref="FieldKind.Custom"/>.
+    /// </summary>
+    public FieldKind Kind { get; }
+
+    private FieldKind KindOf(Type type) =>
+        Editor is not null || (type == typeof(IReadOnlyList<string>) && PlainText is null) ? FieldKind.Custom
+        : type == typeof(bool) ? FieldKind.Bool
+        : type == typeof(int) || type == typeof(float) || type == typeof(double) ? FieldKind.Number
+        : File is { Kind: AssetFileKind.Sound or AssetFileKind.Music } ? FieldKind.Sound
+        : File is { Kind: AssetFileKind.Image } ? FieldKind.Image
+        : EntityName is not null ? FieldKind.Entity
+        : Names is not null ? FieldKind.Name
+        : ActionName is not null ? FieldKind.Action
+        : OutputName is not null ? FieldKind.Output
+        : type == typeof(string) ? FieldKind.Text
+        : type.IsEnum ? FieldKind.Enum
+        : type == typeof(Color) ? FieldKind.Color
+        : type == typeof(IReadOnlyList<string>) ? FieldKind.Lines
+        : FieldKind.Vector;
+
+    /// <summary>
+    /// For a string naming a file in Assets: the kind of file, from <see cref="AssetFileAttribute"/>, or from its name when it
+    /// has no picker, editor or <see cref="PlainTextAttribute"/> of its own: one ending in Sound ("JumpSound") names a
+    /// sound, one ending in Music ("Music") music, one ending in Image ("FireImage") a picture. Null for any other field.
+    /// </summary>
     public AssetFileAttribute? File { get; }
+
+    // What a string names by its name alone, unmarked: one ending in Sound, Music or Image names that kind of file.
+    private static readonly (string Ending, AssetFileAttribute File)[] FiledBy =
+    [
+        ("Sound", new(AssetFileKind.Sound)), ("Music", new(AssetFileKind.Music)), ("Image", new(AssetFileKind.Image)),
+    ];
+
+    private static AssetFileAttribute? FileByName(string name) =>
+        FiledBy.FirstOrDefault(n => name.EndsWith(n.Ending, StringComparison.Ordinal)).File;
 
     /// <summary>
     /// From <see cref="PlainTextAttribute"/>: plain text is right for it, and why (words it shows, what the game writes); null

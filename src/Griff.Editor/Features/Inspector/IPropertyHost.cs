@@ -76,6 +76,14 @@ public interface IPropertyHost
     {
     }
 
+    /// <summary>
+    /// Runs the command that edits fields marked <paramref name="attribute"/> more fully (see <see cref="IEditsFields"/>): a
+    /// dialogue's lines open the Dialogue Editor. Does nothing when no command edits them.
+    /// </summary>
+    void EditFully(FieldEditorAttribute attribute)
+    {
+    }
+
     /// <summary>True while a filter narrows the fields shown: folded ones that match show anyway.</summary>
     bool IsFiltering => false;
 }

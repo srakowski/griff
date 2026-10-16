@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using Griff.Editor.Features.Inspector;
+using FieldKind = Griff.Scenes.FieldKind;
 
 namespace Griff.Editor.Diagnostics.Demo;
 

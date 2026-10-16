@@ -292,6 +292,13 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
         _ = _commands.Value.Get<TCommand>().ExecuteAsync();
     }
 
+    /// <summary>Runs the command that edits fields marked <paramref name="attribute"/> more fully (see <see cref="IEditsFields"/>), if there is one.</summary>
+    public void EditFully(FieldEditorAttribute attribute)
+    {
+        if (_commands.Value.All.OfType<IEditsFields>().FirstOrDefault(c => c.Edits.IsInstanceOfType(attribute)) is Core.Commands.EditorCommand command)
+            _ = command.ExecuteAsync();
+    }
+
     /// <summary>Renames an entity, and the fields in the scene that name it, as one undo step.</summary>
     internal void Rename(Entity entity, string name) => Execute(RenameEntityEdit.WithReferences(entity, name, _projectSession.Components));
 

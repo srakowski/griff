@@ -265,8 +265,8 @@ public sealed class Match3TemplateTests : IDisposable
         var entities = project.FindScenes().SelectMany(p => serializer.LoadFromString(File.ReadAllText(p)).Entities).ToList();
 
         var files = entities.SelectMany(e => e.Components)
-            .SelectMany(c => c.GetType().GetProperties()
-                .Where(p => p.PropertyType == typeof(string) && (p.Name.EndsWith("Sound", StringComparison.Ordinal) || p.Name is "Music" or "Image"))
+            .SelectMany(c => ComponentModel.Of(c).Saved
+                .Where(p => p.File is not null)
                 .Select(p => (Field: $"{c.GetType().Name}.{p.Name}", Path: p.GetValue(c) as string)))
             .Where(f => !string.IsNullOrWhiteSpace(f.Path))
             .ToList();

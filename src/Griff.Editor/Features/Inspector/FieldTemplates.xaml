@@ -4,13 +4,16 @@
                     xmlns:inspector="clr-namespace:Griff.Editor.Features.Inspector"
                     xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
                     xmlns:theme="clr-namespace:Griff.Editor.Themes"
-                    xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters">
+                    xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters"
+                    xmlns:modules="clr-namespace:Griff.Editor.Core.Modules">
 
     <!-- Fields with editors of their own (FieldEditor): each editor's template, by its type -->
     <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="FieldEditors/FieldEditorTemplates.xaml" />
         <ResourceDictionary Source="FieldEditors/GameplayEditorTemplates.xaml" />
         <ResourceDictionary Source="FieldEditors/RowEditorTemplates.xaml" />
+        <!-- Each genre's own (a fighter's moves and boxes): its Templates.xaml -->
+        <modules:GenreTemplates />
     </ResourceDictionary.MergedDictionaries>
 
     <converters:BoolToVisibilityConverter x:Key="Field.Visible" />

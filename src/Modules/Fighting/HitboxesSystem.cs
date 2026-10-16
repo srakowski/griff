@@ -11,7 +11,7 @@ namespace Griff.Modules.Fighting;
 /// other at once both land. Where the game is run (offline, or the host); hitstun counts down a step at a time. With
 /// <see cref="Show"/> on, it draws every box in play over the game.
 /// </summary>
-internal sealed class HitboxesSystem : GameSystem
+internal sealed class HitboxesSystem : GameSystem, IDebugDrawing
 {
     /// <summary>The colors the boxes are drawn in: hitboxes red, hurtboxes blue, hurtboxes in hitstun yellow.</summary>
     internal static readonly Color HitColor = new(1f, 0.3f, 0.33f);
@@ -25,6 +25,8 @@ internal sealed class HitboxesSystem : GameSystem
     private readonly List<SpriteDraw> _draws = [];
 
     public override string Name => "Hitboxes";
+
+    string IDebugDrawing.DrawingName => FightingGame.HitboxesDrawing;
 
     /// <summary>Draws every box in play over the game: the editor's Game &gt; Show Hitboxes, or <c>Game.ShowHitboxes</c>.</summary>
     [field: NotState("the editor's Show Hitboxes")]

@@ -490,4 +490,15 @@ public sealed class HitboxTests
         Assert.Equal(0, Drawn(HitboxesSystem.HitColor));
         Assert.True(Drawn(HitboxesSystem.HurtColor) > 0);
     }
+
+    [Fact]
+    public void The_boxes_are_a_debug_drawing_called_Hitboxes_that_a_host_switches_by_name()
+    {
+        var drawing = Assert.Single(_game.DebugDrawings);
+        Assert.Equal(FightingGame.HitboxesDrawing, drawing.DrawingName);
+        _game.ShowDebugDrawing("hitboxes", true);
+        Assert.True(_game.ShowHitboxes);
+        _game.ShowDebugDrawing("Hitboxes", false);
+        Assert.False(_game.ShowHitboxes);
+    }
 }

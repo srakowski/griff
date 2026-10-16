@@ -8,7 +8,6 @@ using Griff.Networking;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
-using Griff.Modules.Fighting;
 using Griff.Platform.Windows;
 using Griff.Hosting;
 using Griff.Runtime;
@@ -39,7 +38,8 @@ public sealed class PlayMode : ObservableObject, IDisposable
     private MemoryNetwork? _network;
     private readonly List<PlayerWindow> _players = [];
     private bool _slowConnection;
-    private bool _showHitboxes;
+    // The drawings to debug with that are on (a fighting game's "Hitboxes"), by name.
+    private readonly HashSet<string> _drawings = new(StringComparer.OrdinalIgnoreCase);
     private long _refreshedAt;
     // The Game tab's game's tables: kept through rewinds, which start a new game from a snapshot, so what Table Values set
     // isn't set again (with new dice) unless its row has changed, and a change waiting for the next step still reaches it.
@@ -150,19 +150,33 @@ public sealed class PlayMode : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Draws every hitbox and hurtbox in play over the running games (Game &gt; Show Hitboxes), straight away and in every
-    /// game played after: the Game tab's, other players' and a rewind's.
+    /// The drawings to debug with that are on (see <see cref="IDebugDrawing"/>), by name: a fighting game's "Hitboxes"
+    /// (Game &gt; Show Hitboxes).
     /// </summary>
-    public bool ShowHitboxes
+    public IReadOnlyCollection<string> Drawings => _drawings;
+
+    /// <summary>True while the drawing to debug with called <paramref name="name"/> is on.</summary>
+    public bool IsDrawing(string name) => _drawings.Contains(name);
+
+    /// <summary>
+    /// Shows (or hides) the drawing to debug with called <paramref name="name"/> over the running games, a module's
+    /// (<see cref="IDebugDrawing"/>: a fighting game's "Hitboxes"), straight away and in every game played after: the Game
+    /// tab's, other players' and a rewind's. A game whose modules make no such drawing has none to show.
+    /// </summary>
+    public void ShowDrawing(string name, bool show)
     {
-        get => _showHitboxes;
-        set
-        {
-            _showHitboxes = value;
-            foreach (var game in AllGames())
-                game.ShowHitboxes = value;
-            OnPropertyChanged();
-        }
+        if (show ? !_drawings.Add(name) : !_drawings.Remove(name))
+            return;
+        foreach (var game in AllGames())
+            game.ShowDebugDrawing(name, show);
+        OnPropertyChanged(nameof(Drawings));
+    }
+
+    // A new game draws what's on.
+    private void ShowDrawings(Game game)
+    {
+        foreach (var name in _drawings)
+            game.ShowDebugDrawing(name, true);
     }
 
     /// <summary>
@@ -470,7 +484,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _tables ??= game.Tables;
         game.Network.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
         game.Profiler = _profiler;
-        game.ShowHitboxes = _showHitboxes;
+        ShowDrawings(game);
         game.SceneChanged += OnGameSceneChanged;
         game.Stepped += OnStepped;
         game.QuitRequested += OnGameQuit;
@@ -722,7 +736,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         });
         game.Network.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
         game.Network.PlayerName = $"Player {number}";
-        game.ShowHitboxes = _showHitboxes;
+        ShowDrawings(game);
         var runner = new GameRunner(game, surface, window);
         runner.Loop.Add(Debugging.DebuggerLoopHooks.Instance);
         game.Network.Join(_network!.Open(), new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, NetSession.DefaultPort));

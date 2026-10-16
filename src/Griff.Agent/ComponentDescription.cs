@@ -65,7 +65,7 @@ public static class ComponentDescription
         foreach (var line in DrawingAndNetwork(descriptor.Type, sample))
             text.AppendLine(line);
 
-        text.AppendLine().AppendLine("Properties (key: kind = default. meaning):");
+        text.AppendLine().AppendLine("Properties (key: value = default. meaning, then the kind of field it is, as the Inspector edits it):");
         var docs = entry?.Properties.ToDictionary(p => p.Name) ?? [];
 
         // Listed as the Inspector lists them: ungrouped first, then under each group's heading.
@@ -137,6 +137,7 @@ public static class ComponentDescription
                         text.Append(CultureInfo.InvariantCulture, $" {column.Name}:").Append(ChoicesText(column.Names!, offered));
                 }
             }
+            text.Append(CultureInfo.InvariantCulture, $" (Field: {KindText(property)}.)");
             text.AppendLine();
         }
 
@@ -181,6 +182,28 @@ public static class ComponentDescription
 
         return text.ToString();
     }
+
+    /// <summary>
+    /// What kind of field <paramref name="property"/> is, as the Inspector edits it, in a few words: "a sound", "a name",
+    /// "its own editor: Dice". It's <see cref="PropertyDescriptor.Kind"/>, the answer the Inspector reads too.
+    /// </summary>
+    public static string KindText(PropertyDescriptor property) => property.Kind switch
+    {
+        FieldKind.Bool => "on or off",
+        FieldKind.Number => "a number",
+        FieldKind.Text => "text",
+        FieldKind.Enum => "one of its values",
+        FieldKind.Vector => "a vector",
+        FieldKind.Color => "a color",
+        FieldKind.Lines => "lines of text",
+        FieldKind.Sound => property.File?.Kind == AssetFileKind.Music ? "music" : "a sound",
+        FieldKind.Image => "an image",
+        FieldKind.Entity => "an entity's name",
+        FieldKind.Name => "a name",
+        FieldKind.Action => "an action's name",
+        FieldKind.Output => "an output's name",
+        _ => property.Editor is { } editor ? $"its own editor: {ComponentAction.Spaced(editor.GetType().Name.Replace("Attribute", "", StringComparison.Ordinal))}" : "rows",
+    };
 
     // What a field naming prefabs, fonts and the like can name now, as the Inspector's picker lists it: in its groups (a
     // font's: safe to ship, then installed on this PC only, with what to know about them), each with its word.

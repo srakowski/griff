@@ -32,7 +32,8 @@ public sealed class InspectorStructureTests
             Assert.Equal([type.Name], TopLevelTypes(file).Select(t => t.Type.Identifier.Text));
         }
 
-        Assert.True(File.Exists(Path.Combine(Folder, nameof(FieldKind) + ".cs")));
+        // What kind of field each is, the Inspector reads from the core, where component_describe reads it too.
+        Assert.True(File.Exists(Path.Combine(RepoRoot(), "src", "Griff", "Scenes", nameof(Griff.Scenes.FieldKind) + ".cs")));
     }
 
     [Fact]

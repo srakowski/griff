@@ -1,4 +1,5 @@
 using Griff.Editor.Features.Inspector;
+using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Tests;

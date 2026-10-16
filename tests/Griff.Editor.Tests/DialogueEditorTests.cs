@@ -3,7 +3,7 @@ using System.Windows.Threading;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Agent;
-using Griff.Editor.Features.Story;
+using Griff.Editor.Genres.VisualNovels;
 using Griff.Modules.VisualNovels;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;

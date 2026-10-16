@@ -3,7 +3,6 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Griff.Scenes;
-using Griff.Editor.Features.Story;
 
 namespace Griff.Editor.Features.Inspector;
 
@@ -427,8 +426,8 @@ public sealed class DialogueLinesEditor(PropertyField field, DialogueLinesAttrib
         }
     }
 
-    /// <summary>Opens the Dialogue Editor on the selected entity's dialogue (Entity > Edit Dialogue).</summary>
-    public void OpenDialogueEditor() => Host.RunCommand<OpenDialogueEditorCommand>();
+    /// <summary>Opens the Dialogue Editor on the selected entity's dialogue (Entity > Edit Dialogue, the Visual Novels genre's).</summary>
+    public void OpenDialogueEditor() => Host.EditFully(Attribute);
 
     public IRelayCommand OpenDialogueEditorCommand => _open ??= new RelayCommand(OpenDialogueEditor);
 

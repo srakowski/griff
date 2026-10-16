@@ -1,0 +1,236 @@
+<controls:ChromeWindow x:Class="Griff.Editor.Genres.Fighting.MoveListWindow"
+                       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                       xmlns:fighting="clr-namespace:Griff.Editor.Genres.Fighting"
+                       xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
+                       xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters"
+                       xmlns:theme="clr-namespace:Griff.Editor.Themes"
+                       mc:Ignorable="d"
+                       d:DataContext="{d:DesignInstance Type=fighting:MoveListEditor}"
+                       Title="Move List"
+                       Width="1000"
+                       Height="680"
+                       MinWidth="760"
+                       MinHeight="480"
+                       ShowInTaskbar="False"
+                       WindowStartupLocation="CenterOwner">
+
+    <Window.Resources>
+        <converters:BoolToVisibilityConverter x:Key="Visible" />
+
+        <Style x:Key="Heading" TargetType="TextBlock" BasedOn="{StaticResource Style.Text.Overline}">
+            <Setter Property="Margin" Value="0,0,0,6" />
+        </Style>
+        <Style x:Key="Small" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Margin" Value="0,0,4,4" />
+            <Setter Property="Padding" Value="8,0" />
+        </Style>
+        <Style x:Key="Label" TargetType="TextBlock" BasedOn="{StaticResource Style.Text.Secondary}">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,8,6" />
+        </Style>
+        <Style x:Key="Field" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="Margin" Value="0,0,8,6" />
+            <Setter Property="MinWidth" Value="56" />
+        </Style>
+        <Style x:Key="Pick" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+            <Setter Property="Margin" Value="0,0,8,6" />
+            <Setter Property="MinWidth" Value="90" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Background="{DynamicResource Brush.Surface.Panel}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Whose moves these are -->
+        <DockPanel Margin="16,12,16,0">
+            <Button x:Name="CloseButton" Click="OnClose" Content="Close" DockPanel.Dock="Right" IsCancel="True" Style="{StaticResource Small}" ToolTip="Close the Move List (Esc)" />
+            <TextBlock VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="Moves of" />
+            <TextBlock x:Name="EntityName" Margin="6,0,0,0" VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding EntityName}" />
+            <TextBlock Margin="16,0,0,0" VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="{Binding ButtonsNote}" />
+        </DockPanel>
+
+        <Border x:Name="NoticeBar"
+                Grid.Row="1"
+                Margin="16,8,16,0"
+                Padding="10,6"
+                Background="{DynamicResource Brush.Surface.Document}"
+                BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                BorderThickness="1"
+                CornerRadius="{StaticResource Radius.Medium}"
+                Visibility="{Binding HasNotice, Converter={StaticResource Visible}}">
+            <DockPanel>
+                <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Status.Info}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Info}" />
+                <TextBlock VerticalAlignment="Center" Text="{Binding Notice}" TextWrapping="Wrap" />
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Row="2" Margin="16,12,16,14" Visibility="{Binding HasFighter, Converter={StaticResource Visible}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="400" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- The moves -->
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Heading}" Text="Moves" />
+                <TextBlock DockPanel.Dock="Bottom" Margin="0,4,0,0" FontSize="11" Style="{StaticResource Style.Text.Secondary}" Text="{Binding TableNote}" TextWrapping="Wrap" />
+                <WrapPanel x:Name="MoveButtons" Margin="0,8,0,0" DockPanel.Dock="Bottom">
+                    <Button x:Name="AddMoveButton" Command="{Binding AddMoveCommand}" Style="{StaticResource Small}" ToolTip="Add a move after this one">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Margin="0,0,6,0" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Add}" />
+                            <TextBlock Text="Add Move" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="RemoveMoveButton" Command="{Binding RemoveMoveCommand}" Style="{StaticResource Small}" ToolTip="Remove this move">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Margin="0,0,6,0" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                            <TextBlock Text="Remove" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="MoveUpButton" Command="{Binding MoveUpCommand}" Content="Up" Style="{StaticResource Small}" ToolTip="Move it up: of two moves an input makes, the one listed first wins" />
+                    <Button x:Name="MoveDownButton" Command="{Binding MoveDownCommand}" Content="Down" Style="{StaticResource Small}" ToolTip="Move it down" />
+                    <Button x:Name="MakeTableButton" Command="{Binding MakeTableCommand}" Content="Make Moves Table" Style="{StaticResource Small}" ToolTip="Move these moves into a table, to edit like a spreadsheet in Data &gt; Tables" />
+                </WrapPanel>
+                <ListBox x:Name="MoveList" ItemsSource="{Binding Moves}" SelectedIndex="{Binding SelectedIndex}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="fighting:MoveRow">
+                            <DockPanel Margin="2,3">
+                                <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" DockPanel.Dock="Right" FontSize="11" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="{Binding Frames}" ToolTip="Startup / active / recovery, in steps" />
+                                <TextBlock Width="96" VerticalAlignment="Center" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Accent}" Text="{Binding Arrows}" />
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock FontSize="11" Style="{StaticResource Style.Text.Secondary}" Text="{Binding Description}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock FontSize="11" Foreground="{DynamicResource Brush.Status.Warning}" Text="{Binding Problem}" TextWrapping="Wrap" Visibility="{Binding HasProblem, Converter={StaticResource Visible}}" />
+                                </StackPanel>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <!-- The move picked -->
+            <ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource Heading}" Text="Move" />
+
+                    <!-- Its input, big -->
+                    <Border Margin="0,0,0,10"
+                            Padding="12,8"
+                            Background="{DynamicResource Brush.Surface.Document}"
+                            BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource Radius.Medium}"
+                            Visibility="{Binding HasMove, Converter={StaticResource Visible}}">
+                        <StackPanel>
+                            <TextBlock x:Name="InputArrows" FontSize="30" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Accent}" Text="{Binding InputArrows}" ToolTip="The input as a fighter facing right does it" />
+                            <TextBlock x:Name="InputDescription" Style="{StaticResource Style.Text.Secondary}" Text="{Binding InputDescription}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Grid x:Name="MoveFields" IsEnabled="{Binding IsOwnMove}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Style="{StaticResource Label}" Text="Name" />
+                        <TextBox x:Name="NameBox" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding MoveName, UpdateSourceTrigger=LostFocus}" KeyDown="OnTextKeyDown" />
+
+                        <TextBlock Grid.Row="1" Style="{StaticResource Label}" Text="Input" />
+                        <WrapPanel Grid.Row="1" Grid.Column="1">
+                            <ComboBox x:Name="MotionBox" MinWidth="230" ItemsSource="{Binding Motions}" SelectedValue="{Binding MoveMotion}" SelectedValuePath="Motion" Style="{StaticResource Pick}" ToolTip="The directions pressed in turn, for a fighter facing right">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate DataType="fighting:MotionChoice">
+                                        <TextBlock Text="{Binding Label}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <ComboBox x:Name="ButtonBox" ItemsSource="{Binding Buttons}" SelectedItem="{Binding MoveButton}" Style="{StaticResource Pick}" MinWidth="56" ToolTip="The button pressed as the motion ends" />
+                            <CheckBox x:Name="AirBox" Margin="0,0,8,6" VerticalAlignment="Center" Content="In the air" IsChecked="{Binding MoveAir}" ToolTip="Done while jumping (j. in front)" />
+                            <TextBox x:Name="InputBox" Style="{StaticResource Style.TextBox.Code}" MinWidth="90" Margin="0,0,8,6" Text="{Binding MoveInput, UpdateSourceTrigger=LostFocus, ValidatesOnExceptions=True}" ToolTip="Or type it in numpad notation: 236P, 623K, [4]6P, j.2K" KeyDown="OnTextKeyDown" />
+                        </WrapPanel>
+
+                        <TextBlock Grid.Row="2" Style="{StaticResource Label}" Text="Clip" />
+                        <ComboBox x:Name="ClipBox" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" MinWidth="180" ItemsSource="{Binding Clips}" SelectedItem="{Binding MoveClip}" Style="{StaticResource Pick}" ToolTip="The clip it plays: its hitboxes are what hit" />
+
+                        <TextBlock Grid.Row="3" Style="{StaticResource Label}" Text="Frames" />
+                        <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Label}" Text="Startup" />
+                            <TextBox x:Name="StartupBox" Style="{StaticResource Field}" Text="{Binding MoveStartup, UpdateSourceTrigger=LostFocus, ValidatesOnExceptions=True}" ToolTip="Steps before it can hit; 0 for its clip's own" KeyDown="OnTextKeyDown" />
+                            <TextBlock Style="{StaticResource Label}" Text="Active" />
+                            <TextBox x:Name="ActiveBox" Style="{StaticResource Field}" Text="{Binding MoveActive, UpdateSourceTrigger=LostFocus, ValidatesOnExceptions=True}" ToolTip="Steps it can hit for; 0 for its clip's own" KeyDown="OnTextKeyDown" />
+                            <TextBlock Style="{StaticResource Label}" Text="Recovery" />
+                            <TextBox x:Name="RecoveryBox" Style="{StaticResource Field}" Text="{Binding MoveRecovery, UpdateSourceTrigger=LostFocus, ValidatesOnExceptions=True}" ToolTip="Steps after, before it can act again; 0 for its clip's own" KeyDown="OnTextKeyDown" />
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="4" Style="{StaticResource Label}" Text="Blocked" />
+                        <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal">
+                            <ComboBox x:Name="HitsBox" ItemsSource="{Binding Heights}" SelectedItem="{Binding MoveHits}" Style="{StaticResource Pick}" ToolTip="Mid is blocked either way, Low only crouching, High only standing" />
+                            <TextBlock Style="{StaticResource Label}" Text="Blockstun" />
+                            <TextBox x:Name="BlockstunBox" Style="{StaticResource Field}" Text="{Binding MoveBlockstun, UpdateSourceTrigger=LostFocus, ValidatesOnExceptions=True}" ToolTip="Steps a blocked hit holds the blocker; 0 for two thirds of its hitstun" KeyDown="OnTextKeyDown" />
+                            <TextBlock Style="{StaticResource Label}" Text="Chip" />
+                            <TextBox x:Name="ChipBox" Style="{StaticResource Field}" Text="{Binding MoveChip, UpdateSourceTrigger=LostFocus, ValidatesOnExceptions=True}" ToolTip="How much of its damage a blocked hit does, 0 to 1; empty for the blocker's own" KeyDown="OnTextKeyDown" />
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="5" Style="{StaticResource Label}" Text="Cancels into" />
+                        <TextBox x:Name="CancelsBox" Grid.Row="5" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding MoveCancels, UpdateSourceTrigger=LostFocus}" ToolTip="Once it connects: move names, special, normal or any, with commas between" KeyDown="OnTextKeyDown" />
+
+                        <TextBlock Grid.Row="6" Style="{StaticResource Label}" Text="Push" />
+                        <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal">
+                            <TextBox x:Name="PushBox" Style="{StaticResource Field}" MinWidth="70" Text="{Binding MovePush, UpdateSourceTrigger=LostFocus, ValidatesOnExceptions=True}" ToolTip="Forward and up as it starts to hit, e.g. 2,0 for a lunge or 1,8 for an uppercut" KeyDown="OnTextKeyDown" />
+                            <TextBlock Style="{StaticResource Label}" Text="Sound" />
+                            <TextBox x:Name="SoundBox" Style="{StaticResource Field}" MinWidth="120" Text="{Binding MoveSound, UpdateSourceTrigger=LostFocus}" ToolTip="A sound played as it starts" KeyDown="OnTextKeyDown" />
+                            <TextBlock Style="{StaticResource Label}" Text="Message" />
+                            <TextBox x:Name="MessageBox" Style="{StaticResource Field}" MinWidth="100" Text="{Binding MoveMessage, UpdateSourceTrigger=LostFocus}" ToolTip="A message sent as it starts" KeyDown="OnTextKeyDown" />
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="7" Style="{StaticResource Label}" Text="As written" />
+                        <TextBox x:Name="RowBox" Grid.Row="7" Grid.Column="1" Margin="0,0,0,6" Style="{StaticResource Style.TextBox.Code}" Text="{Binding RowText, UpdateSourceTrigger=LostFocus}" ToolTip="The whole move as it's written in the fighter's Moves" KeyDown="OnTextKeyDown" />
+                    </Grid>
+
+                    <!-- Its frames -->
+                    <TextBlock Margin="0,10,0,6" Style="{StaticResource Heading}" Text="Frame data" Visibility="{Binding HasMove, Converter={StaticResource Visible}}" />
+                    <ItemsControl x:Name="FrameBar" ItemsSource="{Binding FrameCells}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="fighting:FrameCell">
+                                <Border Width="7" Height="18" Margin="0,0,1,1" Background="{Binding Fill}" CornerRadius="1" ToolTip="{Binding Tip}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock x:Name="FrameSummary" Margin="0,6,0,0" Text="{Binding FrameSummary}" />
+                    <TextBlock x:Name="Advantage" Style="{StaticResource Style.Text.Secondary}" Text="{Binding Advantage}" />
+                    <TextBlock x:Name="ProblemsText"
+                               Margin="0,8,0,0"
+                               Foreground="{DynamicResource Brush.Status.Warning}"
+                               Text="{Binding Problems}"
+                               TextWrapping="Wrap"
+                               Visibility="{Binding HasProblems, Converter={StaticResource Visible}}" />
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</controls:ChromeWindow>

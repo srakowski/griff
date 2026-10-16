@@ -13,6 +13,7 @@ using Griff.Editor.Features.SceneView;
 using Griff.Editor.Shell;
 using Griff.Editor.Themes.Controls;
 using Point = System.Windows.Point;
+using FieldKind = Griff.Scenes.FieldKind;
 
 namespace Griff.Editor.Diagnostics.Demo;
 

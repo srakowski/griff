@@ -42,20 +42,9 @@ public sealed class PropertyField : ObservableObject
         var summary = Griff.Editing.DocComments.Summary(property);
         Summary = summary.IsEmpty ? null : summary.PlainText;
 
+        // The kind is the descriptor's answer, the one component_describe gives agents too.
         var type = property.Type;
-        Kind = type == typeof(bool) ? FieldKind.Bool
-            : type == typeof(int) || type == typeof(float) || type == typeof(double) ? FieldKind.Number
-            : type == typeof(string) && (IsSoundName(property.Name) || property.File?.Kind is AssetFileKind.Sound or AssetFileKind.Music) ? FieldKind.Sound
-            : type == typeof(string) && (IsImageName(property.Name) || property.File?.Kind == AssetFileKind.Image) ? FieldKind.Image
-            : property.EntityName is not null ? FieldKind.Entity
-            : property.Names is not null ? FieldKind.Name
-            : property.ActionName is not null ? FieldKind.Action
-            : property.OutputName is not null ? FieldKind.Output
-            : type == typeof(string) ? FieldKind.Text
-            : type.IsEnum ? FieldKind.Enum
-            : type == typeof(Color) ? FieldKind.Color
-            : type == typeof(IReadOnlyList<string>) ? FieldKind.Lines
-            : FieldKind.Vector;
+        Kind = property.Kind;
 
         if (Kind == FieldKind.Enum)
         {
@@ -70,13 +59,13 @@ public sealed class PropertyField : ObservableObject
                 .ToList();
         }
 
-        // A field marked for an editor of its own gets it, when the editor has one for it; a list of strings without one gets
-        // rows (or names and values), unless it's marked as plain text.
-        if ((property.Editor ?? GenericFields.For(property, Value)) is { } attribute && FieldEditor.Create(this, attribute) is { } editor)
+        // A field marked for an editor of its own gets it; a list of strings without one gets rows (or names and values),
+        // unless it's marked as plain text. Every attribute has its editor (FieldEditorTests holds the editor to that).
+        if (Kind == FieldKind.Custom)
         {
+            var attribute = property.Editor ?? GenericFields.For(property, Value)!;
             _attribute = attribute;
-            Editor = editor;
-            Kind = FieldKind.Custom;
+            Editor = FieldEditor.Create(this, attribute) ?? throw new InvalidOperationException($"No FieldEditor<{attribute.GetType().Name}> in the editor for {property.Name}.");
         }
     }
 
@@ -191,12 +180,6 @@ public sealed class PropertyField : ObservableObject
     // Sets every component's value at once, as one undo step.
     private void SetAll(object? value) => _owner.SetValues(_components, _property, [.. _components.Select(_ => value)]);
 
-    /// <summary>Properties named like JumpSound, Sound or Music hold a sound file's asset path.</summary>
-    public static bool IsSoundName(string name) => name.EndsWith("Sound", StringComparison.Ordinal) || name == "Music";
-
-    /// <summary>Properties named Image or like FireImage hold an image file's asset path.</summary>
-    public static bool IsImageName(string name) => name.EndsWith("Image", StringComparison.Ordinal);
-
     /// <summary>For an image field: a small preview of the picture, or null.</summary>
     public System.Windows.Media.ImageSource? ImagePreview => Kind == FieldKind.Image && !IsMixed ? _owner.Art.Thumbnail(Value as string) : null;
 
@@ -237,7 +220,7 @@ public sealed class PropertyField : ObservableObject
     }
 
     /// <summary>For a sound field: whether it's music (made in the Sound Maker's Music mode) rather than an effect.</summary>
-    public bool IsMusic => _property.Name == "Music" || _property.File?.Kind == AssetFileKind.Music;
+    public bool IsMusic => _property.File?.Kind == AssetFileKind.Music;
 
     /// <summary>For a sound field: set to a file that isn't in the project.</summary>
     public bool IsSoundMissing => Kind == FieldKind.Sound && !IsMixed && Value is string { Length: > 0 } path &&

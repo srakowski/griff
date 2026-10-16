@@ -5,6 +5,7 @@ using Griff.Data;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.SceneView;
+using Griff.Editor.Genres.Fighting;
 using Griff.Modules.Adventures;
 using Griff.Modules.BlockWorlds;
 using Griff.Modules.Cards;

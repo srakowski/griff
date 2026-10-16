@@ -5,6 +5,12 @@ namespace Griff.Modules.Fighting;
 /// <summary>What a script can ask of a fighting game, as members of <see cref="Game"/>: <c>Game.ShowHitboxes</c>.</summary>
 public static class FightingGame
 {
+    /// <summary>
+    /// What the hitboxes' drawing is called (see <see cref="IDebugDrawing"/>): <c>Game.ShowDebugDrawing("Hitboxes", true)</c>
+    /// is <c>Game.ShowHitboxes = true</c>, and the editor's Game &gt; Show Hitboxes switches it by this name.
+    /// </summary>
+    public const string HitboxesDrawing = "Hitboxes";
+
     extension(Game game)
     {
         /// <summary>

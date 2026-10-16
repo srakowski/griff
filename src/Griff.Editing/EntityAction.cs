@@ -32,6 +32,12 @@ public abstract class EntityAction
     /// <summary>The name of the editor's icon for it (one of its Icons, e.g. "Shuffle"), or null for none.</summary>
     public virtual string? Icon => null;
 
+    /// <summary>
+    /// True when it's done to each selected entity it applies to (Add Breakable), all in one undo step; false (the default)
+    /// for the primary selected entity alone.
+    /// </summary>
+    public virtual bool EachSelected => false;
+
     /// <summary>What to say when it's asked for with nothing it applies to selected, e.g. "Select a dungeon to generate it."</summary>
     public abstract string NotApplicable { get; }
 

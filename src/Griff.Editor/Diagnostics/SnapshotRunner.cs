@@ -56,21 +56,11 @@ internal static partial class SnapshotRunner
                 return;
             }
 
-            if (Environment.GetEnvironmentVariable("GRIFF_SNAPSHOT_ONLY") == "shooter")
+            // A genre's own (GRIFF_SNAPSHOT_ONLY=shooter, sandbox, contraption, strategy): see SnapshotGenre.
+            if (SnapshotGenre.All.FirstOrDefault(g => g.Name == Environment.GetEnvironmentVariable("GRIFF_SNAPSHOT_ONLY")) is { } genre)
             {
                 await workspace.SaveSceneAsync();
-                await ShooterSnapshots(services, main, workspace, projectDir, outputDir);
-                TryDelete(projectDir);
-                return;
-            }
-
-            if (Environment.GetEnvironmentVariable("GRIFF_SNAPSHOT_ONLY") is "sandbox" or "contraption")
-            {
-                await workspace.SaveSceneAsync();
-                if (Environment.GetEnvironmentVariable("GRIFF_SNAPSHOT_ONLY") == "sandbox")
-                    await SandboxSnapshots(services, main, workspace, projectDir, outputDir);
-                else
-                    await ContraptionSnapshots(services, main, workspace, projectDir, outputDir);
+                await genre.Run(services, main, workspace, projectDir, outputDir);
                 TryDelete(projectDir);
                 return;
             }
@@ -82,15 +72,6 @@ internal static partial class SnapshotRunner
                 TryDelete(projectDir);
                 return;
             }
-
-            if (Environment.GetEnvironmentVariable("GRIFF_SNAPSHOT_ONLY") == "strategy")
-            {
-                await workspace.SaveSceneAsync();
-                await StrategySnapshots(services, workspace, projectDir, outputDir);
-                TryDelete(projectDir);
-                return;
-            }
-
 
             // Scripting: add a script and attach it to the player.
             var checks = new List<string>();
@@ -810,7 +791,7 @@ internal static partial class SnapshotRunner
         """;
 
     // The game's middle pixel as the GPU draws it right now, or null without a GL surface.
-    private static (byte R, byte G, byte B)? CenterPixel(PlayMode play, Griff.Runtime.Game game)
+    internal static (byte R, byte G, byte B)? CenterPixel(PlayMode play, Griff.Runtime.Game game)
     {
         if (play.Surface.Capture(SceneRenderer.Build(game, play.Surface.Aspect)) is not var (pixels, width, height))
             return null;
@@ -818,14 +799,14 @@ internal static partial class SnapshotRunner
         return (pixels[i], pixels[i + 1], pixels[i + 2]);
     }
 
-    private static (byte R, byte G, byte B) PixelOf(byte[] pixels, int width, int x, int y)
+    internal static (byte R, byte G, byte B) PixelOf(byte[] pixels, int width, int x, int y)
     {
         var i = (y * width + x) * 4;
         return (pixels[i], pixels[i + 1], pixels[i + 2]);
     }
 
     // The pixel a world position is drawn at in a captured frame (rows top first).
-    private static (byte R, byte G, byte B) PixelAtWorld(byte[] pixels, int width, int height, RenderFrame frame, System.Numerics.Vector2 world)
+    internal static (byte R, byte G, byte B) PixelAtWorld(byte[] pixels, int width, int height, RenderFrame frame, System.Numerics.Vector2 world)
     {
         var clip = System.Numerics.Vector4.Transform(new System.Numerics.Vector4(world, 0, 1), frame.ViewProjection);
         var x = Math.Clamp((int)((clip.X + 1) / 2 * width), 0, width - 1);
@@ -833,7 +814,7 @@ internal static partial class SnapshotRunner
         return PixelOf(pixels, width, x, y);
     }
 
-    private static void SaveRgba(byte[] rgba, int width, int height, string path)
+    internal static void SaveRgba(byte[] rgba, int width, int height, string path)
     {
         // WPF wants BGRA.
         for (var i = 0; i < rgba.Length; i += 4)
@@ -845,7 +826,7 @@ internal static partial class SnapshotRunner
         encoder.Save(file);
     }
 
-    private static void TryDelete(string directory)
+    internal static void TryDelete(string directory)
     {
         try
         {
@@ -856,7 +837,7 @@ internal static partial class SnapshotRunner
         }
     }
 
-    private static void Show(Window window)
+    internal static void Show(Window window)
     {
         window.ShowActivated = false;
         window.WindowStartupLocation = WindowStartupLocation.Manual;
@@ -865,7 +846,7 @@ internal static partial class SnapshotRunner
             window.Show();
     }
 
-    private static void Render(Window window, string path)
+    internal static void Render(Window window, string path)
     {
         window.UpdateLayout();
         window.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);

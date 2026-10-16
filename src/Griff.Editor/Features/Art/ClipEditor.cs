@@ -9,7 +9,6 @@ using Griff.Editing;
 using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Undo;
 using Griff.Editor.Core.Workspace;
-using Griff.Modules.Fighting;
 using Griff.Scenes;
 using Animation = Griff.Scenes.Animation;
 using Vector2 = System.Numerics.Vector2;
@@ -20,9 +19,9 @@ namespace Griff.Editor.Features.Art;
 /// The Clip Editor: the selected entity's animation clips, listed with their frames, speed and looping, and the one
 /// picked playing in a preview the way the game plays it. Clips are added, renamed and removed here, one is picked for
 /// the game to start with, and the one picked gets its frames from the sprite sheet shown beside it and its speed and
-/// looping set, each as one undo step. Over the frame showing, its hitboxes and hurtboxes (a <see cref="Hitboxes"/>'s) are
-/// drawn, moved and resized, copied from the frame before, and given their damage, knockback, stun, group or multiplier,
-/// with the frame before shown faintly underneath (onion skin). It follows the selection, so it stays open beside the scene.
+/// looping set, each as one undo step. The frame before can show faintly underneath (onion skin). A module adds what it
+/// draws over the frame and lists beside it (<see cref="Overlays"/>: a fighting game's hitboxes and hurtboxes), so the
+/// Clip Editor itself knows no genre. It follows the selection, so it stays open beside the scene.
 /// </summary>
 public sealed class ClipEditor : ObservableObject, IDocumentEditor
 {
@@ -54,7 +53,8 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
     private ClipEditorWindow? _window;
 
     private readonly Core.EditorWindow _editorWindow;
-    public ClipEditor(ISceneDocuments sceneDocuments, IProjectSession projectSession, ISelection selection, EditorArt art, IDialogService dialogs, Core.EditorWindow editorWindow)
+    public ClipEditor(ISceneDocuments sceneDocuments, IProjectSession projectSession, ISelection selection, EditorArt art, IDialogService dialogs, Core.EditorWindow editorWindow,
+        IEnumerable<IClipOverlayMaker> overlays)
     {
         _projectSession = projectSession;
         _editorWindow = editorWindow;
@@ -71,8 +71,7 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
         StartWithClipCommand = new RelayCommand(StartWithClip, () => Selected is { IsStart: false });
         AddAnimationCommand = new RelayCommand(AddAnimation, () => CanAddAnimation);
         ShowFrameCommand = new RelayCommand<ClipFrame>(frame => { if (frame is not null) ShowFrame(frame.Index); });
-        CopyPreviousFrameCommand = new RelayCommand(CopyPreviousFrame, () => CanEditBoxes && _frame > 0);
-        RemoveBoxCommand = new RelayCommand(() => RemoveBox(), () => SelectedBox is not null);
+        Overlays = [.. overlays.Select(o => o.Make(this))];
 
         // A picture saved over the sheet: show the new one.
         art.ImageSaved += (_, _) => Rebuild();
@@ -93,6 +92,12 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
 
     /// <summary>The entity whose clips are listed: the primary selected one.</summary>
     public Entity? Entity => _entity;
+
+    /// <summary>The scene (or prefab) the entity is in, whose undo history its changes go into; null with none open.</summary>
+    public SceneDocument? Document => _document;
+
+    /// <summary>The project's components, for the changes an overlay makes to them.</summary>
+    public Griff.Scenes.Serialization.ComponentRegistry Components => _projectSession.Components;
 
     public string EntityName => _entity?.Name ?? "";
 
@@ -226,10 +231,6 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
 
     public IRelayCommand<ClipFrame> ShowFrameCommand { get; }
 
-    public IRelayCommand CopyPreviousFrameCommand { get; }
-
-    public IRelayCommand RemoveBoxCommand { get; }
-
     /// <summary>The Clip Editor's window, while it's open.</summary>
     public ClipEditorWindow? Window => _window;
 
@@ -335,7 +336,7 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
 
         var clips = animation.ClipList.Select(c => Same(c.Name, row.Name) ? c with { Name = name } : c).ToList();
         var start = Same(animation.Clip, row.Name) ? name : animation.Clip;
-        Change($"Rename Clip {row.Name} to {name}", clips, start, BoxesEdit(LinesWith(box => Same(box.Clip, row.Name) ? box with { Clip = name } : box)));
+        Change($"Rename Clip {row.Name} to {name}", clips, start, [.. Overlays.Select(o => o.RenamingClip(row.Name, name)).OfType<IEdit>()]);
         SelectClip(name);
     }
 
@@ -347,7 +348,7 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
         var index = Clips.IndexOf(row);
         var clips = animation.ClipList.Where(c => !Same(c.Name, row.Name)).ToList();
         var start = Same(animation.Clip, row.Name) ? null : animation.Clip;
-        Change($"Remove Clip {row.Name}", clips, start, BoxesEdit(LinesWith(box => Same(box.Clip, row.Name) ? null : box)));
+        Change($"Remove Clip {row.Name}", clips, start, [.. Overlays.Select(o => o.RemovingClip(row.Name)).OfType<IEdit>()]);
         Selected = Clips.Count == 0 ? null : Clips[Math.Clamp(index, 0, Clips.Count - 1)];
     }
 
@@ -458,91 +459,39 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
         document.History.Seal();
     }
 
-    // ----- Hitboxes and hurtboxes on the frame showing
+    // ----- What's drawn over the frame showing
 
-    private (string Clip, int Frame)? _boxesFor;
     // True while the lists are made again (see Selected).
     private bool _rebuilding;
-    private int _selectedBoxIndex = -1;
-    private BoxTool _tool;
-    private bool _drawCircles;
     private bool _onionSkin;
     private ImageSource? _onionImage;
+    // What the overlays were last shown for, the clip and frame (null with no frame), and whether to show them again anyway.
+    private (string Clip, int Frame)? _overlaysFor;
+    private bool _overlaysAgain;
+    private bool _newEntity;
 
-    /// <summary>The entity's <see cref="Griff.Modules.Fighting.Hitboxes"/>, which holds its boxes (the first box drawn adds one).</summary>
-    public Hitboxes? Hitboxes => _entity?.GetComponent<Hitboxes>();
+    /// <summary>
+    /// What the modules add for the frame showing, each drawn over it and listed beside it: a fighting game's hitboxes and
+    /// hurtboxes ("Boxes"). Agents reach one by its name, <c>Overlays[Boxes]</c>.
+    /// </summary>
+    public IReadOnlyList<ClipOverlay> Overlays { get; }
 
-    /// <summary>The boxes on the frame showing, hitboxes and hurtboxes, in the order they're listed.</summary>
-    public ObservableCollection<FrameBoxRow> Boxes { get; } = [];
+    /// <summary>What the overlays draw over the frame, each one's <see cref="ClipOverlay.Drawing"/>.</summary>
+    public IReadOnlyList<object> OverlayDrawings => [.. Overlays.Select(o => o.Drawing).OfType<object>()];
 
-    /// <summary>The boxes on the frame before the one showing, drawn faintly while <see cref="OnionSkin"/> is on.</summary>
-    public ObservableCollection<FrameBoxRow> OnionBoxes { get; } = [];
+    /// <summary>The overlay of type <typeparamref name="T"/>, if the editor has one.</summary>
+    public T? Overlay<T>() where T : ClipOverlay => Overlays.OfType<T>().FirstOrDefault();
 
-    /// <summary>True when the frame showing can have boxes: a clip picked, on an entity with a sprite and an animation.</summary>
-    public bool CanEditBoxes => Selected is not null && Sprite is not null && Animation is not null;
+    /// <summary>True when there's a frame showing to draw over: a clip picked, on an entity with a sprite and an animation.</summary>
+    public bool CanEditFrame => Selected is not null && Sprite is not null && Animation is not null;
 
-    /// <summary>What the boxes' lines call the clip previewed: its name, or <see cref="FrameBox.OwnFrames"/> for the animation's own frames.</summary>
-    public string BoxClip => Selected is null or { IsOwnFrames: true } ? FrameBox.OwnFrames : Selected.Name;
-
-    /// <summary>How big the frame's picture is in the game, in world units (the sprite's Size): what the boxes are measured in.</summary>
+    /// <summary>How big the frame's picture is in the game, in world units (the sprite's Size): what's drawn over it is measured in.</summary>
     public Vector2 FrameSize => Sprite?.Size ?? Vector2.One;
 
-    /// <summary>The box picked on the frame showing, to move, resize, set or remove; null for none.</summary>
-    public FrameBoxRow? SelectedBox
-    {
-        get => _selectedBoxIndex >= 0 && _selectedBoxIndex < Boxes.Count ? Boxes[_selectedBoxIndex] : null;
-        set
-        {
-            if (_rebuilding)
-                return;
-            var index = value is null ? -1 : Boxes.IndexOf(value);
-            if (index == _selectedBoxIndex)
-                return;
-            _selectedBoxIndex = index;
-            NotifyBox();
-        }
-    }
+    /// <summary>E.g. "Attack Frame 2", or "Frame 2" for the animation's own frames: what an undo step on the frame showing calls it.</summary>
+    public string FrameName => $"{(Selected is { IsOwnFrames: false } clip ? clip.Name : "Frame")}{(Selected is { IsOwnFrames: false } ? " Frame" : "")} {_frame + 1}";
 
-    /// <summary>What dragging over the frame does: pick and move boxes, or draw a new hitbox or hurtbox.</summary>
-    public BoxTool Tool
-    {
-        get => _tool;
-        set
-        {
-            if (!SetProperty(ref _tool, value))
-                return;
-            OnPropertyChanged(nameof(IsSelectTool));
-            OnPropertyChanged(nameof(IsHitboxTool));
-            OnPropertyChanged(nameof(IsHurtboxTool));
-        }
-    }
-
-    public bool IsSelectTool
-    {
-        get => Tool == BoxTool.Select;
-        set { if (value) Tool = BoxTool.Select; }
-    }
-
-    public bool IsHitboxTool
-    {
-        get => Tool == BoxTool.Hitbox;
-        set { if (value) Tool = BoxTool.Hitbox; }
-    }
-
-    public bool IsHurtboxTool
-    {
-        get => Tool == BoxTool.Hurtbox;
-        set { if (value) Tool = BoxTool.Hurtbox; }
-    }
-
-    /// <summary>Draw circles rather than boxes with the Hitbox and Hurtbox tools.</summary>
-    public bool DrawCircles
-    {
-        get => _drawCircles;
-        set => SetProperty(ref _drawCircles, value);
-    }
-
-    /// <summary>Shows the frame before the one showing faintly underneath it, with its boxes, to line the boxes up with.</summary>
+    /// <summary>Shows the frame before the one showing faintly underneath it (and the overlays' things on it), to line things up with.</summary>
     public bool OnionSkin
     {
         get => _onionSkin;
@@ -550,8 +499,8 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
         {
             if (!SetProperty(ref _onionSkin, value))
                 return;
-            _boxesFor = null;
-            RefreshBoxes();
+            _overlaysAgain = true;
+            RefreshOverlays();
         }
     }
 
@@ -560,74 +509,6 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
     {
         get => _onionImage;
         private set => SetProperty(ref _onionImage, value);
-    }
-
-    /// <summary>What the frame showing has, e.g. "Frame 2: 1 hitbox, 2 hurtboxes".</summary>
-    public string BoxesSummary
-    {
-        get
-        {
-            if (!CanEditBoxes)
-                return "";
-            var hits = Boxes.Count(b => b.IsHit);
-            var hurts = Boxes.Count - hits;
-            if (hits + hurts == 0)
-                return $"Frame {_frame + 1}: no boxes. Pick Hitbox or Hurtbox and drag over the picture.";
-            var parts = new List<string>();
-            if (hits > 0)
-                parts.Add(hits == 1 ? "1 hitbox" : $"{hits} hitboxes");
-            if (hurts > 0)
-                parts.Add(hurts == 1 ? "1 hurtbox" : $"{hurts} hurtboxes");
-            return $"Frame {_frame + 1}: {string.Join(", ", parts)}";
-        }
-    }
-
-    public bool HasSelectedBox => SelectedBox is not null;
-
-    public bool IsHitboxSelected => SelectedBox is { IsHit: true };
-
-    public bool IsHurtboxSelected => SelectedBox is { IsHit: false };
-
-    /// <summary>The picked hitbox's damage (before the hurtbox it lands on multiplies it). Setting it is one undo step.</summary>
-    public float BoxDamage
-    {
-        get => SelectedBox?.Box.Damage ?? 0;
-        set => ChangeSelectedBox("Damage", Text(value), box => box with { Damage = NotNegative(value, "Damage") });
-    }
-
-    /// <summary>How fast the picked hitbox sends what it hits away from it, in units a second. One undo step.</summary>
-    public float BoxKnockbackX
-    {
-        get => SelectedBox?.Box.Knockback.X ?? 0;
-        set => ChangeSelectedBox("Knockback", Text(value), box => box with { Knockback = box.Knockback with { X = Finite(value) } });
-    }
-
-    /// <summary>How fast the picked hitbox sends what it hits upward, in units a second. One undo step.</summary>
-    public float BoxKnockbackY
-    {
-        get => SelectedBox?.Box.Knockback.Y ?? 0;
-        set => ChangeSelectedBox("Knockback", Text(value), box => box with { Knockback = box.Knockback with { Y = Finite(value) } });
-    }
-
-    /// <summary>How many steps (frames, at 60 a second) of hitstun the picked hitbox leaves what it hits in. One undo step.</summary>
-    public int BoxStun
-    {
-        get => SelectedBox?.Box.Stun ?? 0;
-        set => ChangeSelectedBox("Stun", value.ToString(CultureInfo.InvariantCulture), box => box with { Stun = (int)NotNegative(value, "Stun") });
-    }
-
-    /// <summary>The picked hitbox's group: a swing hits each thing once per group. One undo step.</summary>
-    public int BoxGroup
-    {
-        get => SelectedBox?.Box.Group ?? 1;
-        set => ChangeSelectedBox("Group", value.ToString(CultureInfo.InvariantCulture), box => box with { Group = value });
-    }
-
-    /// <summary>What the picked hurtbox multiplies the damage of hits by: 1.5 for a head that takes more. One undo step.</summary>
-    public float BoxMultiplier
-    {
-        get => SelectedBox?.Box.Multiplier ?? 1;
-        set => ChangeSelectedBox("Multiplier", Text(value), box => box with { Multiplier = NotNegative(value, "A multiplier") });
     }
 
     /// <summary>
@@ -646,267 +527,23 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
         remove { }
     }
 
-    /// <summary>Picks the box at <paramref name="index"/> of <see cref="Boxes"/> (-1 for none).</summary>
-    public void SelectBox(int index)
+    // Shows the overlays' things for the frame showing (and the frame before, for the onion skin) when the frame changes, or
+    // when they may have changed.
+    private void RefreshOverlays()
     {
-        if (index >= Boxes.Count)
-            throw new InvalidOperationException($"Frame {_frame + 1} has {Boxes.Count} boxes, 0 to {Boxes.Count - 1}.");
-        SelectedBox = index < 0 ? null : Boxes[index];
-    }
-
-    /// <summary>
-    /// Adds a hitbox or hurtbox to the frame showing, its middle at <paramref name="x"/>, <paramref name="y"/> and
-    /// <paramref name="width"/> by <paramref name="height"/> big, in world units from the entity's middle facing right, and
-    /// picks it. A hitbox starts with 1 damage in group 1. One undo step (adding a Hitboxes if the entity has none).
-    /// </summary>
-    public void AddBox(FrameBoxKind kind, float x, float y, float width, float height)
-    {
-        var size = new Vector2(Positive(width, "A box's width"), Positive(height, "A box's height"));
-        Add(new FrameBox(BoxClip, _frame, kind, new Vector2(Finite(x), Finite(y)), Rounded(size)));
-    }
-
-    /// <summary>Adds a circle to the frame showing, its middle at <paramref name="x"/>, <paramref name="y"/>, as <see cref="AddBox"/> does a box.</summary>
-    public void AddCircle(FrameBoxKind kind, float x, float y, float radius) =>
-        Add(new FrameBox(BoxClip, _frame, kind, new Vector2(Finite(x), Finite(y)), Vector2.One).AsCircle(MathF.Round(Positive(radius, "A circle's radius"), 3)));
-
-    /// <summary>Moves the box at <paramref name="index"/> so its middle is at <paramref name="x"/>, <paramref name="y"/>. One undo step.</summary>
-    public void MoveBox(int index, float x, float y) =>
-        ChangeBox(index, "Move", box => box with { Center = Rounded(new Vector2(Finite(x), Finite(y))) });
-
-    /// <summary>Makes the box at <paramref name="index"/> <paramref name="width"/> by <paramref name="height"/> (a circle that wide), keeping its middle. One undo step.</summary>
-    public void ResizeBox(int index, float width, float height)
-    {
-        var size = new Vector2(Positive(width, "A box's width"), Positive(height, "A box's height"));
-        ChangeBox(index, "Resize", box => box.IsCircle ? box.AsCircle(MathF.Round(MathF.Max(size.X, size.Y) / 2, 3)) : box with { Size = Rounded(size) });
-    }
-
-    /// <summary>Puts the box at <paramref name="index"/> at <paramref name="x"/>, <paramref name="y"/> and makes it <paramref name="width"/> by <paramref name="height"/>: dragging a corner. One undo step.</summary>
-    public void SetBoxBounds(int index, float x, float y, float width, float height)
-    {
-        var size = new Vector2(Positive(width, "A box's width"), Positive(height, "A box's height"));
-        var center = Rounded(new Vector2(Finite(x), Finite(y)));
-        ChangeBox(index, "Resize", box => box.IsCircle
-            ? box.AsCircle(MathF.Round(MathF.Max(size.X, size.Y) / 2, 3)) with { Center = center }
-            : box with { Center = center, Size = Rounded(size) });
-    }
-
-    /// <summary>Removes the box at <paramref name="index"/> (the one picked, without one). One undo step.</summary>
-    public void RemoveBox(int index = -1)
-    {
-        index = index < 0 ? _selectedBoxIndex : index;
-        if (index < 0)
+        (string, int)? key = CanEditFrame ? (Selected!.Name, _frame) : null;
+        if (key == _overlaysFor && !_overlaysAgain)
             return;
-        var row = Row(index);
-        _selectedBoxIndex = -1;
-        ChangeFrame($"Remove {row.Kind} from {FrameName}", boxes =>
-        {
-            boxes.RemoveAt(index);
-            return true;
-        });
-    }
-
-    /// <summary>Gives the frame showing the boxes of the frame before it, in place of its own: a punch's fist moving on a little. One undo step.</summary>
-    public void CopyPreviousFrame()
-    {
-        if (!CanEditBoxes)
-            return;
-        if (_frame == 0)
-            throw new InvalidOperationException("The first frame has no frame before it to copy from.");
-        var previous = Hitboxes is { } hitboxes ? hitboxes.On(BoxClip, _frame - 1).ToArray() : [];
-        ChangeFrame($"Copy Boxes from Frame {_frame} to {FrameName}", boxes =>
-        {
-            var copied = previous.Select(b => b with { Frame = _frame }).ToList();
-            if (copied.SequenceEqual(boxes))
-                return false;
-            boxes.Clear();
-            boxes.AddRange(copied);
-            _selectedBoxIndex = -1;
-            return true;
-        });
-    }
-
-    // E.g. "Attack Frame 2".
-    private string FrameName => $"{(Selected is { IsOwnFrames: false } clip ? clip.Name : "Frame")}{(Selected is { IsOwnFrames: false } ? " Frame" : "")} {_frame + 1}";
-
-    private void Add(FrameBox box)
-    {
-        ChangeFrame($"Add {(box.IsHit ? "Hitbox" : "Hurtbox")} to {FrameName}", boxes =>
-        {
-            boxes.Add(box);
-            _selectedBoxIndex = boxes.Count - 1;
-            return true;
-        });
-    }
-
-    private FrameBoxRow Row(int index) =>
-        index >= 0 && index < Boxes.Count ? Boxes[index] : throw new InvalidOperationException(Boxes.Count == 0
-            ? $"Frame {_frame + 1} has no boxes."
-            : $"Frame {_frame + 1} has {Boxes.Count} boxes, 0 to {Boxes.Count - 1}.");
-
-    private void ChangeBox(int index, string verb, Func<FrameBox, FrameBox> change) =>
-        ChangeBox(index, row => $"{verb} {row.Kind} on {FrameName}", change);
-
-    private void ChangeBox(int index, Func<FrameBoxRow, string> describe, Func<FrameBox, FrameBox> change)
-    {
-        var row = Row(index);
-        _selectedBoxIndex = index;
-        ChangeFrame(describe(row), boxes =>
-        {
-            var changed = change(boxes[index]);
-            if (changed == boxes[index])
-                return false;
-            boxes[index] = changed;
-            return true;
-        });
-    }
-
-    // E.g. "Set Hitbox Damage to 3".
-    private void ChangeSelectedBox(string what, string value, Func<FrameBox, FrameBox> change)
-    {
-        if (SelectedBox is not { } row)
-            return;
-        ChangeBox(row.Index, _ => $"Set {row.Kind} {what} to {value}", change);
-        NotifyBox();
-    }
-
-    // Changes the frame showing's boxes as one undo step, pausing on it; nothing happens if the change says nothing changed.
-    private void ChangeFrame(string description, Func<List<FrameBox>, bool> change)
-    {
-        if (!CanEditBoxes || _entity is not { } entity || _document is not { } document)
-            return;
-        if (IsPlaying)
-            ShowFrame(_frame);
-        var (clip, frame) = (BoxClip, _frame);
-        var mine = Hitboxes is { } hitboxes ? hitboxes.On(clip, frame).ToArray().ToList() : [];
-        var before = mine.ToList();
-        if (!change(mine) || mine.SequenceEqual(before))
-        {
-            NotifyBox();
-            return;
-        }
-
-        var lines = ReplaceFrame(clip, frame, mine);
-        IEdit edit = Hitboxes is { } existing
-            ? BoxesEdit(existing, lines)
-            : new AddComponentEdit(entity, new Hitboxes { Boxes = lines });
-        document.History.Seal();
-        document.Execute(new CompositeEdit(description, [edit]));
-        document.History.Seal();
-    }
-
-    // The boxes' lines with the frame's own replaced by these, where its first one was (or at the end); the rest as they were.
-    private List<string> ReplaceFrame(string clip, int frame, IReadOnlyList<FrameBox> boxes)
-    {
-        var lines = new List<string>();
-        var at = -1;
-        foreach (var line in Hitboxes?.Boxes ?? [])
-        {
-            if (FrameBox.TryParse(line, out var box, out _) && box.Frame == frame && Same(box.Clip, clip))
-            {
-                if (at < 0)
-                    at = lines.Count;
-                continue;
-            }
-
-            lines.Add(line);
-        }
-
-        lines.InsertRange(at < 0 ? lines.Count : at, boxes.Select(b => b.ToString()));
-        return lines;
-    }
-
-    // The boxes' lines with each box changed (or dropped, for null); lines that don't read, and boxes left as they were, kept as written.
-    private List<string>? LinesWith(Func<FrameBox, FrameBox?> change)
-    {
-        if (Hitboxes is not { } hitboxes)
-            return null;
-        var lines = new List<string>();
-        foreach (var line in hitboxes.Boxes)
-        {
-            if (!FrameBox.TryParse(line, out var box, out _))
-            {
-                lines.Add(line);
-                continue;
-            }
-
-            if (change(box) is { } changed)
-                lines.Add(changed == box ? line : changed.ToString());
-        }
-
-        return lines;
-    }
-
-    private SetPropertyEdit? BoxesEdit(IReadOnlyList<string>? lines) =>
-        lines is null || Hitboxes is not { } hitboxes || lines.SequenceEqual(hitboxes.Boxes) ? null : BoxesEdit(hitboxes, lines);
-
-    private SetPropertyEdit BoxesEdit(Hitboxes hitboxes, IReadOnlyList<string> lines) =>
-        new(hitboxes, _projectSession.Components.Get(typeof(Hitboxes)).Properties.Single(p => p.Name == nameof(Griff.Modules.Fighting.Hitboxes.Boxes)), lines);
-
-    // Lists the boxes of the frame showing (and the frame before, for the onion skin) when the frame changes or they do.
-    private void RefreshBoxes()
-    {
-        (string, int)? key = CanEditBoxes ? (BoxClip, _frame) : null;
-        if (key == _boxesFor)
-            return;
-        _boxesFor = key;
-        var rebuilding = _rebuilding;
-        _rebuilding = true;
-        Boxes.Clear();
-        OnionBoxes.Clear();
-        if (key is var (clip, frame) && Hitboxes is { } hitboxes)
-        {
-            Fill(Boxes, hitboxes.On(clip, frame));
-            if (OnionSkin && frame > 0)
-                Fill(OnionBoxes, hitboxes.On(clip, frame - 1));
-        }
-
+        _overlaysFor = key;
+        var newEntity = _newEntity;
+        _overlaysAgain = _newEntity = false;
         OnionImage = OnionSkin && key is not null && _frame > 0 && Selected is { } row ? SheetImage(row.First + _frame - 1) : null;
-        _rebuilding = rebuilding;
-        if (_selectedBoxIndex >= Boxes.Count)
-            _selectedBoxIndex = -1;
-        OnPropertyChanged(nameof(Hitboxes));
-        OnPropertyChanged(nameof(CanEditBoxes));
-        OnPropertyChanged(nameof(BoxClip));
+        OnPropertyChanged(nameof(CanEditFrame));
         OnPropertyChanged(nameof(FrameSize));
-        NotifyBox();
-        CopyPreviousFrameCommand.NotifyCanExecuteChanged();
-
-        static void Fill(ObservableCollection<FrameBoxRow> rows, ReadOnlySpan<FrameBox> boxes)
-        {
-            var (hits, hurts) = (0, 0);
-            for (var i = 0; i < boxes.Length; i++)
-                rows.Add(new FrameBoxRow(i, boxes[i], boxes[i].IsHit ? ++hits : ++hurts));
-        }
+        OnPropertyChanged(nameof(FrameName));
+        foreach (var overlay in Overlays)
+            overlay.Refresh(newEntity);
     }
-
-    private void NotifyBox()
-    {
-        OnPropertyChanged(nameof(SelectedBox));
-        OnPropertyChanged(nameof(HasSelectedBox));
-        OnPropertyChanged(nameof(IsHitboxSelected));
-        OnPropertyChanged(nameof(IsHurtboxSelected));
-        OnPropertyChanged(nameof(BoxDamage));
-        OnPropertyChanged(nameof(BoxKnockbackX));
-        OnPropertyChanged(nameof(BoxKnockbackY));
-        OnPropertyChanged(nameof(BoxStun));
-        OnPropertyChanged(nameof(BoxGroup));
-        OnPropertyChanged(nameof(BoxMultiplier));
-        OnPropertyChanged(nameof(BoxesSummary));
-        RemoveBoxCommand.NotifyCanExecuteChanged();
-    }
-
-    private static string Text(float value) => FrameBox.Number(value);
-
-    private static float Finite(float value) =>
-        float.IsFinite(value) ? MathF.Round(value, 3) : throw new InvalidOperationException("That isn't a number.");
-
-    private static float Positive(float value, string what) =>
-        float.IsFinite(value) && value > 0 ? value : throw new InvalidOperationException($"{what} is more than 0.");
-
-    private static float NotNegative(float value, string what) =>
-        float.IsFinite(value) && value >= 0 ? MathF.Round(value, 3) : throw new InvalidOperationException($"{what} is 0 or more.");
-
-    private static Vector2 Rounded(Vector2 value) => new(MathF.Round(value.X, 3), MathF.Round(value.Y, 3));
 
     // ----- Following the selection
 
@@ -936,10 +573,9 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
     {
         var keep = pickStart ? null : Selected?.Name;
         var animation = Animation;
-        // The boxes are listed again too, whatever frame shows (they may have changed).
-        _boxesFor = null;
-        if (pickStart)
-            _selectedBoxIndex = -1;
+        // The overlays show theirs again too, whatever frame shows (they may have changed).
+        _overlaysAgain = true;
+        _newEntity |= pickStart;
         _rebuilding = true;
         Clips.Clear();
         if (animation is not null)
@@ -1045,7 +681,7 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
         OnPropertyChanged(nameof(Frame));
         OnPropertyChanged(nameof(SheetFrame));
         OnPropertyChanged(nameof(FrameText));
-        RefreshBoxes();
+        RefreshOverlays();
     }
 
     // One frame of the sprite sheet, cut out the way the sprite cuts it (see Sprite.FrameRect).
@@ -1092,7 +728,7 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
     // ----- Changing the clips
 
     // Sets the animation's Clips (and Clip, the one it starts with) as one undo step.
-    private void Change(string description, IReadOnlyList<AnimationClip> clips, string? start, IEdit? boxes = null)
+    private void Change(string description, IReadOnlyList<AnimationClip> clips, string? start, IReadOnlyList<IEdit>? also = null)
     {
         if (Animation is not { } animation)
             return;
@@ -1102,7 +738,7 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
             changes.Add((nameof(Griff.Scenes.Animation.Clips), text));
         if (!string.Equals(start ?? "", animation.Clip ?? "", StringComparison.Ordinal))
             changes.Add((nameof(Griff.Scenes.Animation.Clip), start));
-        SetAnimation(description, boxes, [.. changes]);
+        SetAnimation(description, also, [.. changes]);
     }
 
     // Changes the previewed clip in the animation's Clips, as one undo step.
@@ -1116,15 +752,14 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
     // Sets properties of the animation, as one undo step.
     private void SetAnimation(string description, params (string Property, object? Value)[] changes) => SetAnimation(description, null, changes);
 
-    // ...with a change to the boxes that goes with it (a clip renamed or removed takes its boxes along).
-    private void SetAnimation(string description, IEdit? boxes, params (string Property, object? Value)[] changes)
+    // ...with the changes that go with it (a clip renamed or removed takes the overlays' things on it along).
+    private void SetAnimation(string description, IReadOnlyList<IEdit>? also, params (string Property, object? Value)[] changes)
     {
         if (Animation is not { } animation || _document is not { } document || changes.Length == 0)
             return;
         var properties = _projectSession.Components.Get(typeof(Animation)).Properties;
         var edits = changes.Select(c => (IEdit)new SetPropertyEdit(animation, properties.Single(p => p.Name == c.Property), c.Value)).ToList();
-        if (boxes is not null)
-            edits.Add(boxes);
+        edits.AddRange(also ?? []);
         document.History.Seal();
         document.Execute(new CompositeEdit(description, edits));
         document.History.Seal();
@@ -1265,52 +900,4 @@ public sealed class SheetCell(int index, ImageSource? image) : ObservableObject
         get => _isCurrent;
         set => SetProperty(ref _isCurrent, value);
     }
-}
-
-/// <summary>What dragging over the Clip Editor's frame does.</summary>
-public enum BoxTool
-{
-    /// <summary>Picks a box, moves it, and resizes it by its corners.</summary>
-    Select,
-
-    /// <summary>Draws a new hitbox.</summary>
-    Hitbox,
-
-    /// <summary>Draws a new hurtbox.</summary>
-    Hurtbox,
-}
-
-/// <summary>One of the boxes on the frame the Clip Editor shows: a hitbox or a hurtbox, where it is and what it does.</summary>
-/// <param name="Index">Where it is among the frame's boxes, counting from 0 (what the Clip Editor's box methods take).</param>
-/// <param name="Number">Which hitbox (or hurtbox) of the frame it is, counting from 1.</param>
-public sealed record FrameBoxRow(int Index, FrameBox Box, int Number)
-{
-    public bool IsHit => Box.IsHit;
-
-    /// <summary>"Hitbox" or "Hurtbox".</summary>
-    public string Kind => IsHit ? "Hitbox" : "Hurtbox";
-
-    /// <summary>What agents and the list see it as, e.g. "Hitbox 1: 2 damage, knockback 4, 3, 18 stun" or "Hurtbox 2 (circle), takes ×1.5".</summary>
-    public string Label
-    {
-        get
-        {
-            var text = $"{Kind} {Number}{(Box.IsCircle ? " (circle)" : "")}";
-            if (!IsHit)
-                return Box.Multiplier == 1 ? text : $"{text}, takes ×{FrameBox.Number(Box.Multiplier)}";
-            var parts = new List<string> { $"{FrameBox.Number(Box.Damage)} damage" };
-            if (Box.Knockback != System.Numerics.Vector2.Zero)
-                parts.Add($"knockback {FrameBox.Number(Box.Knockback.X)}, {FrameBox.Number(Box.Knockback.Y)}");
-            if (Box.Stun > 0)
-                parts.Add($"{Box.Stun} stun");
-            if (Box.Group != 1)
-                parts.Add($"group {Box.Group}");
-            return $"{text}: {string.Join(", ", parts)}";
-        }
-    }
-
-    /// <summary>Where and how big it is, e.g. "at 0.5, 0.2, 0.3 × 0.3" (world units from the entity's middle, facing right).</summary>
-    public string Place => Box.IsCircle
-        ? $"at {FrameBox.Number(Box.Center.X)}, {FrameBox.Number(Box.Center.Y)}, radius {FrameBox.Number(Box.Radius)}"
-        : $"at {FrameBox.Number(Box.Center.X)}, {FrameBox.Number(Box.Center.Y)}, {FrameBox.Number(Box.Size.X)} × {FrameBox.Number(Box.Size.Y)}";
 }

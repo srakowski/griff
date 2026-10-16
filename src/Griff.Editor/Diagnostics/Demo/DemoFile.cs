@@ -9,10 +9,8 @@ using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.Play;
 using Griff.Editor.Features.SceneView;
-using Griff.Modules.Contraptions;
-using Griff.Modules.FirstPerson;
-using Griff.Modules.Strategy;
 using Griff.Templates;
+using FieldKind = Griff.Scenes.FieldKind;
 
 namespace Griff.Editor.Diagnostics.Demo;
 
@@ -59,6 +57,9 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
     private string _agentAnswer = "";
 
     private DemoInput Input => ui.Input;
+
+    /// <summary>The editor's parts the demo drives, for a genre's commands.</summary>
+    internal DemoUi Ui => ui;
     private DemoOverlay Overlay => ui.Overlay;
 
     public Task<bool> Run()
@@ -449,23 +450,6 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
                 var (goneName, goneSeconds) = Split2(a);
                 await WaitInGame($"{goneName} gone", Seconds(goneSeconds),
                     game => !game.Scene.Entities.Any(e => e.Name == goneName && e.IsActive));
-                break;
-            case "ready":
-                var (readyName, readySeconds) = Split2(a);
-                await WaitInGame($"{readyName} ready", Seconds(readySeconds), game => PlayersOwn(game, readyName).Any());
-                break;
-            case "afford":
-                // "afford: 180 Gold | 60": the player can pay for it.
-                var (cost, affordSeconds) = Split2(a);
-                await WaitInGame($"{cost} to spend", Seconds(affordSeconds),
-                    game => game.FactionOf(game.Find<Griff.Modules.Strategy.Commander>()?.Team)?.CanAfford(cost) == true);
-                break;
-            case "have":
-                // "have: 9 Soldier | 90": the player has at least that many.
-                var (haveWhat, haveSeconds) = Split2(a);
-                var (haveCount, haveName) = Split2(haveWhat, ' ');
-                var wanted = int.Parse(haveCount, CultureInfo.InvariantCulture);
-                await WaitInGame($"{wanted} {haveName}", Seconds(haveSeconds), game => PlayersOwn(game, haveName).Count() >= wanted);
                 break;
             case "type":
                 // Quotes keep spaces at the ends: type: " * 2"
@@ -1119,103 +1103,6 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
             case "clips":
                 await DemoUi.WaitForClipEditor();
                 break;
-            case "dialogue":
-                await DemoUi.WaitForDialogueEditor();
-                break;
-            case "dialogueline":
-                // "dialogueline: 3" clicks the Dialogue Editor's third line.
-                await ui.DialogueLine(int.Parse(a, CultureInfo.InvariantCulture));
-                break;
-            case "dialogueset":
-                // "dialogueset: speaker = Ben" picks from a list; "dialogueset: said = Hello" types into a box.
-                var (dialogueField, dialogueValue) = Split2(a, '=');
-                await ui.DialogueSet(dialogueField, dialogueValue);
-                break;
-            case "moves":
-                await DemoUi.WaitForMoveList();
-                break;
-            case "movepick":
-                // "movepick: Palm" clicks the Move List's move called Palm.
-                await ui.MovesPick(a);
-                break;
-            case "moveset":
-                // "moveset: motion = 236" picks from a list; "moveset: startup = 8" types into a box.
-                var (moveField, moveValue) = Split2(a, '=');
-                await ui.MovesSet(moveField, moveValue);
-                break;
-            case "expectmove":
-                // What the Move List says about the move picked (its arrows, what the motion's called, its frame data, what it
-                // leaves on hit and block, its problems) has this in it.
-                await DemoUi.WaitForMoveList();
-                string MoveSays() => DemoUi.MoveList?.Model is { } moves
-                    ? string.Join(" | ", moves.InputArrows, moves.InputDescription, moves.FrameSummary, moves.Advantage, moves.Problems)
-                    : "";
-                if (!await Until(() => MoveSays().Contains(a, StringComparison.OrdinalIgnoreCase), 3000))
-                    throw new InvalidOperationException($"The Move List says \"{MoveSays()}\", not \"{a}\".");
-                break;
-            case "chartset":
-                // "chartset: snap = 1/16", "chartset: metronome = true", "chartset: playhead = 8": set one of the Chart panel's
-                // settings with the real mouse and keyboard (the playhead by clicking the ruler).
-                var (chartSetting, chartValue) = Split2(a, '=');
-                await ui.ChartSet(chartSetting, chartValue);
-                break;
-            case "noteclick":
-                // "noteclick: 4.5, 3": click the Chart panel's timeline at beat 4.5 in lane 3 (adding a note, or picking it).
-                var noteClickAt = NoteAt(a);
-                await ui.NoteClick(noteClickAt.Beat, noteClickAt.Lane);
-                break;
-            case "noteremove":
-                // "noteremove: 4.5, 3": right-click the note there, taking it out.
-                var noteRemoveAt = NoteAt(a);
-                await ui.NoteClick(noteRemoveAt.Beat, noteRemoveAt.Lane, right: true);
-                break;
-            case "notedrag":
-                // "notedrag: 4.5, 3 > 5, 2": drag on the timeline: a note moved, a hold's end dragged, or a new hold drawn.
-                var (noteDragFrom, noteDragTo) = Split2(a, '>');
-                await ui.NoteDrag(NoteAt(noteDragFrom), NoteAt(noteDragTo));
-                break;
-            case "notetap":
-                // "notetap: 2 @ 9", "notetap: 1 @ 10 - 11.5": while a take records, press lane 2's key as beat 9 is heard
-                // (and hold it to 11.5).
-                var (tapLane, tapWhen) = Split2(a, '@');
-                var tapBeats = tapWhen.Split(" - ", 2, StringSplitOptions.TrimEntries);
-                await ui.NoteTap(int.Parse(tapLane, CultureInfo.InvariantCulture), double.Parse(tapBeats[0], CultureInfo.InvariantCulture),
-                    tapBeats.Length > 1 ? double.Parse(tapBeats[1], CultureInfo.InvariantCulture) : double.NaN);
-                break;
-            case "chartwait":
-                // "chartwait: 12": wait until the Chart panel's song has been heard to beat 12 (or stops).
-                await DemoUi.WaitForBeat(double.Parse(a, CultureInfo.InvariantCulture));
-                break;
-            case "expectnotes":
-                // What the Chart panel says (its summary of the difficulty, and what the last thing done said) has this in it.
-                string ChartSays() => $"{DemoUi.Chart.Summary} | {DemoUi.Chart.Message}";
-                if (!await Until(() => ChartSays().Contains(a, StringComparison.OrdinalIgnoreCase), 3000))
-                    throw new InvalidOperationException($"The Chart panel says \"{ChartSays()}\", not \"{a}\".");
-                break;
-            case "expectnote":
-                // "expectnote: 9, 4, hold 1.5": the difficulty has a note at beat 9 in lane 4, held 1.5 beats ("hold 0" for a
-                // tap; leave it out for either); "expectnote: none at 4.5, 3": it has none there.
-                var noneThere = a.StartsWith("none at ", StringComparison.OrdinalIgnoreCase);
-                var noteParts = (noneThere ? a[8..] : a).Split(',', StringSplitOptions.TrimEntries);
-                var noteAt = NoteAt($"{noteParts[0]}, {noteParts[1]}");
-                double? wantHold = noteParts.Length > 2 ? double.Parse(noteParts[2].Replace("hold", "").Trim(), CultureInfo.InvariantCulture) : null;
-                bool NoteIsThere()
-                {
-                    var row = DemoUi.Chart.NoteAt(noteAt.Beat, noteAt.Lane);
-                    if (noneThere)
-                        return row is null;
-                    return row is not null && (wantHold is not { } hold || DemoUi.Chart.Rows.Any(r => r.Row == row && Math.Abs(r.Note.Hold - hold) < 1e-3));
-                }
-
-                if (!await Until(NoteIsThere, 3000))
-                    throw new InvalidOperationException($"Expected {(noneThere ? "no note" : "a note")} at {a}, but the chart has: {string.Join("; ", DemoUi.Chart.NoteLines.Take(40))}");
-                break;
-            case "expectpreview":
-                // The Dialogue Editor's preview of the stage, in words, has this in it.
-                await DemoUi.WaitForDialogueEditor();
-                if (!await Until(() => DemoUi.DialogueEditor?.Model.PreviewText.Contains(a, StringComparison.OrdinalIgnoreCase) == true, 3000))
-                    throw new InvalidOperationException($"The Dialogue Editor's preview says \"{DemoUi.DialogueEditor?.Model.PreviewText}\", not \"{a}\".");
-                break;
             case "clipframes":
                 // "clipframes: 2 > 5" drags across the Clip Editor's sheet; "clipframes: 3" clicks one; "Shift+6" stretches to it.
                 var (clipFramesText, clipFramesModifiers) = ParseModifiedName(a);
@@ -1226,24 +1113,11 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
                 await DemoUi.WaitForClipEditor();
                 await ui.EditBox((TextBox)DemoUi.ClipsPart("speed"), a);
                 break;
-            case "clipbox":
-                // "clipbox: 0.3, 0.1 > 0.7, 0.4" drags over the Clip Editor's frame between two points in world units.
-                var (clipBoxFrom, clipBoxTo) = Split2(a, '>');
-                var (boxFrom, boxTo) = (Numbers(clipBoxFrom, 2), Numbers(clipBoxTo, 2));
-                await ui.DragClipBox(new System.Numerics.Vector2((float)boxFrom[0], (float)boxFrom[1]), new System.Numerics.Vector2((float)boxTo[0], (float)boxTo[1]));
-                break;
             case "clipset":
                 // "clipset: damage = 3" types into one of the Clip Editor's fields for the box picked.
                 await DemoUi.WaitForClipEditor();
                 var (clipSetField, clipSetValue) = Split2(a, '=');
                 await ui.EditBox((TextBox)DemoUi.ClipsPart(clipSetField), clipSetValue);
-                break;
-            case "expectboxes":
-                // The Clip Editor's line on the frame's boxes, or one of their labels, has this in it.
-                var boxesWindow = await DemoUi.WaitForClipEditor();
-                if (!await Until(() => boxesWindow.Model.BoxesSummary.Contains(a, StringComparison.OrdinalIgnoreCase) ||
-                        boxesWindow.Model.Boxes.Any(b => b.Label.Contains(a, StringComparison.OrdinalIgnoreCase)), 3000))
-                    throw new InvalidOperationException($"The Clip Editor's boxes are \"{boxesWindow.Model.BoxesSummary}\" ({string.Join("; ", boxesWindow.Model.Boxes.Select(b => b.Label))}), not \"{a}\".");
                 break;
             case "paint":
                 // "paint: 3,4 > 12,4 > 12,10" drags through those pixels of the frame; "| right" erases.
@@ -1326,6 +1200,13 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
                     throw new InvalidOperationException($"project.griff doesn't give {controlAction} {controlBinding}.");
                 break;
             default:
+                // A genre's windows and games have commands of their own (DemoGenre).
+                foreach (var genre in DemoGenre.All)
+                {
+                    if (await genre.Play(this, line.Command, a))
+                        return;
+                }
+
                 throw new FormatException($"Unknown command \"{line.Command}\".");
         }
     }
@@ -1559,8 +1440,8 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
 
         // The game didn't take the mouse (say the window isn't active): turn the viewer as the mouse would have.
         options.Log("FORCED mouselook: the game didn't take the mouse");
-        if (RunningGame.FirstPersonViewer is { } viewer && viewer.GetComponent<FirstPersonMovement>() is { } movement)
-            viewer.Transform.Rotation -= new System.Numerics.Vector3(0, 0, (float)(x * movement.MouseSensitivity));
+        var game = RunningGame;
+        _ = DemoGenre.All.Any(g => g.Look(game, x));
         await options.Control.Delay(seconds * 1000);
     }
 
@@ -1572,13 +1453,12 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
         if (CurrentGame is not { } game)
             return;
         var mouse = game.Input.MouseWorld;
-        var team = game.Find<Griff.Modules.Strategy.Commander>()?.Team;
-        var sandbox = game.Find<Griff.Scenes.Inventory>() is { } inventory ? $"; carrying {string.Join(", ", inventory.Items)}" : "";
-        if (game.Tools is { } tools)
-            sandbox += $"; tool {tools.Current}{(game.ToolFirst is { } first ? $" after {first.Name}" : "")}{(game.Grabbed is { } held ? $" holding {held.Name}" : "")}";
+        var shown = string.Concat(DemoGenre.All.Select(g => g.Describe(game)));
+        if (game.Find<Griff.Scenes.Inventory>() is { } inventory)
+            shown += $"; carrying {string.Join(", ", inventory.Items)}";
         if (game.Notice is { } notice)
-            sandbox += $"; \"{notice}\"";
-        options.Log($"{line.Command}: {line.Argument} -> mouse {mouse.X:0.0}, {mouse.Y:0.0}; selected {game.Selected.Count} ({string.Join(", ", game.Selected.Select(e => e.Name).Distinct())}); {(game.FactionOf(team) is { } shown ? string.Join(", ", shown.Resources) : "")}{sandbox}");
+            shown += $"; \"{notice}\"";
+        options.Log($"{line.Command}: {line.Argument} -> mouse {mouse.X:0.0}, {mouse.Y:0.0}{shown}");
     }
 
     private Griff.Runtime.Game RunningGame => CurrentGame ?? throw new InvalidOperationException("The game isn't playing.");
@@ -1657,7 +1537,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
         var at = GameScreenPoint(world);
         if (!rect.Contains(at))
             throw new InvalidOperationException($"{world.X}, {world.Y} is off screen; move the camera there first (minimap:).");
-        if (RunningGame.StrategyHud?.Covers(world) == true)
+        if (DemoGenre.All.Any(g => g.Covers(RunningGame, world)))
             throw new InvalidOperationException($"{world.X}, {world.Y} is under the HUD; move the camera first (minimap:).");
         if (RunningGame.HudButtons.Any(b => b.Rect.Contains(world)))
             throw new InvalidOperationException($"{world.X}, {world.Y} is under a HUD button (gamebutton: clicks them).");
@@ -1666,8 +1546,10 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
     /// <summary>Where the minimap shows a world point, on screen.</summary>
     private Point MinimapPoint(System.Numerics.Vector2 world)
     {
-        var hud = RunningGame.StrategyHud ?? throw new InvalidOperationException("The game has no strategy HUD (Commander) showing a minimap.");
-        return GameScreenPoint(hud.WorldToMinimap(world));
+        var game = RunningGame;
+        var shown = DemoGenre.All.Select(g => g.OnMinimap(game, world)).FirstOrDefault(p => p is not null)
+            ?? throw new InvalidOperationException("The game has no HUD showing a minimap (a strategy game's Commander has one).");
+        return GameScreenPoint(shown);
     }
 
     // ----- The sandbox HUD, and points in the running game -----
@@ -1735,49 +1617,29 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
     }
 
     /// <summary>
-    /// The screen box of a part of the strategy HUD (minimap, card, selection or resources) or the sandbox HUD (hotbar,
-    /// crafting, tools, props or ports).
+    /// The screen box of a part of the running game's HUD, as its genre names it (a strategy game's minimap, card, selection
+    /// or resources; a sandbox's hotbar, crafting, tools, props or ports): an area of its HUD, or the HUD's buttons of a kind.
     /// </summary>
     private Rect HudRect(string part)
     {
-        if (RunningGame.StrategyHud is null && RunningGame.HudButtons.Count > 0)
-            return SandboxHudRect(part);
-        var hud = RunningGame.StrategyHud ?? throw new InvalidOperationException("The game has no strategy HUD (Commander).");
-        var area = part.ToLowerInvariant() switch
-        {
-            "minimap" => hud.Minimap,
-            "card" => hud.Card,
-            "selection" => hud.Info,
-            "resources" => hud.TopBar,
-            _ => throw new FormatException($"Unknown HUD part \"{part}\" (minimap, card, selection, resources)."),
-        };
-        return new Rect(GameScreenPoint(new System.Numerics.Vector2(area.X, area.Top)), GameScreenPoint(new System.Numerics.Vector2(area.Right, area.Y)));
-    }
-
-    private Rect SandboxHudRect(string part)
-    {
-        var kind = part.ToLowerInvariant() switch
-        {
-            "hotbar" => Griff.Modules.BlockWorlds.BlockHud.Slot,
-            "crafting" => Griff.Modules.BlockWorlds.BlockHud.Recipe,
-            "tools" => ToolHud.Tool,
-            "props" => ToolHud.Prop,
-            "ports" => ToolHud.Port,
-            _ => throw new FormatException($"Unknown HUD part \"{part}\" (hotbar, crafting, tools, props, ports)."),
-        };
-        var rects = RunningGame.HudButtons.Where(b => b.Kind == kind).Select(b => b.Rect).ToList();
+        var game = RunningGame;
+        if (DemoGenre.All.Select(g => g.HudArea(game, part)).FirstOrDefault(r => r is not null) is var (topLeft, bottomRight))
+            return new Rect(GameScreenPoint(topLeft), GameScreenPoint(bottomRight));
+        var kind = DemoGenre.All.Select(g => g.HudButtons(part)).FirstOrDefault(k => k is not null)
+            ?? throw new FormatException($"Unknown HUD part \"{part}\" ({string.Join(", ", DemoGenre.All.SelectMany(g => g.HudParts))}).");
+        var rects = game.HudButtons.Where(b => b.Kind == kind).Select(b => b.Rect).ToList();
         if (rects.Count == 0)
-            throw new InvalidOperationException($"The sandbox HUD isn't showing its {part}.");
+            throw new InvalidOperationException($"The game's HUD isn't showing its {part}.");
         // A hundredth of the view's height, the HUD's unit.
-        var margin = (float)(Griff.Runtime.Views.FindCamera(RunningGame.Scene)?.GetComponent<Griff.Scenes.Camera>()?.Size ?? Griff.Runtime.Views.DefaultCameraSize) * 2 / 100;
-        var topLeft = new System.Numerics.Vector2(rects.Min(r => r.X) - margin, rects.Max(r => r.Top) + margin);
-        var bottomRight = new System.Numerics.Vector2(rects.Max(r => r.Right) + margin, rects.Min(r => r.Y) - margin);
-        return new Rect(GameScreenPoint(topLeft), GameScreenPoint(bottomRight));
+        var margin = (float)(Griff.Runtime.Views.FindCamera(game.Scene)?.GetComponent<Griff.Scenes.Camera>()?.Size ?? Griff.Runtime.Views.DefaultCameraSize) * 2 / 100;
+        var from = new System.Numerics.Vector2(rects.Min(r => r.X) - margin, rects.Max(r => r.Top) + margin);
+        var to = new System.Numerics.Vector2(rects.Max(r => r.Right) + margin, rects.Min(r => r.Y) - margin);
+        return new Rect(GameScreenPoint(from), GameScreenPoint(to));
     }
 
     // Waits (real time, as the game plays) until the running game is as asked, noting how the sides stand every few
     // seconds so a slow or lost battle can be seen in the log.
-    private async Task WaitInGame(string what, double seconds, Func<Griff.Runtime.Game, bool> done)
+    internal async Task WaitInGame(string what, double seconds, Func<Griff.Runtime.Game, bool> done)
     {
         var clock = Stopwatch.StartNew();
         var noted = 0.0;
@@ -1802,28 +1664,10 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
         throw new TimeoutException($"No {what} within {seconds:0} seconds. {(CurrentGame is { } state ? Standings(state) : "")}");
     }
 
-    // Each team's fighters, workers and buildings.
-    private static string Standings(Griff.Runtime.Game game) =>
-        string.Join("; ", game.FindAll<Griff.Modules.Strategy.Faction>().Select(f =>
-        {
-            var units = game.FindAll<Griff.Modules.Strategy.Unit>().Where(u => Mine(u.Team, f.Team)).ToList();
-            var buildings = game.FindAll<Griff.Modules.Strategy.Building>().Count(b => Mine(b.Team, f.Team));
-            return $"{f.Team}: {units.Count(u => u.Entity!.GetComponent<Griff.Modules.Strategy.Fighter>() is not null)} fighters, " +
-                   $"{units.Count(u => u.Entity!.GetComponent<Griff.Modules.Strategy.Worker>() is not null)} workers, {buildings} buildings, {string.Join(", ", f.Resources)}";
-        }));
+    // How the sides stand, as the game's genre says (a strategy game's teams).
+    private static string Standings(Griff.Runtime.Game game) => string.Join("; ", DemoGenre.All.Select(g => g.Standings(game)).Where(t => t.Length > 0));
 
-    private static bool Mine(string? team, string? player) => string.Equals(team?.Trim(), player?.Trim(), StringComparison.OrdinalIgnoreCase);
-
-    // The player's own: whoever the Commander commands.
-    private static IEnumerable<Griff.Scenes.Entity> PlayersOwn(Griff.Runtime.Game game, string name)
-    {
-        var team = game.Find<Griff.Modules.Strategy.Commander>()?.Team;
-        return game.Scene.Entities.Where(e => e.Name == name && e.IsActive &&
-            (e.GetComponent<Griff.Modules.Strategy.Unit>() is { } unit ? Mine(unit.Team, team) :
-             e.GetComponent<Griff.Modules.Strategy.Building>() is { IsBuilt: true } building && Mine(building.Team, team)));
-    }
-
-    private static double Seconds(string text) => text.Length > 0 ? double.Parse(text, CultureInfo.InvariantCulture) : 60;
+    internal static double Seconds(string text) => text.Length > 0 ? double.Parse(text, CultureInfo.InvariantCulture) : 60;
 
     // Where an entity (by name) or a world point ("x, y") is on screen in the Scene view.
     private Point ScenePoint(string text)
@@ -1841,7 +1685,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
         return new System.Numerics.Vector2((float)v[0], (float)v[1]);
     }
 
-    private async Task<bool> Until(Func<bool> condition, int ms = 1500)
+    internal async Task<bool> Until(Func<bool> condition, int ms = 1500)
     {
         var clock = Stopwatch.StartNew();
         while (!condition() && clock.ElapsedMilliseconds < ms)
@@ -1973,9 +1817,6 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
             "newproject" => DemoUi.NewProjectPart(name),
             "painter" => DemoUi.PainterPart(name),
             "clips" => DemoUi.ClipsPart(name),
-            "dialogue" => DemoUi.DialoguePart(name),
-            "moves" => DemoUi.MovesPart(name),
-            "chart" => DemoUi.ChartPart(name),
             "image" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
                 DemoUi.ImageButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No image field {name[..at]} in the Inspector."),
             "color" => ui.ColorPart(name),
@@ -1995,6 +1836,8 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
             "edit" => DemoUi.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             "asset" => (FrameworkElement?)DemoUi.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
+            // A genre's windows and panels: the Dialogue Editor's dialogue:, the Move List's moves:, the Chart's chart:.
+            var genre when DemoGenre.All.Select(g => g.Part(genre, name)).FirstOrDefault(p => p is not null) is { } genrePart => genrePart,
             _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, editor:, component:, addall:, remove:, need:, needadd:, addlist:, entitylist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, dialogue:, moves:, chart:, sound:, image:, pick:, picker:, color:, transform:, filter:, profiler:, tables:, sims:, asset:, world:, gameworld:, hud:, tiles:)."),
         };
     }
@@ -2120,17 +1963,6 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
     private static string ClipText(string text) => text.Replace("\\t", "\t", StringComparison.Ordinal).Replace("\\n", "\r\n", StringComparison.Ordinal);
 
     // "15, 30000" as a level and a value on the Tables panel's chart.
-    // "4.5, 3": a beat and a lane (from 1) on the Chart panel's timeline.
-    private static (double Beat, int Lane) NoteAt(string text)
-    {
-        var parts = text.Split(',', StringSplitOptions.TrimEntries);
-        return parts.Length == 2
-            && double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var beat)
-            && int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var lane)
-            ? (beat, lane)
-            : throw new FormatException($"Write a note on the timeline as <beat>, <lane>, not \"{text}\".");
-    }
-
     private static (double Level, double Value) ChartAt(string text)
     {
         var parts = text.Split(',', StringSplitOptions.TrimEntries);
@@ -2141,13 +1973,13 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
             : throw new FormatException($"Write a point on the chart as <level>, <value>, not \"{text}\".");
     }
 
-    private static (string First, string Second) Split2(string text, char separator = '|')
+    internal static (string First, string Second) Split2(string text, char separator = '|')
     {
         var at = text.IndexOf(separator);
         return at < 0 ? (text.Trim(), "") : (text[..at].Trim(), text[(at + 1)..].Trim());
     }
 
-    private static double[] Numbers(string text, int count)
+    internal static double[] Numbers(string text, int count)
     {
         var numbers = text.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .Select(n => double.Parse(n, CultureInfo.InvariantCulture)).ToArray();

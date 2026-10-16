@@ -87,7 +87,7 @@ public sealed class CardEffect : Component, ICardPart
     /// "Health.Max" (one component's).
     /// </summary>
     [ShownWhen(nameof(Buff))]
-    [Stat]
+    [Stat(typeof(Card), typeof(Health))]
     public string? BuffStat { get; set; } = "Value";
 
     /// <summary>

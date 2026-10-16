@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Shell;
+using FieldKind = Griff.Scenes.FieldKind;
 
 namespace Griff.Editor.Features.Inspector;
 

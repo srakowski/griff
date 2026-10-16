@@ -42,7 +42,7 @@ Select the entity and choose **Art → Animation Clips**. Pick a clip and the fr
 - **Select** (S): click a box to pick it, drag it to move it, drag its corners to resize it. Delete removes it.
 - The box picked shows its **Damage**, **Knockback** (away and up), **Stun** and **Group**, or a hurtbox its **Multiplier**, to type.
 - **Copy From Previous Frame** (Ctrl+D) gives the frame the boxes of the frame before it, to move on a little as the fist goes out.
-- **Onion skin** (O) shows the frame before underneath, faintly, with its boxes dashed, to line the new ones up with.
+- **Onion skin** (O, under the preview) shows the frame before underneath, faintly, with its boxes dashed, to line the new ones up with.
 
 The first box drawn gives the entity a **Hitboxes**. Every change is one undo step (Ctrl+Z and Ctrl+Y, or Edit → Undo, which undo the scene the clips are in), and renaming or removing a clip takes its boxes along in the same step. Agents draw and set boxes through the same Clip Editor (`ui_invoke ClipEditor AddBox`, `ui_set ClipEditor BoxDamage`), or set **Boxes** with the scene tools.
 
@@ -58,7 +58,7 @@ A hit lands on the step the frame showing it comes, after physics: the boxes are
 
 ## Seeing the boxes in play
 
-**Game → Show Hitboxes** draws every box in play over the running game: hitboxes red, hurtboxes blue (yellow in hitstun), and a hitbox that has already hit this swing faint. It stays on for the games played after, in Play with Players' windows and after a rewind. A game can show them itself, for a training mode: `Game.ShowHitboxes = true`.
+**Game → Show Hitboxes** draws every box in play over the running game: hitboxes red, hurtboxes blue (yellow in hitstun), and a hitbox that has already hit this swing faint. It stays on for the games played after, in Play with Players' windows and after a rewind. A game can show them itself, for a training mode: `Game.ShowHitboxes = true`. They're the Fighting module's drawing to debug with, called "Hitboxes" (`Game.ShowDebugDrawing("Hitboxes", true)` is the same; a script's own `GameSystem` can make one too, see `IDebugDrawing`). Agents reach the boxes as the Clip Editor's `Overlays[Boxes]` (`AddBox`, `SelectBox`, `BoxDamage`...) and the toggle as `Game_ShowHitboxes`.
 
 ## Fighters
 

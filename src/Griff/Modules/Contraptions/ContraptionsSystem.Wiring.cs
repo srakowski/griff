@@ -236,8 +236,11 @@ internal sealed partial class ContraptionsSystem
         foreach (var button in buttons)
         {
             var entity = button.Entity!;
-            var touchers = Game.TouchersOf(entity).Select(t => t.By).ToList();
-            var pressing = players.Any(p => p.Input.WasPressed("Interact") && (p.Mouse.Contains(entity) || touchers.Any(t => Game.InputOf(t) == p.Input)))
+            // Standing on it presses it only for a character that has the input (not one whose player is playing a board).
+            var touchers = Game.TouchersOf(entity).Select(t => t.By).Where(Griff.Runtime.Game.HasFocus).ToList();
+            var requested = button.PressRequested;
+            button.PressRequested = false;
+            var pressing = requested || players.Any(p => p.Input.WasPressed("Interact") && (p.Mouse.Contains(entity) || touchers.Any(t => Game.InputOf(t) == p.Input)))
                            || (!Net.IsOnline && touchers.Count > 0 && Input.WasPressed("Interact"));
             if (pressing)
             {
@@ -248,7 +251,8 @@ internal sealed partial class ContraptionsSystem
                     Game.PlaySoundAt(button.Sound.Trim(), Game.CenterOf(entity));
             }
 
-            if (!held)
+            // Pressed by its action, it's held for this step: a pulse.
+            if (!held && !requested)
                 button.Held = false;
             if (!button.Toggle)
                 button.IsOn = button.Held;

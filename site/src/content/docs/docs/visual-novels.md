@@ -22,7 +22,7 @@ A **Stage** draws a background filling its **Size** (as much as the camera shows
 
 ## Characters and expressions
 
-A **Character** is someone who appears on the stage: an entity inside it with a **Sprite** (how they look) and usually a **Speaker** (their name, which their lines start with). They're on stage while their entity is shown, standing at their **Position**, one of the stage's: pick it in the Inspector and they stand there. Their **Expressions** are one per row, a one-word name and either a picture for their sprite (`Happy: Stage/ava-happy.png`) or the name of a clip their **Animation** plays (`Laugh: Laugh`, a laugh that moves, or a blink). **Expression** is how they look now: set it and their sprite shows it.
+A **Character** is someone who appears on the stage: an entity inside it with a **Sprite** (how they look) and usually a **Speaker** (their name, which their lines start with). They're on stage while their entity is shown, standing at their **Position**, one of the stage's: pick it in the Inspector and they stand there. Their **Expressions** are one per row, a one-word name and either a picture for their sprite (`Happy: Stage/ava-happy.png`) or the name of a clip their **Animation** plays (`Laugh: Laugh`, a laugh that moves, or a blink). **Expression** is how they look now: set it and their sprite shows it. With no code, a character's own **Show**, **Hide**, **Look** (an expression) and **Stand** (a position) actions bring them on and off and change them from a trigger, a card or a hotspot, and their **Expression**, **Position** and **On Stage** outputs show how they are.
 
 ## Directing from the lines
 

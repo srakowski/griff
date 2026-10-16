@@ -396,6 +396,15 @@ public class SceneToolsTests
         Assert.Contains("- countKind: a whole number = -1. Count the things of one kind", Run("component_describe", """{"component": "Counter"}""").Text);
     }
 
+    // Whether a component takes the player's input, and by whose focus, so an agent mixing genres knows what to Focus.
+    [Fact]
+    public void Describe_SaysWhatTakesInputOnlyWithFocus()
+    {
+        Assert.Contains("Takes the player's input only while it has focus (its Controllable)", Run("component_describe", """{"component": "MatchBoard"}""").Text);
+        Assert.Contains("Takes the player's input only while the FirstPersonMovement it goes with has focus.", Run("component_describe", """{"component": "Weapon"}""").Text);
+        Assert.DoesNotContain("Takes the player's input", Run("component_describe", """{"component": "Health"}""").Text);
+    }
+
     [Fact]
     public void Get_SaysWhichMapATilemapIsALayerOf()
     {

@@ -230,8 +230,11 @@ internal sealed class FirstPersonSystem : GameSystem
             var controllable = owner.GetComponent<FirstPersonMovement>() is not { Controllable: false };
             if (controllable)
                 SwitchWeapons(usable, Game.InputOf(owner));
-            if (CurrentWeaponOf(owner) is { } current && controllable)
-                RunWeapon(current, owner);
+            // Its Fire action fires the weapon in hand whether or not the player has the input; one asked of any other is dropped.
+            if (CurrentWeaponOf(owner) is { } current && (controllable || current.FireRequested))
+                RunWeapon(current, owner, controllable);
+            foreach (var weapon in weapons)
+                weapon.FireRequested = false;
         }
     }
 
@@ -254,12 +257,12 @@ internal sealed class FirstPersonSystem : GameSystem
         Equip(usable[((at < 0 ? 0 : at) + step + usable.Count) % usable.Count]);
     }
 
-    private void RunWeapon(Weapon weapon, Entity owner)
+    private void RunWeapon(Weapon weapon, Entity owner, bool controllable)
     {
         var action = string.IsNullOrWhiteSpace(weapon.Action) ? "Fire" : weapon.Action.Trim();
         var keys = Game.InputOf(owner);
-        var pressed = keys.WasPressed(action);
-        var wants = weapon.Automatic ? keys.IsDown(action) : pressed;
+        var pressed = weapon.FireRequested || (controllable && keys.WasPressed(action));
+        var wants = pressed || (controllable && weapon.Automatic && keys.IsDown(action));
         // A weapon just taken out is raised before it fires.
         if (!wants || weapon.Cooldown > 0 || Fps.Swapped < FirstPersonState.RaiseSeconds)
             return;
@@ -290,6 +293,7 @@ internal sealed class FirstPersonSystem : GameSystem
     {
         weapon.Cooldown = weapon.FireRate > 0 ? 1 / weapon.FireRate : 0;
         weapon.SinceFired = 0;
+        weapon.Shots++;
         Game.PlayIfSet(weapon.Sound);
         if (weapon.Shake > 0)
             Game.ShakeFor(owner, weapon.Shake, 0.15f);

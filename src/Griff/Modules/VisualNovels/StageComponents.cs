@@ -221,6 +221,7 @@ public sealed class Character : Component, IDrawEffect
     public IReadOnlyList<string> Expressions { get; set; } = [];
 
     /// <summary>How they look now, one of <see cref="Expressions"/>: their sprite shows it as soon as it's set.</summary>
+    [Output]
     [ChoiceOf(nameof(ExpressionNames), Noun = "one of their expressions (Expressions)")]
     public string? Expression
     {
@@ -235,6 +236,7 @@ public sealed class Character : Component, IDrawEffect
     }
 
     /// <summary>Where on the stage they stand, one of its positions: set here, they stand there.</summary>
+    [Output]
     [ChoiceOf(nameof(PositionNames), Noun = "one of their stage's positions")]
     public string? Position
     {
@@ -286,7 +288,27 @@ public sealed class Character : Component, IDrawEffect
     public string Name => Entity?.GetComponent<Speaker>() is { } speaker ? speaker.ShownName : Entity?.Name ?? "";
 
     /// <summary>True while they're on stage (and not going off).</summary>
+    [Output("On Stage")]
     public bool IsOnStage => Entity is { IsEnabled: true } && !Leaving;
+
+    /// <summary>Brings them on, as "[show Ava]" does: where they were last, or in the middle.</summary>
+    [Action]
+    public void Show() => OwnStage()?.Show(Name);
+
+    /// <summary>Takes them off, as "[hide Ava]" does.</summary>
+    [Action]
+    public void Hide() => OwnStage()?.Hide(Name);
+
+    /// <summary>Makes them look as <paramref name="expression"/> says, one of their <see cref="Expressions"/>, e.g. "Happy".</summary>
+    [Action]
+    public void Look(string expression) => Expression = expression;
+
+    /// <summary>Stands them at <paramref name="position"/>, one of their stage's positions, e.g. "Left".</summary>
+    [Action]
+    public void Stand(string position) => Position = position;
+
+    // The stage they're on: the one they're inside, else the scene's first.
+    private Stage? OwnStage() => Entity is { } entity ? Stage.StageOf(entity) ?? entity.Scene?.AllNow<Stage>().FirstOrDefault() : null;
 
     // Shows the expression on their sprite (a picture) or animation (a clip).
     private void ShowExpression()

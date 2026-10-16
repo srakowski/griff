@@ -42,6 +42,11 @@ public static class ComponentDescription
             text.AppendLine("Works with: " + string.Join("; ", descriptor.WorksWith.Select(r => r.Type.Name + (r.Note is null ? "" : $" ({r.Note})"))));
         if (entry is { RequiredBy.Count: > 0 })
             text.AppendLine("Needed by: " + string.Join(", ", entry.RequiredBy.Select(r => r.DisplayName)));
+        if (ComponentFocus.Has(descriptor.Type))
+            text.AppendLine("Takes the player's input only while it has focus (its " + string.Join(", ", ComponentFocus.PropertiesOf(descriptor.Type).Select(p => p.Name)) +
+                            "): its Focus action hands it the input and takes it from everything else the same player plays.");
+        else if (descriptor.Type.GetCustomAttributes(typeof(FocusFromAttribute), inherit: true) is [FocusFromAttribute from, ..])
+            text.AppendLine(CultureInfo.InvariantCulture, $"Takes the player's input only while the {from.Type.Name} it goes with has focus.");
         if (descriptor.FormerNames.Count > 0)
             text.AppendLine("Formerly saved as: " + string.Join(", ", descriptor.FormerNames) + " (scenes that use those names still load).");
         if (descriptor.Version > 1)

@@ -141,6 +141,28 @@ public class MoveHistoryTests
         Assert.Equal(1, history.Moves);
     }
 
+    // Sharing the scene with another genre that has the input (a match-3 board's Z is its own), it hears neither key.
+    [Fact]
+    public void Undo_and_restart_go_unheard_while_its_grid_player_hasnt_the_input()
+    {
+        AddRoom();
+        var history = AddHistory();
+        var player = AddPlayer(1, 1);
+        Run(Frame);
+        Tap(Key.D);
+        Assert.Equal(1, history.Moves);
+
+        player.Controllable = false;
+        Tap(Key.Z);
+        Tap(Key.R);
+        Assert.Equal((2, 1), player.Cell);
+        Assert.Equal(1, history.Moves);
+
+        player.Controllable = true;
+        Tap(Key.Z);
+        Assert.Equal((1, 1), player.Cell);
+    }
+
     [Fact]
     public void Undo_in_the_middle_of_a_step_puts_it_back_where_it_started_it()
     {

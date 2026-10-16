@@ -111,6 +111,30 @@ public sealed class VisualNovelTests
         Assert.False(dialogue.IsTalking);
     }
 
+    // What another genre sets off and reads with no code: a character's Show, Hide, Look and Stand, and On Stage, Expression and Position.
+    [Fact]
+    public void A_characters_own_actions_bring_them_on_and_off_and_its_outputs_say_how_they_are()
+    {
+        var (stage, _, _) = Build("Hello.");
+        Start();
+        var ava = Cast("Ava");
+        Assert.Equal(0f, ComponentOutputs.Read(ava.Entity!, "On Stage"));
+        Assert.Equal(["Expression", "Position", "OnStage"], ComponentOutputs.Of(typeof(Character)).Select(o => o.Name));
+
+        _game.Do(ava.Entity!, "Show");
+        _game.Do(ava.Entity!, "Look", "Sad");
+        _game.Do(ava.Entity!, "Stand", "Right");
+        Run(stage.TransitionTime + Frame);
+        Assert.Equal(1f, ComponentOutputs.Read(ava.Entity!, "On Stage"));
+        Assert.Equal(("Sad", "Right"), (ava.Expression, ava.Position));
+        Assert.Equal("ava-sad.png", ava.Entity!.GetComponent<Sprite>()!.Image);
+        Assert.Equal(4.5f, X("Ava"), 3);
+
+        _game.Do(ava.Entity!, "Hide");
+        Run(stage.TransitionTime + Frame);
+        Assert.Equal(0f, ComponentOutputs.Read(ava.Entity!, "On Stage"));
+    }
+
     [Fact]
     public void Show_brings_a_character_on_at_a_position_looking_as_it_says_fading_in()
     {

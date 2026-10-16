@@ -167,6 +167,32 @@ public class TacticsTests
         Assert.Equal((1, 1), Cell(knight));
     }
 
+    // What another genre sets off (a trigger on the beat, a card) and reads: Undo Move and Wait, and Moved, Can Act and Done.
+    [Fact]
+    public void A_units_actions_take_back_its_walk_and_end_its_go_and_its_outputs_say_where_it_is()
+    {
+        AddMap();
+        AddTurns();
+        AddControls();
+        var knight = AddUnit("Knight", 1, 1, "Blue");
+        AddUnit("Squire", 1, 3, "Blue");
+        AddUnit("Ogre", 3, 2, "Red");
+        Run(Frame);
+        Assert.Equal((0f, 1f, 0f), (ComponentOutputs.Read(knight, "Moved"), ComponentOutputs.Read(knight, "Can Act"), ComponentOutputs.Read(knight, "Done")));
+
+        UnitOf(knight).MoveTo((2, 2));
+        Run(0.5f);
+        Assert.Equal(1f, ComponentOutputs.Read(knight, "Moved"));
+        _game.Do(knight, "Undo Move");
+        Run(Frame);
+        Assert.Equal((1, 1), Cell(knight));
+        Assert.Equal(0f, ComponentOutputs.Read(knight, "Moved"));
+
+        _game.Do(knight, "Wait");
+        Run(Frame * 2);
+        Assert.Equal((0f, 1f), (ComponentOutputs.Read(knight, "Can Act"), ComponentOutputs.Read(knight, "Done")));
+    }
+
     [Fact]
     public void After_walking_next_to_a_foe_it_waits_for_the_attack()
     {
@@ -588,7 +614,7 @@ public class TacticsTests
         AddControls();
         var strong = AddUnit("Knight", 3, 1, "Blue");
         var weak = AddUnit("Squire", 4, 2, "Blue", hitPoints: 1);
-        AddUnit("Orc", 3, 2, "Red");
+        AddUnit("Orc", 6, 4, "Red");
         Run(2);
 
         Assert.Null(weak.Scene);

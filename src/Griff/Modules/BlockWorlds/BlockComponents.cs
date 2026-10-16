@@ -465,6 +465,18 @@ public sealed class Hotbar : Component, IClaimsNumberKeys
         return count;
     }
 
+    /// <summary>Picks the next slot along, as the mouse wheel does (round to the first after the last).</summary>
+    [Action]
+    public void Next() => Selected++;
+
+    /// <summary>Picks the slot before, as the mouse wheel does (round to the last before the first).</summary>
+    [Action]
+    public void Previous() => Selected--;
+
+    /// <summary>Picks slot <paramref name="slot"/>, counting from 1 as the number keys do.</summary>
+    [Action]
+    public void Pick(int slot = 1) => Selected = Math.Max(1, slot) - 1;
+
     /// <summary>The color of <paramref name="item"/>'s slot: from <see cref="Colors"/>, or picked from its name.</summary>
     public Color ColorOf(string item)
     {
@@ -506,6 +518,7 @@ public sealed class Hotbar : Component, IClaimsNumberKeys
 /// </remarks>
 [Category("Blocks")]
 [Requires(typeof(Inventory), Note = "what it makes things from")]
+[FocusFrom(typeof(BlockBuilder))]
 [ComponentName("Griff.Crafting")]
 public sealed class Crafting : Component
 {

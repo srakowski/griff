@@ -367,6 +367,33 @@ public sealed class StrategyTests
         Assert.Single(producer.Queue);
     }
 
+    // What another genre sets off (a trigger, a card, a wire): Train and Cancel, and the queue read as an output.
+    [Fact]
+    public void ProducersActions_TrainAndCancel_AndItsQueueIsAnOutput()
+    {
+        var scene = new Scene();
+        var team = Team(scene, "Player", "Gold 200");
+        var hall = At(Hall(), 0, 0);
+        var producer = hall.AddComponent<Producer>();
+        producer.Trains = "Soldier";
+        scene.Add(hall);
+        var input = new InputState();
+        var game = NewGame(scene, input);
+        Run(game, input, 0.1);
+
+        game.Do(hall, "Train");
+        game.Do(hall, "Train", "Soldier");
+        Run(game, input, Frame);
+        Assert.Equal(2, producer.Queued);
+        Assert.Equal(80, team.GetComponent<Faction>()!.Amount("Gold"));
+        Assert.Equal(2, ComponentOutputs.Read(hall, "Queued"));
+
+        game.Do(hall, "Cancel");
+        Run(game, input, Frame);
+        Assert.Equal(1, producer.Queued);
+        Assert.Equal(140, team.GetComponent<Faction>()!.Amount("Gold"));
+    }
+
     [Fact]
     public void Workers_PutUpBuildings_ThatProvideSupplyOnceFinished()
     {

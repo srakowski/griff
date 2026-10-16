@@ -1,0 +1,139 @@
+title: Genres driving each other
+intro: Every genre names what it does and what it knows, and takes the input only while it has it. So a card spawns an enemy, a hotspot opens a door, a note fires a weapon and a bumper hurts a boss, with no code.
+project: Empty | Mix Kit
+
+chapter: A card spawns an enemy | A Card Effect's Do
+menu: File > New Scene...
+prompt: Cards
+create: Sprite
+rename: Slime
+set: Sprite.Tint = #57D36B
+menu: Entity > Save as Prefab
+menu: Entity > Delete
+expectcount: Slime = 0
+say: A slime, saved as a prefab.
+create: Empty
+rename: Slime Pit
+set: Transform.Position = 6, 3, 0
+add: Spawner
+pick: Spawner.Prefab = Slime
+set: Spawner.Running = false
+explain: field:Spawner.Running | Only when told | A platformer's spawner, switched off, so it spawns a slime only when something tells it to.
+deselect
+create: Deck
+select: Hand
+set: Hand.StartWith = 0
+create: Card
+rename: Summon
+add: Card Effect
+pick: CardEffect.DoOn = Slime Pit
+pick: CardEffect.Do = Spawn
+expectvalue: Summon.CardEffect.Do = Spawn
+explain: field:CardEffect.Do | Do | A card effect can do any action in the scene. This card does the spawner's Spawn.
+play
+wait: 1
+gamedrag: Summon > Play Zone
+waitfor: Slime | 3
+explain: game | A slime | Playing the card spawned a slime by the pit. A card could open a door or start a lift the same way.
+stop
+
+chapter: A hotspot opens any door | A Hotspot's Use Do
+menu: File > New Scene...
+prompt: Vault
+create: Walker
+deselect
+create: Sprite
+rename: Vault Door
+set: Transform.Position = -6, 1, 0
+set: Sprite.Size = 1.5, 3
+set: Sprite.Tint = #8A5A33
+add: Door
+set: Door.Locked = true
+explain: component:Door | A locked door | A platformer's door, locked. It could be anywhere in the game.
+deselect
+create: Hotspot
+rename: Lever
+set: Transform.Position = 3, 0.5, 0
+set: Hotspot.UseLine = Something clanks open.
+pick: Hotspot.UseTargets = Vault Door
+pick: Hotspot.UseDo = Open
+expectvalue: Lever.Hotspot.UseDo = Open
+explain: field:Hotspot.UseDo | Use Do | Using the lever does the door's Open: an adventure's hotspot can do any action, on anything.
+play
+wait: 0.5
+gameclick: Lever
+wait: 3
+expectvalue: Lever.Hotspot.TimesUsed = 1
+expectvalue: Vault Door.Door.Locked = false
+explain: game | Open | The walker walked over and pulled the lever, and the vault door is open for good.
+stop
+
+chapter: A note fires a weapon | A Trigger hearing Hit
+menu: File > New Scene...
+prompt: Beat
+write: Tables/Taps.table | mashup-ready-genres/Taps.table
+create: Note Lanes
+pick: NoteLanes.Chart = Taps
+say: Note lanes, with a chart of notes on every half beat in the first lane.
+deselect
+create: Sprite
+rename: Hero
+set: Transform.Position = -7, 2, 0
+add: First Person Movement
+set: Body.GravityScale = 0
+set: FirstPersonMovement.Controllable = false
+explain: field:FirstPersonMovement.Controllable | The lanes have the input | The hero doesn't have the input: the lanes do, so D presses a lane rather than moving the hero.
+add: Weapon
+add: Trigger
+pick: Trigger.Message = Hit
+pick: Trigger.From = Note Lanes
+pick: Trigger.Do = Fire
+expectvalue: Hero.Trigger.Do = Fire
+explain: field:Trigger.Do | Fire | When a note is hit, the hero's weapon fires. Its Fire action works whether or not the hero has the input.
+deselect
+create: Sprite
+rename: Dummy
+set: Transform.Position = 7, 2, 0
+set: Sprite.Tint = #C04040
+add: Box Collider
+add: Health
+set: Health.Max = 3
+play
+wait: 2.5
+tap: D
+wait: 0.6
+tap: D
+wait: 0.6
+tap: D
+wait: 0.6
+tap: D
+waitgone: Dummy | 3
+explain: game | Three hits, three shots | Each note hit on the beat fired the weapon, and three shots finished the dummy.
+stop
+
+chapter: A bumper hurts a boss | A Trigger hearing a bumper
+menu: File > New Scene...
+prompt: Pinball
+create: Pinball Table
+deselect
+create: Sprite
+rename: Boss
+set: Transform.Position = 13, 4, 0
+set: Sprite.Size = 3, 3
+set: Sprite.Tint = #C04040
+add: Health
+set: Health.Max = 3
+add: Trigger
+pick: Trigger.Message = Score
+pick: Trigger.From = Bumper
+pick: Trigger.Do = Damage
+explain: component:Trigger | When a bumper scores | When a bumper sends its score, the boss takes a point of damage. A pinball table can fight a boss.
+select: Ball
+set: Transform.Position = -2.4, 5.5, 0
+say: For the demo, the ball starts just over a bumper.
+play
+wait: 1
+waitgone: Boss | 6
+explain: game | Down | Three knocks off the bumper, and the boss is gone.
+stop
+say: Every genre names its actions and outputs, and what reads the input waits for focus. Griff's tests hold each genre to it, so the next one can't skip it.

@@ -1,4 +1,6 @@
+using System.Reflection;
 using Griff.Runtime;
+using Griff.Scenes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -10,7 +12,8 @@ namespace Griff.Tests.Architecture;
 /// points instead: its systems and their steps (GameModule.AddTo) and hooks (GameSystem's Draw, DrawView, Eyes, LayOutHud,
 /// RunForPlayer, GridStepStarting, SceneEnding...), components that draw themselves and say what they send, and interfaces
 /// Griff's own components call (ICounterSource, IGridDriver, ITurnReady, IPlaytestReport, IHearsMessages,
-/// IClaimsNumberKeys). Modules don't name each other either, so each stands alone.
+/// IClaimsNumberKeys). Modules don't name each other either, so each stands alone. Each is mashup-ready too: it names actions
+/// and outputs, and what of it reads the player's input takes it only with focus.
 /// </summary>
 public sealed class ModuleTests
 {
@@ -115,6 +118,65 @@ public sealed class ModuleTests
         Assert.True(problems.Count == 0, string.Join("\n", problems));
         Assert.Equal(folders.Select(f => $"{ModulesNamespace}.{f}").Order(), GameModule.All.Select(m => m.Namespace).Order());
     }
+
+    // Every genre is mashup-ready (the Mixing genres guide): its components name something they do and something they know,
+    // so any other genre's pieces drive and read them with no code. A Focus action alone doesn't count: anything that takes
+    // input gets one for free.
+    [Fact]
+    public void EachModule_NamesAnActionAndAnOutput()
+    {
+        var problems = new List<string>();
+        foreach (var module in GameModule.All)
+        {
+            var components = ComponentsOf(module);
+            if (!components.Any(t => ComponentActions.Of(t).Any(a => a.Method.DeclaringType != typeof(ComponentFocus))))
+                problems.Add($"{module.Name} names no action: mark what one of its components does [Action] (a board's Restart, a weapon's Fire), so a trigger, a card or a wire can set it off.");
+            if (!components.Any(t => ComponentOutputs.Of(t).Count > 0))
+                problems.Add($"{module.Name} names no output: mark what one of its components knows [Output] (a board's Score, a unit's Moved), so a counter, a bar, a text or a wire can read it.");
+        }
+
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    // A genre's component that reads the player's input (it names an input action or a key) takes it only while it has focus,
+    // so it shares a scene with another genre's: a property of its own marked [Focus], or [FocusFrom] what it goes with.
+    [Fact]
+    public void EachModule_TakesInputOnlyWithFocus()
+    {
+        var problems = new List<string>();
+        foreach (var type in GameModule.All.SelectMany(ComponentsOf).Where(ReadsInput))
+        {
+            if (ComponentFocus.Has(type))
+                continue;
+            if (type.GetCustomAttribute<FocusFromAttribute>() is not { } from)
+                problems.Add($"{type.FullName} reads the player's input but has no focus: give it a true-or-false Controllable marked [Focus], or mark it [FocusFrom] the component whose focus it goes by.");
+            else if (!ComponentFocus.Has(from.Type))
+                problems.Add($"{type.FullName} takes its focus from {from.Type.Name}, which has none.");
+        }
+
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    [Fact]
+    public void ReadsInput_FindsInputActionsKeysAndRowsOfThem()
+    {
+        Assert.True(ReadsInput(typeof(Griff.Modules.Fighting.FightingCharacter)));
+        Assert.True(ReadsInput(typeof(Griff.Modules.BlockWorlds.Crafting)));
+        Assert.True(ReadsInput(typeof(Griff.Modules.Puzzles.MoveHistory)));
+        Assert.False(ReadsInput(typeof(Griff.Modules.PhysicsGames.Bumper)));
+    }
+
+    // The component types a module declares.
+    private static IEnumerable<Type> ComponentsOf(GameModule module) =>
+        module.GetType().Assembly.GetTypes().Where(t => typeof(Component).IsAssignableFrom(t) && !t.IsAbstract &&
+                                                        (t.Namespace == module.Namespace || t.Namespace?.StartsWith(module.Namespace + ".", StringComparison.Ordinal) == true));
+
+    // It names an input action, a key or a button to press, or rows of them (a fighter's buttons).
+    private static bool ReadsInput(Type type) =>
+        type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Any(p =>
+            p.GetCustomAttribute<NamesAttribute>() is { Kind: NameKind.Action } ||
+            p.PropertyType == typeof(Griff.Input.Key) || p.PropertyType == typeof(MouseButton) || p.PropertyType == typeof(GamepadButton) ||
+            p.GetCustomAttribute<RowsAttribute>()?.Columns.Any(c => c.Names is { Kind: NameKind.Action }) == true);
 
     private static bool IsModuleFile(SyntaxTree tree) =>
         tree.FilePath.Length > 0 && Path.GetRelativePath(Path.Combine(LayerTests.RepoRoot(), "src", "Griff", "Modules"), tree.FilePath) is var relative &&

@@ -298,6 +298,16 @@ public sealed class WireButton : Component
     internal Color? RestingTint { get; set; }
 
     internal bool Held { get; set; }
+
+    // Pressed by its Press action, for the next step.
+    internal bool PressRequested { get; set; }
+
+    /// <summary>
+    /// Presses it as a player does: a toggle flips on or off, and one that's only on while held is on for a moment (a pulse
+    /// down its wires). A trigger, a card or a note on the beat can press it.
+    /// </summary>
+    [Action]
+    public void Press() => PressRequested = true;
 }
 
 /// <summary>

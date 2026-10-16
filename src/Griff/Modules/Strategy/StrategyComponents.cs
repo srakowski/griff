@@ -433,7 +433,13 @@ public sealed class Producer : Component, INetState
     [DoNotSerialize]
     public IReadOnlyList<string> Queue => QueueList;
 
+    /// <summary>How many units it has queued up, the one in training included.</summary>
+    [DoNotSerialize]
+    [Output]
+    public int Queued => QueueList.Count;
+
     /// <summary>How far along the first in line is, from 0 to 1.</summary>
+    [Output]
     [DoNotSerialize]
     [Sent]
     public float Progress
@@ -461,6 +467,21 @@ public sealed class Producer : Component, INetState
     internal List<string?> Paid { get; } = [];
 
     internal void RaiseTrained(Entity unit) => Trained?.Invoke(unit);
+
+    /// <summary>
+    /// Queues up a unit it trains, one of <see cref="Trains"/> (the first without one), as its button does: its team pays for
+    /// it and needs the supply. A trigger, a card or a wire can train an army.
+    /// </summary>
+    [Action]
+    public void Train([Names(NameKind.Prefab)] string? unit = null) =>
+        Asked.Add(string.IsNullOrWhiteSpace(unit) ? Options() is [var first, ..] ? first : "" : unit.Trim());
+
+    /// <summary>Cancels the last unit queued, giving back what it cost.</summary>
+    [Action("Cancel")]
+    public void CancelLast() => Asked.Add(null);
+
+    // What its actions asked for, done in the next step: a unit to train, or null to cancel the last.
+    internal List<string?> Asked { get; } = [];
 }
 
 /// <summary>

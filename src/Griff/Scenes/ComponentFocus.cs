@@ -21,6 +21,20 @@ namespace Griff.Scenes;
 public sealed class FocusAttribute : Attribute;
 
 /// <summary>
+/// Marks a component that reads the player's input but has no focus of its own (see <see cref="FocusAttribute"/>): it takes
+/// the input only while the <see cref="Type"/> it goes with has focus, so the Focus action given to that hands it over too.
+/// A first-person weapon fires while its player's movement has the input, a puzzle's move history hears Undo while a grid
+/// player it covers has it, and crafting opens while its builder has it. Every genre's components that read input have one
+/// or the other, which Griff's own tests hold them to.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, Inherited = true)]
+public sealed class FocusFromAttribute(Type type) : Attribute
+{
+    /// <summary>The component whose focus it goes by, e.g. a first-person movement's for a weapon.</summary>
+    public Type Type { get; } = type;
+}
+
+/// <summary>
 /// The properties of component types that say whether they take the player's input (see <see cref="FocusAttribute"/>),
 /// found the first time each type is asked about and kept for as long as it's loaded. Reading and setting them allocates
 /// nothing.

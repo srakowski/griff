@@ -126,6 +126,7 @@ public sealed class Goal : Component, ICounterSource
 [Category("Level")]
 [WorksWith(typeof(GridMovement), Note = "the players, crates and enemies it puts back")]
 [WorksWith(typeof(Counter), Note = "Count Moves shows how many moves have been taken")]
+[FocusFrom(typeof(GridMovement))]
 [ComponentName("Griff.MoveHistory")]
 public sealed class MoveHistory : Component, ICounterSource
 {

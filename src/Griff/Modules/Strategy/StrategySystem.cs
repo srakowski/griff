@@ -289,8 +289,19 @@ internal sealed partial class StrategySystem : GameSystem
 
             foreach (var producer in Game.Active<Producer>())
             {
-                if (OwnerOf(producer.Entity!) == Rts)
-                    RunProducer(producer, dt);
+                if (OwnerOf(producer.Entity!) != Rts)
+                    continue;
+                // What its Train and Cancel actions asked for.
+                for (var i = 0; i < producer.Asked.Count; i++)
+                {
+                    if (producer.Asked[i] is { } unit)
+                        Train(producer, unit);
+                    else
+                        CancelTraining(producer);
+                }
+
+                producer.Asked.Clear();
+                RunProducer(producer, dt);
             }
 
             // What a paused group holds (see PauseGroup) stands still.

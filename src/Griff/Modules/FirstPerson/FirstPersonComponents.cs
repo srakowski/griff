@@ -181,6 +181,7 @@ public sealed class FirstPersonMovement : Component
 [Category("First Person")]
 [WorksWith(typeof(Inventory), Note = "holds its ammo")]
 [WorksWith(typeof(FirstPersonMovement), Note = "aims it")]
+[FocusFrom(typeof(FirstPersonMovement))]
 [ComponentName("Griff.Weapon")]
 public sealed class Weapon : Component
 {
@@ -270,9 +271,24 @@ public sealed class Weapon : Component
     /// <summary>Shakes the screen by this much with each shot. 0 for none.</summary>
     public float Shake { get; set; }
 
+    /// <summary>How many shots it has fired. The game counts them.</summary>
+    [Group("State")]
+    [Output]
+    public int Shots { get; set; }
+
     /// <summary>True while it can't fire again yet.</summary>
     [DoNotSerialize]
+    [Output("Cooling Down")]
     public bool IsCoolingDown => Cooldown > 0;
+
+    /// <summary>
+    /// Fires it once, as pressing its <see cref="Action"/> does, if it's the weapon in its player's hands and ready, using up
+    /// its <see cref="Ammo"/>, whether or not the player has the input: a note hit on the beat, a card or a trigger fires it.
+    /// </summary>
+    [Action]
+    public void Fire() => FireRequested = true;
+
+    internal bool FireRequested { get; set; }
 
     /// <summary>Raised with each shot fired.</summary>
     public event Action<Weapon>? Fired;

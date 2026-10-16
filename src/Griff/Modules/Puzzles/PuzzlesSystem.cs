@@ -100,8 +100,7 @@ internal sealed class PuzzlesSystem : GameSystem
             history.Begin(Game.Scene);
             var (undos, restart) = (history.UndoRequests, history.RestartRequested);
             (history.UndoRequests, history.RestartRequested) = (0, false);
-            // One that covers part of the scene hears Undo and Restart only while a grid player there has the input.
-            if (!Game.PausedThisFrame && (string.IsNullOrWhiteSpace(history.Within) || PlayerIn(history.Covering())))
+            if (!Game.PausedThisFrame && HearsKeys(history))
             {
                 restart |= !string.IsNullOrWhiteSpace(history.RestartAction) && Game.PlayerInputs().Any(i => i.WasPressed(history.RestartAction.Trim()));
                 undos += UndoPresses(history);
@@ -118,16 +117,23 @@ internal sealed class PuzzlesSystem : GameSystem
         }
     }
 
-    // A grid player that takes the player's input stands in the scope.
-    private bool PlayerIn(Scope scope)
+    // It hears Undo and Restart while a grid player it covers has the input, so a board or a platformer given the input in the
+    // same scene doesn't undo its steps. One covering the whole scene with no grid player at all (its moves recorded by a
+    // script) always hears them.
+    private bool HearsKeys(MoveHistory history)
     {
+        var scope = history.Covering();
+        var any = false;
         foreach (var m in Game.Active<GridMovement>())
         {
-            if (m.Controllable && IsGridPlayer(m.Entity!) && scope.Covers(m.Entity))
+            if (!IsGridPlayer(m.Entity!) || !scope.Covers(m.Entity))
+                continue;
+            if (m.Controllable)
                 return true;
+            any = true;
         }
 
-        return false;
+        return !any && string.IsNullOrWhiteSpace(history.Within);
     }
 
     // A grid mover the player steps (not a crate, a chaser or a patrol).

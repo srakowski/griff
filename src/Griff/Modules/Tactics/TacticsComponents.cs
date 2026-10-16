@@ -84,14 +84,17 @@ public sealed class TacticsUnit : Component, IGridDriver, ITurnReady, IPlaytestR
     /// side's turns starts.
     /// </summary>
     [Group("State")]
+    [Output("Moved")]
     public bool HasMoved { get; set; }
 
     /// <summary>True while it can take its go: it's its side's turn (if it takes turns) and it hasn't used its action.</summary>
     [DoNotSerialize]
+    [Output]
     public bool CanAct { get; internal set; }
 
     /// <summary>True on its side's turn once it has had its go: drawn dimmed until its side's next turn.</summary>
     [DoNotSerialize]
+    [Output("Done")]
     public bool IsDone { get; internal set; }
 
     /// <summary>True while it's walking to where it was sent.</summary>
@@ -122,9 +125,11 @@ public sealed class TacticsUnit : Component, IGridDriver, ITurnReady, IPlaytestR
     public void Attack(Entity target) => Requests.Add(new TacticsRequest(TacticsOrder.Attack, null, target));
 
     /// <summary>Ends its go where it stands, without attacking, at the start of the next frame.</summary>
+    [Action]
     public void Wait() => Requests.Add(new TacticsRequest(TacticsOrder.Wait, null, null));
 
     /// <summary>Takes back the walk it took this go, if it hasn't attacked or waited yet, putting it back where it was.</summary>
+    [Action]
     public void UndoMove() => Requests.Add(new TacticsRequest(TacticsOrder.UndoMove, null, null));
 
     /// <summary>Raised as it sets off on a walk, with the cell it's going to.</summary>

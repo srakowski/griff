@@ -102,7 +102,7 @@ Each player can make the notes come faster or slower still with their own **note
 
 The lanes send a message on each judgment, for anything else in the game to act on, the way every genre's pieces drive each other (see [Mixing genres](/docs/mashups/#genres-driving-each-other)):
 
-- **Hit Message** (`Hit`) on each Perfect, Great and Good, with the points as its data: a **Counter** listening for it adds up the score, and a **Trigger** ("when `Hit` arrives from Note Lanes, Fire the Cannon") makes each hit do something. With **Use Message Number**, the points are the value: a Perfect does 300 damage.
+- **Hit Message** (`Hit`) on each Perfect, Great and Good, with the points as its data: a **Counter** listening for it adds up the score, and a **Trigger** ("when `Hit` arrives from Note Lanes, Fire the Cannon") makes each hit do something: a **Shooter**'s or a first-person **Weapon**'s **Fire** (the weapon in hand fires even while the lanes have the input). With **Use Message Number**, the points are the value: a Perfect does 300 damage.
 - **Perfect Message** (`Perfect`) on each Perfect as well, for a bonus.
 - **Miss Message** (`Miss`) on each Miss: a Health that loses a heart, a crowd that boos.
 - **Complete Message** (`Song Complete`) once the song is over (every note judged, and their own song played to its end; keeping time with other music, a bar after the last note), with the score as its data: a results panel with it as its **Open Message**, showing the **Grade**, **Accuracy** and **Best Combo**.

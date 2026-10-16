@@ -42,7 +42,7 @@ public sealed class PolygonPointTests : IDisposable
         scene.Add(wheel);
 
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         return (document, services.GetRequiredService<ISelection>(), services.GetRequiredService<SceneViewModel>());
     }
 
@@ -131,7 +131,7 @@ public sealed class PolygonPointTests : IDisposable
     public void FittingToASprite_TracesItsPicture_InPlaceOfItsBox_AsOneUndoStep() => EditorHost.Run(services =>
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
 
         // A 16-pixel picture of a right triangle, solid below the line from its bottom left to its top right.

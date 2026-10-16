@@ -33,7 +33,7 @@ public class InspectorEntityPickerTests
         scene.Add(new Entity("Hitbox"), fighter);
 
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         return (document, services.GetRequiredService<ISelection>(), services.GetRequiredService<InspectorPanel>());
     }
 

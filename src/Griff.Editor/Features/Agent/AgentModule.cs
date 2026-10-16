@@ -20,7 +20,7 @@ public sealed class AgentModule : IEditorModule
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddSingleton(new ServiceCatalog(services));
+        services.AddSingleton(sp => new ServiceCatalog(services, sp));
         services.AddSingleton<IAgentScene, EditorAgentScene>();
         services.AddSingleton<IAgentProject, EditorAgentProject>();
 

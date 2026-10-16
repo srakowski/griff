@@ -4,6 +4,8 @@ using CommunityToolkit.Mvvm.Input;
 using Griff.Editing;
 using Griff.Modules.Fighting;
 using Griff.Scenes;
+using Griff.Editor.Features.Art;
+using Griff.Editor.Features.Fighting;
 
 namespace Griff.Editor.Features.Inspector;
 
@@ -184,7 +186,7 @@ public sealed class MovesEditor(PropertyField field, MoveListAttribute attribute
     };
 
     /// <summary>Opens the Move List on the selected fighter, to edit its moves.</summary>
-    public void OpenMoveList() => Host.RunCommand("Fighting.EditMoves");
+    public void OpenMoveList() => Host.RunCommand<OpenMoveListCommand>();
 
     public IRelayCommand OpenCommand => _open ??= new RelayCommand(OpenMoveList);
 
@@ -219,7 +221,7 @@ public sealed class FrameBoxesEditor(PropertyField field, FrameBoxesAttribute at
     };
 
     /// <summary>Opens the Clip Editor on the selected entity, to draw its boxes over its frames.</summary>
-    public void OpenClipEditor() => Host.RunCommand("Art.Clips");
+    public void OpenClipEditor() => Host.RunCommand<OpenClipEditorCommand>();
 
     public IRelayCommand OpenCommand => _open ??= new RelayCommand(OpenClipEditor);
 

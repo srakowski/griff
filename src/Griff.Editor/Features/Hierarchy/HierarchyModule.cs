@@ -23,7 +23,7 @@ public sealed class HierarchyModule : IEditorModule
 /// inside the selected entity, or at the top level. Agents can call the Entity_Create tools straight away; the palette is
 /// the Hierarchy panel's Palette.
 /// </summary>
-public sealed class AddEntityCommand(IWorkspace workspace, HierarchyPanel panel, PanelLayout layout) : EditorCommand
+public sealed class AddEntityCommand(ISceneDocuments sceneDocuments, HierarchyPanel panel, PanelLayout layout) : EditorCommand
 {
     public override string Id => "Entity.AddEntity";
     public override string Text => "_Add Entity...";
@@ -31,7 +31,7 @@ public sealed class AddEntityCommand(IWorkspace workspace, HierarchyPanel panel,
     public override KeyGesture? Gesture { get; } = new(Key.A, ModifierKeys.Control | ModifierKeys.Shift);
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: -1);
 
-    protected override bool CanExecuteCore() => workspace.Scene is not null;
+    protected override bool CanExecuteCore() => sceneDocuments.Scene is not null;
 
     protected override Task ExecuteCoreAsync()
     {

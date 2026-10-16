@@ -1,0 +1,26 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using Griff.Projects;
+using Griff.Scenes;
+using Griff.Scenes.Serialization;
+using Griff.Scripting;
+
+namespace Griff.Editor.Core.Workspace;
+
+/// <summary>
+/// Whether the scene is being played: the running copy of the scene shown in place of the one being edited. One of the four faces of the <see cref="Workspace"/> (with the other three: <see cref="IProjectSession"/>, <see cref="ISceneDocuments"/>,
+/// <see cref="IPlaySession"/>, <see cref="IScriptSession"/>): a service takes the ones it uses.
+/// </summary>
+public interface IPlaySession : INotifyPropertyChanged
+{
+    /// <summary>True while a play-mode copy of the scene is open in place of the edit scene.</summary>
+    bool IsPlaying { get; }
+
+    /// <summary>Shows <paramref name="runtime"/> in place of the edit scene until <see cref="ExitPlayMode"/>.</summary>
+    void EnterPlayMode(SceneDocument runtime);
+
+    void ExitPlayMode();
+
+    /// <summary>Replaces the play-mode copy (e.g. after rewinding) without leaving play mode.</summary>
+    void ReplacePlayScene(SceneDocument runtime);
+}

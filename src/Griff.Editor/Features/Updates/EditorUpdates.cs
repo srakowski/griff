@@ -14,8 +14,8 @@ namespace Griff.Editor.Features.Updates;
 /// to restart into it now or on the next start. A Griff that wasn't installed by the installer (a build from source, the
 /// portable zip) never looks: it says how to get a newer one instead.
 /// </summary>
-public sealed class EditorUpdates(IUpdater updater, ISettingsStore settings, IStatusService status, IDialogService dialogs, IWorkspace workspace,
-    ILogger<EditorUpdates> logger)
+public sealed class EditorUpdates(IUpdater updater, ISettingsStore settings, IStatusService status, IDialogService dialogs, IProjectSession projectSession, IPlaySession playSession,
+    ILogger<EditorUpdates> logger, Core.EditorWindow editorWindow)
 {
     /// <summary>How long after the editor starts it first looks for an update, so starting never waits on it.</summary>
     public static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(10);
@@ -53,8 +53,8 @@ public sealed class EditorUpdates(IUpdater updater, ISettingsStore settings, ISt
     /// <summary>Shuts the editor once the user has agreed to restart into an update (and said what to do with unsaved work).</summary>
     internal Action Exit { get; set; } = () =>
     {
-        if (Application.Current?.MainWindow is MainWindow main)
-            main.CloseConfirmed();
+        if (editorWindow.Main is not null)
+            editorWindow.CloseConfirmed();
         else
             Application.Current?.Shutdown();
     };
@@ -160,13 +160,13 @@ public sealed class EditorUpdates(IUpdater updater, ISettingsStore settings, ISt
     private async Task<string> OfferRestartAsync(FoundUpdate update, bool userAsked)
     {
         // A question in the middle of a game being played can wait for it to stop.
-        while (!userAsked && workspace.IsPlaying)
+        while (!userAsked && playSession.IsPlaying)
             await Task.Delay(TimeSpan.FromSeconds(2));
 
         var later = $"Griff {update.Version} is downloaded: it's used the next time Griff starts.";
         if (!dialogs.Confirm(ReadyTitle, $"Griff {update.Version} is downloaded. Restart Griff now to use it?\n\nNo: it's used the next time Griff starts."))
             return Say(true, later);
-        if (!await workspace.ConfirmCloseProjectAsync())
+        if (!await projectSession.ConfirmCloseProjectAsync())
             return Say(true, later);
 
         updater.ApplyOnExitAndRestart(update);

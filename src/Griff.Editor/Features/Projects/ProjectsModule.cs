@@ -1,3 +1,4 @@
+using Griff.Editor.Core;
 using System.Windows;
 using System.Windows.Input;
 using Griff.Editor.Core.Commands;
@@ -16,6 +17,7 @@ public sealed class ProjectsModule : IEditorModule
     {
         services.AddTransient<NewProjectViewModel>();
         services.AddTransient<NewProjectWindow>();
+        services.AddFactory<NewProjectWindow>();
         services
             .AddCommand<NewProjectCommand>()
             .AddCommand<OpenProjectCommand>()
@@ -27,7 +29,7 @@ public sealed class ProjectsModule : IEditorModule
 /// Opens the New Project window: a name, a folder and a template to start from. Its Templates lists every one Griff has
 /// (Platformer, Top-down, Match-3...), each with what it is and how to play; set SelectedTemplate to one by its name.
 /// </summary>
-public sealed class NewProjectCommand(IServiceProvider services) : EditorCommand
+public sealed class NewProjectCommand(Func<NewProjectWindow> createWindow, Core.EditorWindow editorWindow) : EditorCommand
 {
     public override string Id => "Project.New";
     public override string Text => "_New Project...";
@@ -37,15 +39,15 @@ public sealed class NewProjectCommand(IServiceProvider services) : EditorCommand
 
     protected override Task ExecuteCoreAsync()
     {
-        var window = services.GetRequiredService<NewProjectWindow>();
-        window.Owner = Application.Current.MainWindow;
+        var window = createWindow();
+        window.Owner = editorWindow.Main;
         window.ShowDialog();
         return Task.CompletedTask;
     }
 }
 
 /// <summary>Opens a project: its folder or its project.griff file.</summary>
-public sealed class OpenProjectCommand(IWorkspace workspace, IDialogService dialogs) : EditorCommand
+public sealed class OpenProjectCommand(IProjectSession projectSession, IDialogService dialogs) : EditorCommand
 {
     public const string ProjectFilter = "Griff project (project.griff)|project.griff";
 
@@ -59,13 +61,13 @@ public sealed class OpenProjectCommand(IWorkspace workspace, IDialogService dial
     protected override async Task ExecuteCoreAsync()
     {
         if (dialogs.ShowOpenFileDialog(ProjectFilter) is { } path)
-            await workspace.OpenProjectAsync(path);
+            await projectSession.OpenProjectAsync(path);
     }
 }
 
 /// <summary>Closes the editor (asking to save unsaved changes first).</summary>
 [Destructive]
-public sealed class ExitCommand(IWorkspace workspace) : EditorCommand
+public sealed class ExitCommand(IProjectSession projectSession, Core.EditorWindow editorWindow) : EditorCommand
 {
     public override string Id => "App.Exit";
     public override string Text => "E_xit";
@@ -79,16 +81,10 @@ public sealed class ExitCommand(IWorkspace workspace) : EditorCommand
     // then the window closes without asking again.
     protected override async Task ExecuteCoreAsync()
     {
-        if (await workspace.ConfirmCloseProjectAsync())
+        if (await projectSession.ConfirmCloseProjectAsync())
             CloseWindow();
     }
 
     /// <summary>Closes the editor's window once the questions are answered.</summary>
-    private static void CloseWindow()
-    {
-        if (Application.Current?.MainWindow is Griff.Editor.Shell.MainWindow window)
-            window.CloseConfirmed();
-        else
-            Application.Current?.MainWindow?.Close();
-    }
+    private void CloseWindow() => editorWindow.CloseConfirmed();
 }

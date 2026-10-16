@@ -15,7 +15,7 @@ namespace Griff.Editor.Features.Play;
 /// the usual rates, or run it without a pick (or pick a number) for any from 10 to 240. It's undone like an edit.
 /// Scripts can still change Time.StepRate as the game runs.
 /// </summary>
-public sealed class StepRateCommand(IWorkspace workspace, PlayMode play, IDialogService dialogs, IStatusService status) : EditorCommand
+public sealed class StepRateCommand(IProjectSession projectSession, ISceneDocuments sceneDocuments, IPlaySession playSession, PlayMode play, IDialogService dialogs, IStatusService status) : EditorCommand
 {
     private static readonly int[] Usual = [30, 60, 120, 240];
 
@@ -24,15 +24,15 @@ public sealed class StepRateCommand(IWorkspace workspace, PlayMode play, IDialog
     public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 2, Order: 0);
 
     public override IReadOnlyList<string>? Choices =>
-        workspace.Project is { } project ? Usual.Append(project.StepRate).Distinct().Order().Select(Label).ToList() : [];
+        projectSession.Project is { } project ? Usual.Append(project.StepRate).Distinct().Order().Select(Label).ToList() : [];
 
-    public override string? Chosen => workspace.Project is { } project ? Label(project.StepRate) : null;
+    public override string? Chosen => projectSession.Project is { } project ? Label(project.StepRate) : null;
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {
-        if (workspace.Project is not { } project)
+        if (projectSession.Project is not { } project)
             return Task.CompletedTask;
         var answer = dialogs.Prompt("Step Rate", "Steps a second", project.StepRate.ToString(CultureInfo.InvariantCulture),
             text => Parse(text) is null ? $"Give a whole number from {Time.MinStepRate} to {Time.MaxStepRate}." : null);
@@ -43,7 +43,7 @@ public sealed class StepRateCommand(IWorkspace workspace, PlayMode play, IDialog
 
     protected override Task ChooseCoreAsync(string choice)
     {
-        if (workspace.Project is not { } project)
+        if (projectSession.Project is not { } project)
             return Task.CompletedTask;
         var rate = Parse(choice)
             ?? throw new ArgumentException($"\"{choice}\" isn't a step rate: pick one of {string.Join(", ", Choices ?? [])}, or a number from {Time.MinStepRate} to {Time.MaxStepRate}.", nameof(choice));
@@ -73,7 +73,7 @@ public sealed class StepRateCommand(IWorkspace workspace, PlayMode play, IDialog
             play.UseStepRate(now);
             status.Show($"The game takes {now} steps a second" + (play.IsPlaying ? " (the running game too)" : ""));
         });
-        if ((workspace.IsPlaying ? workspace.EditScene : workspace.Scene) is { } document)
+        if ((playSession.IsPlaying ? sceneDocuments.EditScene : sceneDocuments.Scene) is { } document)
             document.Execute(edit);
         else
             edit.Apply();

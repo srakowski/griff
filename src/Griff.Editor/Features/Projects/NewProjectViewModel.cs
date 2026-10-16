@@ -16,15 +16,15 @@ public sealed class NewProjectViewModel : ObservableObject
 {
     private const string DefaultName = "My Project";
 
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
     private readonly IDialogService _dialogs;
     private string _name;
     private string _location;
     private string? _error;
 
-    public NewProjectViewModel(IWorkspace workspace, IDialogService dialogs, ISettingsStore settings)
+    public NewProjectViewModel(IProjectSession projectSession, IDialogService dialogs, ISettingsStore settings)
     {
-        _workspace = workspace;
+        _projectSession = projectSession;
         _dialogs = dialogs;
         _location = settings.Settings.LastProjectLocation ?? DefaultLocation;
         _name = UniqueName(_location);
@@ -103,7 +103,7 @@ public sealed class NewProjectViewModel : ObservableObject
     {
         try
         {
-            await _workspace.CreateProjectAsync(Location.Trim(), Name, SelectedTemplate.Template);
+            await _projectSession.CreateProjectAsync(Location.Trim(), Name, SelectedTemplate.Template);
             Created?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)

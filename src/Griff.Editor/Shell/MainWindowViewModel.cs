@@ -13,18 +13,31 @@ public sealed class MainWindowViewModel : ObservableObject
     private SceneDocument? _scene;
     private SceneDocument? _editScene;
 
-    public MainWindowViewModel(IWorkspace workspace, IStatusService status, ISelection selection, PlayMode play)
+    private readonly IProjectSession projectSession;
+    private readonly ISceneDocuments sceneDocuments;
+    private readonly IPlaySession playSession;
+
+    public MainWindowViewModel(IProjectSession projectSession, ISceneDocuments sceneDocuments, IPlaySession playSession, IStatusService status,
+        ISelection selection, PlayMode play)
     {
-        Workspace = workspace;
+        (this.projectSession, this.sceneDocuments, this.playSession) = (projectSession, sceneDocuments, playSession);
         Status = status;
         Play = play;
         play.PropertyChanged += (_, _) => OnPropertyChanged(nameof(IsPlaying));
-        workspace.PropertyChanged += OnWorkspaceChanged;
+        projectSession.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(IProjectSession.Project) or nameof(IProjectSession.RecentProjects))
+                Raise();
+        };
+        sceneDocuments.PropertyChanged += OnScenesChanged;
+        playSession.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(IPlaySession.IsPlaying))
+                Raise();
+        };
         selection.PropertyChanged += (_, _) => CommandManager.InvalidateRequerySuggested();
-        Track(workspace.Scene);
+        Track(sceneDocuments.Scene);
     }
-
-    public IWorkspace Workspace { get; }
 
     public IStatusService Status { get; }
 
@@ -32,27 +45,28 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsPlaying => Play.IsPlaying;
 
-    public bool HasProject => Workspace.Project is not null;
+    public bool HasProject => projectSession.Project is not null;
 
     // The scene's tab, whether or not a prefab's tab is showing. While playing, the dirty marker belongs to the edit
     // scene, which isn't on screen.
-    public string SceneTitle => Workspace.IsPlaying && Workspace.Scene is { } running ? $"{running.Name} (playing)"
-        : Workspace.EditScene is { } scene ? $"{scene.Name}{(scene.IsDirty ? "*" : "")}"
+    public string SceneTitle => playSession.IsPlaying && sceneDocuments.Scene is { } running ? $"{running.Name} (playing)"
+        : sceneDocuments.EditScene is { } scene ? $"{scene.Name}{(scene.IsDirty ? "*" : "")}"
         : "";
 
     // What's showing: the scene, or a prefab in its tab.
-    public string Title => Workspace.Project is { } project
-        ? $"{(Workspace.Scene is { IsPrefab: true } prefab ? $"{prefab.Name}{(prefab.IsDirty ? "*" : "")} (prefab)" : SceneTitle)} - {project.Name} - {AppVersion.Title}"
+    public string Title => projectSession.Project is { } project
+        ? $"{(sceneDocuments.Scene is { IsPrefab: true } prefab ? $"{prefab.Name}{(prefab.IsDirty ? "*" : "")} (prefab)" : SceneTitle)} - {project.Name} - {AppVersion.Title}"
         : AppVersion.Title;
 
-    public string SceneLocation => Workspace.Project is { } project && Workspace.Scene is { } scene
+    public string SceneLocation => projectSession.Project is { } project && sceneDocuments.Scene is { } scene
         ? project.GetRelativePath(scene.FilePath)
         : "";
 
-    private void OnWorkspaceChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnScenesChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(IWorkspace.Scene))
-            Track(Workspace.Scene);
+        if (e.PropertyName != nameof(ISceneDocuments.Scene))
+            return;
+        Track(sceneDocuments.Scene);
         Raise();
     }
 
@@ -64,7 +78,7 @@ public sealed class MainWindowViewModel : ObservableObject
         if (_editScene is not null)
             _editScene.PropertyChanged -= OnSceneChanged;
         _scene = scene;
-        _editScene = Workspace.EditScene == scene ? null : Workspace.EditScene;
+        _editScene = sceneDocuments.EditScene == scene ? null : sceneDocuments.EditScene;
         if (_scene is not null)
             _scene.PropertyChanged += OnSceneChanged;
         if (_editScene is not null)

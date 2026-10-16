@@ -30,10 +30,10 @@ public sealed class ChartPanelTests : IDisposable
     }
 
     // A new project with Note Lanes and their song and chart, the lanes selected.
-    private (IWorkspace Workspace, ChartPanel Panel, TableStore Tables) Lanes(IServiceProvider services)
+    private (Workspace Workspace, ChartPanel Panel, TableStore Tables) Lanes(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         EditorHost.Pump(workspace.CreateProjectAsync(_root, "Game"));
         EditorHost.Pump(services.GetRequiredService<CommandRegistry>().Get("Entity.CreateNoteLanes").ExecuteAsync());
         var lanes = workspace.Scene!.Scene.Entities.Single(e => e.GetComponent<NoteLanes>() is not null);
@@ -92,7 +92,7 @@ public sealed class ChartPanelTests : IDisposable
         // The table has it, saved to its file.
         var table = tables.Find("Groove")!;
         Assert.Equal((4.75, 4L, 1.25, "Normal"), (table[row]["Beat"].AsNumber, table[row]["Lane"].AsWholeNumber, table[row]["Hold"].AsNumber, table[row]["Difficulty"].ToString()));
-        Assert.Contains("Normal 59", File.ReadAllText(Path.Combine(services.GetRequiredService<IWorkspace>().Project!.AssetsPath, "Tables", "Groove.table")));
+        Assert.Contains("Normal 59", File.ReadAllText(Path.Combine(services.GetRequiredService<Workspace>().Project!.AssetsPath, "Tables", "Groove.table")));
 
         panel.RemoveNote("Normal 1");
         Assert.Equal(notes, panel.NoteCount);

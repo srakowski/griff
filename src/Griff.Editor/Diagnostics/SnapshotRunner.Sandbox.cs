@@ -17,7 +17,7 @@ namespace Griff.Editor.Diagnostics;
 // the spawn list, and the machine past the door.
 internal static partial class SnapshotRunner
 {
-    private static async Task SandboxSnapshots(IServiceProvider services, Window main, IWorkspace workspace, string projectDir, string outputDir)
+    private static async Task SandboxSnapshots(IServiceProvider services, Window main, Workspace workspace, string projectDir, string outputDir)
     {
         var checks = new List<string>();
         await workspace.CreateProjectAsync(projectDir, "Snapshot Sandbox", Griff.Projects.ProjectTemplates.Get("Sandbox"));
@@ -70,7 +70,7 @@ internal static partial class SnapshotRunner
         await workspace.SaveSceneAsync();
     }
 
-    private static async Task ContraptionSnapshots(IServiceProvider services, Window main, IWorkspace workspace, string projectDir, string outputDir)
+    private static async Task ContraptionSnapshots(IServiceProvider services, Window main, Workspace workspace, string projectDir, string outputDir)
     {
         var checks = new List<string>();
         await workspace.CreateProjectAsync(projectDir, "Snapshot Contraption", Griff.Projects.ProjectTemplates.Get("Contraption"));

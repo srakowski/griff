@@ -12,6 +12,7 @@ public sealed class CommandRegistry
     public const int MaxRecent = 5;
 
     private readonly Dictionary<string, EditorCommand> _commands = new(StringComparer.Ordinal);
+    private readonly Dictionary<Type, EditorCommand> _byType = [];
     private readonly ISettingsStore _settings;
 
     public CommandRegistry(IEnumerable<EditorCommand> commands, ISettingsStore settings)
@@ -22,6 +23,9 @@ public sealed class CommandRegistry
             if (!_commands.TryAdd(command.Id, command))
                 throw new InvalidOperationException($"Duplicate command id '{command.Id}'.");
         }
+
+        foreach (var command in _commands.Values)
+            _byType.TryAdd(command.GetType(), command);
 
         Categorized = CommandCategories.Group(_commands.Values);
         foreach (var command in Categorized.SelectMany(g => g))
@@ -42,6 +46,17 @@ public sealed class CommandRegistry
         _commands.TryGetValue(id, out var command)
             ? command
             : throw new KeyNotFoundException($"No command registered with id '{id}'.");
+
+    /// <summary>
+    /// The command of a class, e.g. <c>Get&lt;HideEntityCommand&gt;()</c>: how editor code reaches a command, by a reference
+    /// the compiler checks rather than an id string.
+    /// </summary>
+    public T Get<T>() where T : EditorCommand =>
+        _byType.TryGetValue(typeof(T), out var command) ? (T)command : throw new KeyNotFoundException($"No command of type {typeof(T).Name} is registered.");
+
+    /// <summary>The command of a class given as a <see cref="Type"/>, for a list of them.</summary>
+    public EditorCommand Of(Type type) =>
+        _byType.TryGetValue(type, out var command) ? command : throw new KeyNotFoundException($"No command of type {type.Name} is registered.");
 
     // Puts a command first among the recently used, in the settings.
     private void Remember(EditorCommand command)

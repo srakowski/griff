@@ -5,16 +5,20 @@ using Griff.Scenes.Serialization;
 
 namespace Griff.Editor.Core.Workspace;
 
-/// <summary>Prefab files as the editor uses them: saved from a selection, instantiated by drag-and-drop.</summary>
-public static class PrefabFiles
+/// <summary>Prefab files as the editor uses them: saved from a selection, instantiated by drag-and-drop, read for looking at.</summary>
+public sealed class PrefabFiles
 {
-    // Prefab files read for looking at (what a placed copy changes from its prefab), per workspace: each with when it was
-    // written, read again when the file changes and all let go when scripts reload (a script component's type changes).
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IWorkspace, ReadPrefabs> s_read = [];
+    private readonly IProjectSession _project;
+    private readonly ISceneDocuments _documents;
 
-    private sealed class ReadPrefabs
+    // Prefab files read for looking at (what a placed copy changes from its prefab): each with when it was written, read
+    // again when the file changes and all let go when scripts reload (a script component's type changes).
+    private readonly Dictionary<string, (DateTime Written, Entity? Prefab)> _read = new(StringComparer.OrdinalIgnoreCase);
+
+    public PrefabFiles(IProjectSession project, ISceneDocuments documents, IScriptSession scripts)
     {
-        public readonly Dictionary<string, (DateTime Written, Entity? Prefab)> Files = new(StringComparer.OrdinalIgnoreCase);
+        (_project, _documents) = (project, documents);
+        scripts.ScriptsReloaded += (_, _) => _read.Clear();
     }
 
     /// <summary>
@@ -22,33 +26,27 @@ public static class PrefabFiles
     /// copy or its prefab can't be read. It's shared (the Inspector marks overrides from it, a demo's checks read it) and read again
     /// only when the file changes, so it's for looking at: never change it, or put it in a scene.
     /// </summary>
-    public static Entity? PrefabOf(IWorkspace workspace, Entity copy) =>
-        copy.Prefab is { } link && workspace.Project?.FindPrefab(link) is { } path ? Read(workspace, path) : null;
+    public Entity? PrefabOf(Entity copy) =>
+        copy.Prefab is { } link && _project.Project?.FindPrefab(link) is { } path ? Read(path) : null;
 
     /// <summary>The prefab file at <paramref name="path"/> (a full path), read as <see cref="PrefabOf"/> reads one.</summary>
-    public static Entity? Read(IWorkspace workspace, string path)
+    public Entity? Read(string path)
     {
-        var read = s_read.GetValue(workspace, w =>
-        {
-            var files = new ReadPrefabs();
-            w.ScriptsReloaded += (_, _) => files.Files.Clear();
-            return files;
-        });
         var written = File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
-        if (read.Files.TryGetValue(path, out var known) && known.Written == written)
+        if (_read.TryGetValue(path, out var known) && known.Written == written)
             return known.Prefab;
 
         Entity? prefab;
         try
         {
-            prefab = written == DateTime.MinValue ? null : workspace.Serializer.LoadPrefabFromString(File.ReadAllText(path));
+            prefab = written == DateTime.MinValue ? null : _project.Serializer.LoadPrefabFromString(File.ReadAllText(path));
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             prefab = null;
         }
 
-        read.Files[path] = (written, prefab);
+        _read[path] = (written, prefab);
         return prefab;
     }
 
@@ -65,8 +63,8 @@ public static class PrefabFiles
         PrefabCopies.Normalize(Path.GetRelativePath(project.AssetsPath, path));
 
     /// <summary>True if <paramref name="document"/> is the prefab at <paramref name="assetPath"/>'s own tab, which can't hold a copy of itself.</summary>
-    public static bool IsOwnTab(IWorkspace workspace, SceneDocument document, string assetPath) =>
-        document.IsPrefab && workspace.Project is { } project &&
+    public bool IsOwnTab(SceneDocument document, string assetPath) =>
+        document.IsPrefab && _project.Project is { } project &&
         string.Equals(AssetPathOf(project, document.FilePath), PrefabCopies.Normalize(assetPath), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
@@ -74,14 +72,14 @@ public static class PrefabFiles
     /// Assets, making folders as needed), keeping every copy of it linked (see <see cref="Relink"/>).
     /// </summary>
     /// <exception cref="IOException">There's a file there already, or the prefab can't be moved.</exception>
-    public static PrefabUpdate Move(IWorkspace workspace, string fromAssetPath, string toAssetPath)
+    public PrefabUpdate Move(string fromAssetPath, string toAssetPath)
     {
-        if (workspace.Project is not { } project)
+        if (_project.Project is not { } project)
             return new PrefabUpdate(0, [], []);
         var to = FullPath(project, toAssetPath);
         Directory.CreateDirectory(Path.GetDirectoryName(to)!);
         File.Move(FullPath(project, fromAssetPath), to);
-        return Relink(workspace, fromAssetPath, toAssetPath);
+        return Relink(fromAssetPath, toAssetPath);
     }
 
     /// <summary>
@@ -90,21 +88,21 @@ public static class PrefabFiles
     /// prefab tabs (one undo step in each; one with no other changes stays saved, as its file is relinked too). The
     /// prefab's own tab, if it's open, follows its file.
     /// </summary>
-    public static PrefabUpdate Relink(IWorkspace workspace, string oldAssetPath, string newAssetPath)
+    public PrefabUpdate Relink(string oldAssetPath, string newAssetPath)
     {
-        if (workspace.Project is not { } project)
+        if (_project.Project is not { } project)
             return new PrefabUpdate(0, [], []);
 
         var copies = 0;
         var places = new List<string>();
         var problems = new List<string>();
-        var serializer = workspace.Serializer;
+        var serializer = _project.Serializer;
 
-        foreach (var tab in workspace.Prefabs.Where(t => IsOwnTab(workspace, t, oldAssetPath)).ToList())
+        foreach (var tab in _documents.Prefabs.Where(t => IsOwnTab(t, oldAssetPath)).ToList())
             tab.MoveTo(FullPath(project, newAssetPath));
 
         // Open documents count what they hold now, saved or not.
-        var open = new[] { workspace.EditScene }.Concat(workspace.Prefabs).OfType<SceneDocument>().ToList();
+        var open = new[] { _documents.EditScene }.Concat(_documents.Prefabs).OfType<SceneDocument>().ToList();
         foreach (var document in open)
         {
             var count = document.Scene.Entities.Count(e => PrefabCopies.IsCopyOf(e, oldAssetPath));
@@ -150,15 +148,15 @@ public static class PrefabFiles
     /// A new copy of the prefab at <paramref name="assetPath"/> (relative to Assets), linked to it so saving the prefab
     /// updates it, or null if it can't be read.
     /// </summary>
-    public static Entity? Instantiate(IWorkspace workspace, string assetPath, ICollection<string>? warnings = null)
+    public Entity? Instantiate(string assetPath, ICollection<string>? warnings = null)
     {
-        if (workspace.Project is not { } project)
+        if (_project.Project is not { } project)
             return null;
 
         var path = Path.Combine(project.AssetsPath, assetPath.Replace('/', Path.DirectorySeparatorChar));
         try
         {
-            var entity = workspace.Serializer.LoadPrefabFromString(File.ReadAllText(path), warnings);
+            var entity = _project.Serializer.LoadPrefabFromString(File.ReadAllText(path), warnings);
             entity.Prefab = PrefabCopies.Normalize(assetPath);
             return entity;
         }
@@ -178,18 +176,18 @@ public static class PrefabFiles
     /// prefab's own tab, if it's open, is brought up to date the same way. A prefab that the saved one holds a copy of
     /// isn't updated, as they'd hold each other.
     /// </summary>
-    public static PrefabUpdate UpdateCopies(IWorkspace workspace, string assetPath, string json, string? oldJson, Entity? source)
+    public PrefabUpdate UpdateCopies(string assetPath, string json, string? oldJson, Entity? source)
     {
-        if (workspace.Project is not { } project)
+        if (_project.Project is not { } project)
             return new PrefabUpdate(0, [], []);
 
         var copies = 0;
         var scenes = new List<string>();
         var problems = new List<string>();
-        var serializer = workspace.Serializer;
+        var serializer = _project.Serializer;
 
         // The scene being edited (not the running copy while playing), through its undo history.
-        if (workspace.EditScene is { } document)
+        if (_documents.EditScene is { } document)
         {
             var edits = new List<IEdit>();
             var here = source?.Scene == document.Scene ? source : null;
@@ -216,7 +214,7 @@ public static class PrefabFiles
         }
 
         // Every other scene, on disk.
-        var open = workspace.EditScene is { } edit ? Path.GetFullPath(edit.FilePath) : null;
+        var open = _documents.EditScene is { } edit ? Path.GetFullPath(edit.FilePath) : null;
         foreach (var scenePath in project.FindScenes())
         {
             if (string.Equals(Path.GetFullPath(scenePath), open, StringComparison.OrdinalIgnoreCase))
@@ -239,7 +237,7 @@ public static class PrefabFiles
         // Copies placed inside other prefabs (coins in a chest), on disk: open ones' files too, so they stay right
         // whether or not their tabs are saved. Not inside a prefab the saved one holds a copy of: they'd hold each other.
         var holds = Holds(json, serializer);
-        var openTabs = workspace.Prefabs.Select(t => Path.GetFullPath(t.FilePath)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var openTabs = _documents.Prefabs.Select(t => Path.GetFullPath(t.FilePath)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var prefabFile in project.FindPrefabs())
         {
             var other = AssetPathOf(project, prefabFile);
@@ -268,12 +266,12 @@ public static class PrefabFiles
             }
         }
 
-        foreach (var tab in workspace.Prefabs)
+        foreach (var tab in _documents.Prefabs)
         {
             if (tab.Scene.Roots.Count != 1)
                 continue;
             var root = tab.Scene.Roots[0];
-            var own = IsOwnTab(workspace, tab, assetPath);
+            var own = IsOwnTab(tab, assetPath);
             var saved = !tab.IsDirty;
 
             try
@@ -349,9 +347,9 @@ public static class PrefabFiles
         return scene;
     }
     /// <summary>The prefab file's text, or null if there's no such file (or it can't be read).</summary>
-    public static string? ReadText(IWorkspace workspace, string assetPath)
+    public string? ReadText(string assetPath)
     {
-        if (workspace.Project is not { } project || project.FindPrefab(assetPath) is not { } path)
+        if (_project.Project is not { } project || project.FindPrefab(assetPath) is not { } path)
             return null;
         try
         {
@@ -369,12 +367,12 @@ public static class PrefabFiles
     /// then match their prefab there. <paramref name="components"/> are the field's components, one per entity;
     /// those whose value is the prefab's are skipped.
     /// </summary>
-    public static PrefabUpdate ApplyField(IWorkspace workspace, IReadOnlyList<Component> components, PropertyDescriptor property)
+    public PrefabUpdate ApplyField(IReadOnlyList<Component> components, PropertyDescriptor property)
     {
         var copies = 0;
         var scenes = new List<string>();
         var problems = new List<string>();
-        var serializer = workspace.Serializer;
+        var serializer = _project.Serializer;
         var done = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var component in components)
         {
@@ -382,7 +380,7 @@ public static class PrefabFiles
                 continue;
 
             var name = PrefabCopies.NameOf(link);
-            if (workspace.Project is not { } project || project.FindPrefab(link) is not { } path || ReadText(workspace, link) is not { } oldJson)
+            if (_project.Project is not { } project || project.FindPrefab(link) is not { } path || ReadText(link) is not { } oldJson)
             {
                 problems.Add($"{name}: the prefab isn't in the project");
                 continue;
@@ -404,7 +402,7 @@ public static class PrefabFiles
                 File.WriteAllText(path, json);
                 done.Add(PrefabCopies.Normalize(link));
 
-                var update = UpdateCopies(workspace, AssetPathOf(project, path), json, oldJson, source: copy);
+                var update = UpdateCopies(AssetPathOf(project, path), json, oldJson, source: copy);
                 copies += update.Copies;
                 scenes.AddRange(update.Scenes.Except(scenes));
                 problems.AddRange(update.Problems);
@@ -423,17 +421,17 @@ public static class PrefabFiles
     /// components and children added or taken away) is undone, keeping their own name and place. Null if none of them
     /// changes anything (or their prefabs can't be read).
     /// </summary>
-    public static IEdit? Revert(IWorkspace workspace, Scene scene, IEnumerable<Entity> copies)
+    public IEdit? Revert(Scene scene, IEnumerable<Entity> copies)
     {
         var edits = new List<UpdatePrefabCopyEdit>();
         foreach (var copy in copies)
         {
-            if (copy.Prefab is not { } link || ReadText(workspace, link) is not { } json)
+            if (copy.Prefab is not { } link || ReadText(link) is not { } json)
                 continue;
             try
             {
-                var prefab = workspace.Serializer.LoadPrefabFromString(json);
-                if (PrefabOverrides.Find(copy, prefab, workspace.Components).Count > 0)
+                var prefab = _project.Serializer.LoadPrefabFromString(json);
+                if (PrefabOverrides.Find(copy, prefab, _project.Components).Count > 0)
                     edits.Add(new UpdatePrefabCopyEdit(scene, copy, prefab));
             }
             catch (InvalidDataException)

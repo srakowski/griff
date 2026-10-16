@@ -6,6 +6,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Griff.Editor.Core.Dialogs;
+using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Debugging;
 using Griff.Editor.Features.Scripts.Editor;
@@ -28,8 +29,8 @@ public partial class ScriptEditorView : UserControl
     private List<ISearchResult> _matches = [];
     private bool _showingReferences;
 
-    public ScriptEditorView(ScriptDocument script, ScriptEditors editors, IWorkspace workspace, ISelection selection, IDialogService dialogs,
-        Art.EditorArt art, Audio.EditorAudio audio, Debugger debugger)
+    public ScriptEditorView(ScriptDocument script, ScriptEditors editors, IProjectSession projectSession, ISceneDocuments sceneDocuments, IScriptSession scriptSession, IPlaySession playSession, ISelection selection, IDialogService dialogs,
+        Art.EditorArt art, Audio.EditorAudio audio, Debugger debugger, ISettingsStore settings)
     {
         InitializeComponent();
         Script = script;
@@ -37,13 +38,13 @@ public partial class ScriptEditorView : UserControl
         _debugger = debugger;
         DataContext = script;
 
-        Editor = new CodeEditor(script, editors.Language) { Prompt = dialogs.Prompt };
+        Editor = new CodeEditor(script, editors.Language, settings) { Prompt = dialogs.Prompt };
         Editor.Attach(debugger);
         EditorHost.Content = Editor;
-        Component = new ComponentPanel(script, workspace, selection, art, audio);
+        Component = new ComponentPanel(script, sceneDocuments, scriptSession, projectSession, playSession, selection, art, audio);
         ComponentPane.DataContext = Component;
 
-        var assets = workspace.Project?.AssetsPath;
+        var assets = projectSession.Project?.AssetsPath;
         var folder = Path.GetDirectoryName(script.FilePath) ?? "";
         var relative = assets is not null && folder.StartsWith(Path.GetDirectoryName(assets) ?? assets, StringComparison.OrdinalIgnoreCase)
             ? Path.GetRelativePath(Path.GetDirectoryName(assets)!, folder)

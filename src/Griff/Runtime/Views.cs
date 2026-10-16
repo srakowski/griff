@@ -205,6 +205,21 @@ public static class Views
     }
 
     /// <summary>
+    /// A draw order for a control made inside <paramref name="inside"/>: at least <paramref name="order"/>, and above
+    /// anything drawn by it or the entities it's inside (a button made on a panel draws over the panel's backdrop).
+    /// </summary>
+    public static int OrderAbove(Entity? inside, int order)
+    {
+        for (var e = inside; e is not null; e = e.Parent)
+        {
+            if (OrderOf(e) is { } under)
+                order = Math.Max(order, under + 10);
+        }
+
+        return order;
+    }
+
+    /// <summary>
     /// The draw order of an entity: its sprite's, or else that of its first drawable component (in
     /// <see cref="IDrawable.DrawStep"/> order) with one; null if it draws nothing in the world.
     /// </summary>

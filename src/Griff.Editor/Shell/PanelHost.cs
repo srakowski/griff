@@ -11,7 +11,7 @@ namespace Griff.Editor.Shell;
 /// tabbed groups, and floating windows. Each panel's view and tab are made once and moved as the layout changes;
 /// dragging a tab moves the panel (<see cref="PanelDrag"/>).
 /// </summary>
-public sealed class PanelHost(IServiceProvider services, IEnumerable<PanelDescriptor> descriptors, PanelLayout layout)
+public sealed class PanelHost(IEnumerable<PanelDescriptor> descriptors, PanelLayout layout)
 {
     private readonly Dictionary<string, TabItem> _tabs = [];
     private readonly Dictionary<FloatingPanels, FloatingPanelWindow> _windows = [];
@@ -56,10 +56,10 @@ public sealed class PanelHost(IServiceProvider services, IEnumerable<PanelDescri
 
         foreach (var descriptor in descriptors)
         {
-            var panel = (ToolPanel)services.GetRequiredService(descriptor.PanelType);
+            var panel = descriptor.Panel();
             if (_tabs.ContainsKey(panel.Id))
                 continue;
-            var view = (FrameworkElement)services.GetRequiredService(descriptor.ViewType);
+            var view = descriptor.View();
             view.DataContext = panel;
             var tab = new TabItem { Header = CreateHeader(panel), Content = view, Tag = panel.Id };
             drag.Watch(tab);

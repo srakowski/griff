@@ -21,15 +21,17 @@ public sealed class ControlsModule : IEditorModule
 /// <summary>Opens the Controls window for the open project (one at a time; a new project closes it).</summary>
 public sealed class ShowControlsCommand : EditorCommand
 {
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
     private readonly PlayMode _play;
+    private readonly Core.EditorWindow _editorWindow;
     private ControlsWindow? _window;
 
-    public ShowControlsCommand(IWorkspace workspace, PlayMode play)
+    public ShowControlsCommand(IProjectSession projectSession, PlayMode play, Core.EditorWindow editorWindow)
     {
-        _workspace = workspace;
+        _editorWindow = editorWindow;
+        _projectSession = projectSession;
         _play = play;
-        _workspace.PropertyChanged += OnWorkspaceChanged;
+        projectSession.PropertyChanged += OnWorkspaceChanged;
     }
 
     public override string Id => "Game.Controls";
@@ -37,7 +39,7 @@ public sealed class ShowControlsCommand : EditorCommand
     public override string? Icon => Icons.Gamepad;
     public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 2, Order: -1);
 
-    protected override bool CanExecuteCore() => _workspace.Project is not null;
+    protected override bool CanExecuteCore() => _projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {
@@ -47,7 +49,7 @@ public sealed class ShowControlsCommand : EditorCommand
             return Task.CompletedTask;
         }
 
-        _window = new ControlsWindow(new ControlsViewModel(_workspace, _play)) { Owner = Application.Current.MainWindow };
+        _window = new ControlsWindow(new ControlsViewModel(_projectSession, _play)) { Owner = _editorWindow.Main };
         _window.Closed += (_, _) => _window = null;
         _window.Show();
         return Task.CompletedTask;
@@ -56,7 +58,7 @@ public sealed class ShowControlsCommand : EditorCommand
     // The window edits one project's controls, so it closes when another project opens.
     private void OnWorkspaceChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(IWorkspace.Project))
+        if (e.PropertyName == nameof(IProjectSession.Project))
             _window?.Close();
     }
 }

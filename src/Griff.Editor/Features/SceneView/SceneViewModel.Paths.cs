@@ -117,7 +117,7 @@ public sealed partial class SceneViewModel
     /// </summary>
     public IReadOnlyList<ScenePathPoint> PathPoints()
     {
-        if (workspace.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
+        if (sceneDocuments.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
             return [];
         var points = new List<ScenePathPoint>();
         if (primary.GetComponent<Mover>() is { } mover)
@@ -250,7 +250,7 @@ public sealed partial class SceneViewModel
     {
         if (BeginPathPoint(FindPathPoint(point)) is not { } drag)
             return;
-        workspace.Scene!.History.Seal();
+        sceneDocuments.Scene!.History.Seal();
         drag.To(to, snap);
         drag.End();
     }
@@ -282,7 +282,7 @@ public sealed partial class SceneViewModel
                 : $"A point goes from 1 (right after the start) to {count + 1} (after the last).");
         if (BeginInsertPathPoint(path, index) is not { } drag)
             return;
-        workspace.Scene!.History.Seal();
+        sceneDocuments.Scene!.History.Seal();
         drag.To(at, snap);
         drag.End();
     }
@@ -296,7 +296,7 @@ public sealed partial class SceneViewModel
     public void RemovePathPoint(string point)
     {
         var found = FindPathPoint(point);
-        if (found.Open || workspace.Scene is not { } document)
+        if (found.Open || sceneDocuments.Scene is not { } document)
             return;
         var (property, value) = found.Component switch
         {
@@ -327,7 +327,7 @@ public sealed partial class SceneViewModel
     /// </summary>
     public PathPointDrag? BeginPathPoint(ScenePathPoint point)
     {
-        if (workspace.Scene is not { } document || selection.Entity is not { } primary || point.Component.Entity != primary)
+        if (sceneDocuments.Scene is not { } document || selection.Entity is not { } primary || point.Component.Entity != primary)
             return null;
         return point.Component switch
         {
@@ -350,7 +350,7 @@ public sealed partial class SceneViewModel
     /// </summary>
     public PathPointDrag? BeginInsertPathPoint(Component path, int index)
     {
-        if (workspace.Scene is not { } document || selection.Entity is not { } primary || path.Entity != primary ||
+        if (sceneDocuments.Scene is not { } document || selection.Entity is not { } primary || path.Entity != primary ||
             path is not (Mover or GridPatrol or IPointOutline) || path is GridPatrol && primary.GetComponent<GridMovement>() is null)
             return null;
         // Mover, GridPatrol, PolygonCollider and every other outline call theirs Points.
@@ -367,7 +367,7 @@ public sealed partial class SceneViewModel
     }
 
     private PropertyDescriptor Property(Component component, string name) =>
-        workspace.Components.Get(component.GetType()).Properties.Single(p => p.Name == name);
+        projectSession.Components.Get(component.GetType()).Properties.Single(p => p.Name == name);
 
     // A mover's or grid patrol's points after the start, as offsets from it; a polygon's (or other outline's) points.
     private static List<Vector2> PointsOf(Component path) => path switch

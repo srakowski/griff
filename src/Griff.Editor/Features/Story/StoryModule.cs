@@ -25,14 +25,14 @@ public sealed class StoryModule : IEditorModule
 /// the stage at that line; choices, parts and go-tos are added with a click. Each change is one undo step. It follows the
 /// selection.
 /// </summary>
-public sealed class OpenDialogueEditorCommand(DialogueEditor editor, IWorkspace workspace) : EditorCommand
+public sealed class OpenDialogueEditorCommand(DialogueEditor editor, IProjectSession projectSession) : EditorCommand
 {
     public override string Id => "Story.EditDialogue";
     public override string Text => "Edit _Dialogue...";
     public override string? Icon => Icons.Rename;
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 4);
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {

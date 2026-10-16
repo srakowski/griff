@@ -229,7 +229,7 @@ public sealed partial class DialogueEditor
     // The flags the project sets, or its messages, for a tag of that kind.
     private IReadOnlyList<string> NamesFor(string kind)
     {
-        if (_workspace.Names is not { } names)
+        if (_projectSession.Names is not { } names)
             return [];
         return kind == "send"
             ? [.. names.Choices(new NamesAttribute(NameKind.Message)).Select(c => c.Name)]

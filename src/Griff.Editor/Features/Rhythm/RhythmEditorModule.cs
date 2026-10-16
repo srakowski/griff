@@ -28,7 +28,7 @@ public sealed class RhythmEditorModule : IEditorModule
 /// ui_set and ui_invoke on the Chart panel (ChartName, Difficulty, Snap, RecordMode, Metronome, AudioOffset, Playhead,
 /// NoteLines, Summary, AddNote, RemoveNote, MoveNote, SetHold, RecordTake, PlayFrom, Stop...).
 /// </summary>
-public sealed class EditChartCommand(ChartPanel panel, PanelLayout layout, IWorkspace workspace, ISelection selection) : EditorCommand
+public sealed class EditChartCommand(ChartPanel panel, PanelLayout layout, IProjectSession projectSession, ISelection selection) : EditorCommand
 {
     public override string Id => "Rhythm.EditChart";
     public override string Text => "Edit _Chart";
@@ -37,7 +37,7 @@ public sealed class EditChartCommand(ChartPanel panel, PanelLayout layout, IWork
     public override IReadOnlyList<string>? Choices => panel.ChartNames;
     public override string? Chosen => panel.ChartName;
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {

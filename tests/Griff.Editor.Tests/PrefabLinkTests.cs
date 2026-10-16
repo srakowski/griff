@@ -36,10 +36,10 @@ public sealed class PrefabLinkTests : IDisposable
 
     // An empty project with a Coin prefab (a sprite and a Pickup worth 1), open in the editor, and a second scene, Level 2,
     // holding a copy of the coin.
-    private (IWorkspace Workspace, Project Project) Open(IServiceProvider services)
+    private (Workspace Workspace, Project Project) Open(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         var project = workspace.Project!;
 
@@ -50,7 +50,7 @@ public sealed class PrefabLinkTests : IDisposable
         File.WriteAllText(project.DefaultPrefabPath("Coin"), workspace.Serializer.SavePrefabToString(coin));
 
         var level2 = new Scene();
-        var copy = PrefabFiles.Instantiate(workspace, "Prefabs/Coin.prefab")!;
+        var copy = services.GetRequiredService<PrefabFiles>().Instantiate("Prefabs/Coin.prefab")!;
         copy.Transform.Position = new Vector3(7, 0, 0);
         level2.Add(copy);
         level2.Add(new Entity("Player"));
@@ -58,16 +58,16 @@ public sealed class PrefabLinkTests : IDisposable
         return (workspace, project);
     }
 
-    private static Entity Place(IWorkspace workspace, string name, Vector3 position)
+    private static Entity Place(Workspace workspace, string name, Vector3 position)
     {
-        var copy = PrefabFiles.Instantiate(workspace, "Prefabs/Coin.prefab")!;
+        var copy = new PrefabFiles(workspace, workspace, workspace).Instantiate("Prefabs/Coin.prefab")!;
         copy.Name = name;
         copy.Transform.Position = position;
         workspace.Scene!.Execute(new Griff.Editing.AddEntityEdit(workspace.Scene.Scene, copy));
         return copy;
     }
 
-    private static Scene Load(IWorkspace workspace, Project project, string scene) =>
+    private static Scene Load(Workspace workspace, Project project, string scene) =>
         workspace.Serializer.LoadFromString(File.ReadAllText(project.FindScene(scene)!));
 
     private static Task Run(IServiceProvider services, string id, string answers) =>
@@ -94,7 +94,7 @@ public sealed class PrefabLinkTests : IDisposable
         Assert.Contains("Coin prefab", row.PrefabTip);
 
         // An agent's copies are linked too.
-        var host = new EditorAgentScene(workspace, services.GetRequiredService<ISelection>());
+        var host = new EditorAgentScene(workspace, workspace, workspace, services.GetRequiredService<ISelection>());
         Assert.Equal("Prefabs/Coin.prefab", host.InstantiatePrefab("Coin")!.Prefab);
     });
 
@@ -189,7 +189,7 @@ public sealed class PrefabLinkTests : IDisposable
         var coin = new Entity("Coin");
         coin.AddComponent<Pickup>().Amount = 25;
         File.WriteAllText(project.DefaultPrefabPath("Coin"), workspace.Serializer.SavePrefabToString(coin));
-        var feedback = Wait(new EditorAgentProject(workspace).AssetChangedAsync("Prefabs/Coin.prefab"));
+        var feedback = Wait(new EditorAgentProject(workspace, workspace, workspace, services.GetRequiredService<PrefabFiles>()).AssetChangedAsync("Prefabs/Coin.prefab"));
 
         Assert.Equal("Updated 2 copies in Main and Level 2.", feedback!.Message);
         Assert.Equal(25, copy.GetComponent<Pickup>()!.Amount);

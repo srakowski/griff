@@ -33,7 +33,7 @@ public sealed class MoveListEditor : ObservableObject
     private static readonly Brush ActiveBrush = Frozen(System.Windows.Media.Color.FromRgb(0xE0, 0x4A, 0x4A));
     private static readonly Brush RecoveryBrush = Frozen(System.Windows.Media.Color.FromRgb(0x4A, 0x86, 0xD8));
 
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
     private readonly ISelection _selection;
     private readonly TableStore _tables;
     private SceneDocument? _document;
@@ -42,9 +42,11 @@ public sealed class MoveListEditor : ObservableObject
     private bool _rebuilding;
     private MoveListWindow? _window;
 
-    public MoveListEditor(IWorkspace workspace, ISelection selection, TableStore tables)
+    private readonly Core.EditorWindow _editorWindow;
+    public MoveListEditor(ISceneDocuments sceneDocuments, IProjectSession projectSession, ISelection selection, TableStore tables, Core.EditorWindow editorWindow)
     {
-        _workspace = workspace;
+        _projectSession = projectSession;
+        _editorWindow = editorWindow;
         _selection = selection;
         _tables = tables;
         AddMoveCommand = new RelayCommand(() => AddMove(), () => Fighter is not null);
@@ -58,13 +60,13 @@ public sealed class MoveListEditor : ObservableObject
             if (e.PropertyName == nameof(ISelection.Entity))
                 Follow();
         };
-        workspace.PropertyChanged += (_, e) =>
+        sceneDocuments.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.Scene))
-                Track(workspace.Scene);
+            if (e.PropertyName == nameof(ISceneDocuments.Scene))
+                Track(sceneDocuments.Scene);
         };
         tables.Changed += (_, _) => Rebuild();
-        Track(workspace.Scene);
+        Track(sceneDocuments.Scene);
     }
 
     public string Title => "Move List";
@@ -314,7 +316,7 @@ public sealed class MoveListEditor : ObservableObject
     {
         if (_window is null)
         {
-            _window = new MoveListWindow(this) { Owner = Application.Current?.MainWindow };
+            _window = new MoveListWindow(this) { Owner = _editorWindow.Main };
             _window.Closed += (_, _) => _window = null;
             _window.Show();
         }
@@ -428,7 +430,7 @@ public sealed class MoveListEditor : ObservableObject
         ]));
         _tables.Create(name);
         _tables.Commit(new Table(name, columns, rows), $"Make {name}");
-        var component = _workspace.Components.Get(typeof(FightingCharacter));
+        var component = _projectSession.Components.Get(typeof(FightingCharacter));
         document.History.Seal();
         document.Execute(new CompositeEdit("Make Moves Table",
         [
@@ -459,7 +461,7 @@ public sealed class MoveListEditor : ObservableObject
         change(lines);
         if (lines.SequenceEqual(fighter.Moves))
             return;
-        var property = _workspace.Components.Get(typeof(FightingCharacter)).Properties.Single(p => p.Name == nameof(FightingCharacter.Moves));
+        var property = _projectSession.Components.Get(typeof(FightingCharacter)).Properties.Single(p => p.Name == nameof(FightingCharacter.Moves));
         document.History.Seal();
         document.Execute(new CompositeEdit(description, [new SetPropertyEdit(fighter, property, (IReadOnlyList<string>)lines)]));
         document.History.Seal();
@@ -618,7 +620,7 @@ public sealed class MoveListEditor : ObservableObject
     }
 
     internal MoveTiming TimingOf(FighterMove move) =>
-        FightingCharacter.TimingOf(move, Animation, _entity?.GetComponent<Hitboxes>(), _workspace.Project?.StepRate ?? 60);
+        FightingCharacter.TimingOf(move, Animation, _entity?.GetComponent<Hitboxes>(), _projectSession.Project?.StepRate ?? 60);
 
     // The move's first hitbox on its first active frame.
     private FrameBox? FirstHit(FighterMove move, MoveTiming timing)

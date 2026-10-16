@@ -31,10 +31,10 @@ public sealed class InspectorFontPickerTests : IDisposable
     }
 
     // A project with a font file of its own, and in its scene a label.
-    private (IWorkspace Workspace, Entity Label, InspectorPanel Inspector) Open(IServiceProvider services)
+    private (Workspace Workspace, Entity Label, InspectorPanel Inspector) Open(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         var fonts = Directory.CreateDirectory(Path.Combine(workspace.Project!.AssetsPath, "Fonts")).FullName;
         File.Copy(FreeFonts.Serif.FilePath, Path.Combine(fonts, "Story.ttf"));

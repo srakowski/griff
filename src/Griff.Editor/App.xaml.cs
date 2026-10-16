@@ -1,3 +1,4 @@
+using Griff.Editor.Core;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
@@ -119,10 +120,17 @@ public partial class App : Application
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<ISettingsStore, JsonSettingsStore>();
         services.AddSingleton<IStatusService, StatusService>();
-        services.AddSingleton<IWorkspace, Workspace>();
+        services.AddSingleton<Workspace>();
+        services.AddSingleton<IProjectSession>(sp => sp.GetRequiredService<Workspace>());
+        services.AddSingleton<ISceneDocuments>(sp => sp.GetRequiredService<Workspace>());
+        services.AddSingleton<IPlaySession>(sp => sp.GetRequiredService<Workspace>());
+        services.AddSingleton<IScriptSession>(sp => sp.GetRequiredService<Workspace>());
+        services.AddSingleton<PrefabFiles>();
         services.AddSingleton<ISelection, Selection>();
         services.AddSingleton<IExternalPrograms, ExternalPrograms>();
         services.AddSingleton<IClipboard, WindowsClipboard>();
+        services.AddSingleton<Core.EditorWindow>();
+        services.AddLazyServices();
         services.AddSingleton<CommandRegistry>();
         services.AddSingleton<Core.Undo.ActiveDocument>();
 
@@ -147,13 +155,13 @@ public partial class App : Application
     // Jams are short: pick up exactly where you left off.
     private async Task ReopenLastProjectAsync(ILogger logger)
     {
-        var workspace = _host!.Services.GetRequiredService<IWorkspace>();
-        if (workspace.RecentProjects is not [{ } last, ..])
+        var projectSession = _host!.Services.GetRequiredService<IProjectSession>();
+        if (projectSession.RecentProjects is not [{ } last, ..])
             return;
 
         try
         {
-            await workspace.OpenProjectAsync(last);
+            await projectSession.OpenProjectAsync(last);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
         {

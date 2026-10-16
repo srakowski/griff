@@ -25,7 +25,7 @@ public class SceneTilePaintTests
         scene.Add(box);
 
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         var selection = services.GetRequiredService<ISelection>();
         selection.Select(level);
         return (document, selection, services.GetRequiredService<SceneViewModel>(), map);

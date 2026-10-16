@@ -36,13 +36,13 @@ public sealed partial class SceneViewModel
     /// </summary>
     public IReadOnlyList<SceneVector> Vectors()
     {
-        if (workspace.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
+        if (sceneDocuments.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
             return [];
         var vectors = new List<SceneVector>();
         var here = Flat(primary.Transform.WorldPosition);
-        foreach (var component in primary.Components.Where(c => workspace.Components.IsRegistered(c.GetType())))
+        foreach (var component in primary.Components.Where(c => projectSession.Components.IsRegistered(c.GetType())))
         {
-            var properties = workspace.Components.Get(component.GetType()).Properties;
+            var properties = projectSession.Components.Get(component.GetType()).Properties;
             foreach (var property in properties)
             {
                 if (property.GetValue(component) is not Vector2 value)
@@ -101,7 +101,7 @@ public sealed partial class SceneViewModel
     /// </summary>
     public VectorDrag? BeginVector(SceneVector vector)
     {
-        if (workspace.Scene is not { } document || selection.Entity is not { } primary || vector.Component.Entity != primary)
+        if (sceneDocuments.Scene is not { } document || selection.Entity is not { } primary || vector.Component.Entity != primary)
             return null;
         return new VectorDrag(document, vector);
     }

@@ -18,7 +18,7 @@ internal sealed record PathHandle(string Key, Point Screen, ScenePathPoint? Poin
 /// knob, the scale and resize squares, the knobs on its distances and its path, and the arrows of its links. What a
 /// drag on one does is <see cref="SceneViewModel"/>'s; this only says where they are, for drawing and for the mouse.
 /// </summary>
-internal sealed class SceneHandleGeometry(SceneViewport viewport, SceneViewModel model, ISelection selection, IWorkspace workspace,
+internal sealed class SceneHandleGeometry(SceneViewport viewport, SceneViewModel model, ISelection selection, ISceneDocuments sceneDocuments,
     Func<string, Size> measure)
 {
     public const double MarkerRadius = 7;
@@ -37,7 +37,7 @@ internal sealed class SceneHandleGeometry(SceneViewport viewport, SceneViewModel
     /// <summary>True while a path point is being dragged: the pluses that add points hide meanwhile.</summary>
     public bool DraggingPathPoint { get; set; }
 
-    private SceneDocument? Document => workspace.Scene;
+    private SceneDocument? Document => sceneDocuments.Scene;
 
     /// <summary>Topmost unlocked entity under the point (see <see cref="SceneViewModel.EntityAt"/>); pivots are hit within a few pixels.</summary>
     public Entity? HitTest(Point screen) =>

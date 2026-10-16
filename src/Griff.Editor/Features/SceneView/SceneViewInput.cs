@@ -9,6 +9,8 @@ using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;
 using Point = System.Windows.Point;
 using Vector = System.Windows.Vector;
+using Griff.Editor.Features.Art;
+using Griff.Editor.Features.Entities;
 
 namespace Griff.Editor.Features.SceneView;
 
@@ -35,7 +37,8 @@ internal enum SceneDrag
 /// being painted) is kept here for drawing.
 /// </summary>
 internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewport, SceneViewModel model, TilePalette palette,
-    ISelection selection, IWorkspace workspace, SceneHandleGeometry handles, SceneViewStyle style, IServiceProvider services)
+    ISelection selection, ISceneDocuments sceneDocuments, SceneHandleGeometry handles, SceneViewStyle style,
+    AddTilesetCommand addTileset, HideEntityCommand hide, AssetPlacement placement, PrefabFiles prefabFiles)
 {
     public const double DragThreshold = 3;
     private const float SnapStep = 0.5f;
@@ -129,7 +132,7 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
     public void Down(MouseButtonEventArgs e)
     {
         view.Focus();
-        if (workspace.Scene is null)
+        if (sceneDocuments.Scene is null)
             return;
 
         var position = e.GetPosition(view);
@@ -441,7 +444,7 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
     // The + tab lists the project's images to add as a tileset, as Art > Add Tileset to Tilemap does.
     private void ShowAddTilesetMenu(Rect tab)
     {
-        var command = services.GetRequiredService<CommandRegistry>().Get("Art.AddTileset");
+        var command = addTileset;
         var menu = new ContextMenu { PlacementTarget = view, Placement = System.Windows.Controls.Primitives.PlacementMode.Relative, HorizontalOffset = tab.Left, VerticalOffset = tab.Bottom };
         var images = command.Choices ?? [];
         foreach (var image in images)
@@ -461,7 +464,7 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
     // Dropping an image or a prefab from the Assets panel is its Add to Scene, placed where it lands.
     public void DragOver(DragEventArgs e)
     {
-        e.Effects = workspace.Scene is { } document && DroppedAsset(e) is var (assetPath, _) && !PrefabFiles.IsOwnTab(workspace, document, assetPath)
+        e.Effects = sceneDocuments.Scene is { } document && DroppedAsset(e) is var (assetPath, _) && !prefabFiles.IsOwnTab(document, assetPath)
             ? DragDropEffects.Copy
             : DragDropEffects.None;
         e.Handled = true;
@@ -470,12 +473,12 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
     public void Drop(DragEventArgs e)
     {
         e.Handled = true;
-        if (workspace.Scene is not { } document || DroppedAsset(e) is not var (assetPath, _) || PrefabFiles.IsOwnTab(workspace, document, assetPath))
+        if (sceneDocuments.Scene is not { } document || DroppedAsset(e) is not var (assetPath, _) || prefabFiles.IsOwnTab(document, assetPath))
             return;
 
         try
         {
-            services.GetRequiredService<AssetPlacement>().AddToScene(assetPath, viewport.ToWorld(e.GetPosition(view)));
+            placement.AddToScene(assetPath, viewport.ToWorld(e.GetPosition(view)));
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
@@ -522,7 +525,6 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
         // H hides the selection here (or shows it again), as Entity > Hide does.
         if (e.Key == Key.H && Keyboard.Modifiers == ModifierKeys.None && Drag == SceneDrag.None)
         {
-            var hide = services.GetRequiredService<CommandRegistry>().Get("Entity.Hide");
             if (hide.CanExecute())
                 _ = hide.ExecuteAsync();
             e.Handled = true;
@@ -634,7 +636,7 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
         handles.DraggingPathPoint = mode == SceneDrag.Path;
         DragStart = position;
         _dragStartPan = viewport.Pan;
-        workspace.Scene?.History.Seal();
+        sceneDocuments.Scene?.History.Seal();
         view.CaptureMouse();
         if (mode == SceneDrag.Pan)
             view.Cursor = Cursors.SizeAll;

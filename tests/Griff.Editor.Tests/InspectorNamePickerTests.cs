@@ -33,7 +33,7 @@ public sealed class InspectorNamePickerTests : IDisposable
     private (SceneDocument Document, ISelection Selection, InspectorPanel Inspector) Open(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         var project = workspace.Project!;
         var serializer = new SceneSerializer(workspace.Components);

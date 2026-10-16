@@ -2,6 +2,9 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using Griff.Editing;
+using Griff.Editor.Features.Art;
+using Griff.Editor.Features.Assets;
+using Griff.Editor.Features.Entities;
 using Griff.Editor.Core.Workspace;
 
 namespace Griff.Editor.Features.SceneView;
@@ -35,17 +38,16 @@ public sealed class SceneViewControl : FrameworkElement, IDisposable
     private readonly SceneViewDrawing _drawing;
     private SceneDocument? _document;
 
-    // Commands are reached through the services on demand, as some are built with this view.
-    public SceneViewControl(IWorkspace workspace, ISelection selection, SceneViewModel model, SceneViewport viewport, TilePalette palette,
-        IServiceProvider services)
+    public SceneViewControl(ISceneDocuments sceneDocuments, IProjectSession projectSession, IScriptSession scriptSession, ISelection selection, SceneViewModel model, SceneViewport viewport, TilePalette palette,
+        AddTilesetCommand addTileset, HideEntityCommand hide, AssetPlacement placement, PrefabFiles prefabFiles)
     {
         _viewport = viewport;
         _palette = palette;
         _style = new SceneViewStyle(this);
-        Handles = new SceneHandleGeometry(viewport, model, selection, workspace, _style.Measure);
-        _input = new SceneViewInput(this, viewport, model, palette, selection, workspace, Handles, _style, services);
-        _picture = new SceneViewPicture(viewport, model, workspace, _style);
-        _drawing = new SceneViewDrawing(viewport, model, palette, selection, workspace, Handles, _input, _style, _picture);
+        Handles = new SceneHandleGeometry(viewport, model, selection, sceneDocuments, _style.Measure);
+        _input = new SceneViewInput(this, viewport, model, palette, selection, sceneDocuments, Handles, _style, addTileset, hide, placement, prefabFiles);
+        _picture = new SceneViewPicture(viewport, model, projectSession, _style);
+        _drawing = new SceneViewDrawing(viewport, model, palette, selection, projectSession, Handles, _input, _style, _picture);
 
         Focusable = true;
         AllowDrop = true;
@@ -55,11 +57,14 @@ public sealed class SceneViewControl : FrameworkElement, IDisposable
 
         // The scene's picture is drawn again when what it shows changes; the rest (the selection, what's under the mouse)
         // only redraws what goes over it.
-        workspace.PropertyChanged += (_, e) =>
+        sceneDocuments.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.Scene))
-                Track(workspace.Scene);
-            else if (e.PropertyName == nameof(IWorkspace.Project))
+            if (e.PropertyName == nameof(ISceneDocuments.Scene))
+                Track(sceneDocuments.Scene);
+        };
+        projectSession.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(IProjectSession.Project))
                 Redraw();
         };
         selection.PropertyChanged += (_, _) => InvalidateVisual();
@@ -70,8 +75,8 @@ public sealed class SceneViewControl : FrameworkElement, IDisposable
         };
         viewport.PropertyChanged += (_, _) => Redraw();
         palette.PropertyChanged += (_, _) => Redraw();
-        workspace.ScriptsReloaded += (_, _) => Redraw();
-        Track(workspace.Scene);
+        scriptSession.ScriptsReloaded += (_, _) => Redraw();
+        Track(sceneDocuments.Scene);
     }
 
     /// <summary>Where the handles are on screen (for demos to point at them).</summary>

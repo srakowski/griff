@@ -54,7 +54,7 @@ public sealed record SceneDistance(Component Component, PropertyDescriptor Prope
 /// draws to and from the entities the selection's fields name. The view's drags call these, and agents can too
 /// (positions are world units, Y up).
 /// </summary>
-public sealed partial class SceneViewModel(IWorkspace workspace, ISelection selection) : ObservableObject
+public sealed partial class SceneViewModel(IProjectSession projectSession, ISceneDocuments sceneDocuments, ISelection selection) : ObservableObject
 {
     /// <summary>The shape of a camera's frame, as the game's window is.</summary>
     public const double CameraAspect = 16.0 / 9.0;
@@ -92,7 +92,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// <summary>The entities a box between two world corners catches, in the Hierarchy's order (see <see cref="SelectInBox"/>).</summary>
     public IReadOnlyList<Entity> EntitiesInBox(Vector2 from, Vector2 to)
     {
-        if (workspace.Scene is not { } document)
+        if (sceneDocuments.Scene is not { } document)
             return [];
         var (min, max) = (Vector2.Min(from, to), Vector2.Max(from, to));
         bool Inside(Vector2 p) => p.X >= min.X && p.X <= max.X && p.Y >= min.Y && p.Y <= max.Y;
@@ -126,7 +126,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// </summary>
     public Entity? EntityAt(Vector2 world, float pivotRadius)
     {
-        if (workspace.Scene is not { } document)
+        if (sceneDocuments.Scene is not { } document)
             return null;
 
         foreach (var entity in DrawOrder(document.Scene).Reverse())
@@ -186,7 +186,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     {
         if (BeginMove() is not { } move)
             return;
-        workspace.Scene!.History.Seal();
+        sceneDocuments.Scene!.History.Seal();
         move.To(offset, snap: false);
         move.End();
     }
@@ -197,7 +197,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// </summary>
     public SelectionMove? BeginMove()
     {
-        if (workspace.Scene is not { } document)
+        if (sceneDocuments.Scene is not { } document)
             return null;
         // Children go along with a selected parent, so only the outermost ones move.
         var moving = selection.TopLevel().Where(e => e.Scene == document.Scene).ToList();
@@ -205,7 +205,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
             return null;
         // Snapping lines up the one picked last (or the selected parent it's inside); the rest keep their distance.
         var anchor = moving.FirstOrDefault(e => selection.Entity is { } primary && primary.IsSelfOrDescendantOf(e)) ?? moving[^1];
-        var position = workspace.Components.Get(typeof(Transform)).Properties.Single(p => p.Name == nameof(Transform.Position));
+        var position = projectSession.Components.Get(typeof(Transform)).Properties.Single(p => p.Name == nameof(Transform.Position));
         return new SelectionMove(document, moving, anchor, position);
     }
 
@@ -218,7 +218,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     {
         if (BeginRotate() is not { } rotate)
             return;
-        workspace.Scene!.History.Seal();
+        sceneDocuments.Scene!.History.Seal();
         rotate.To(degrees, snap: false, round: false);
         rotate.End();
     }
@@ -230,7 +230,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// </summary>
     public SelectionRotate? BeginRotate()
     {
-        if (workspace.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
+        if (sceneDocuments.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
             return null;
         var turning = selection.TopLevel().Where(e => e.Scene == document.Scene).ToList();
         if (turning.Count == 0)
@@ -249,7 +249,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     {
         if (BeginScale() is not { } scale)
             return;
-        workspace.Scene!.History.Seal();
+        sceneDocuments.Scene!.History.Seal();
         scale.To(factor, snap: false, round: false);
         scale.End();
     }
@@ -261,7 +261,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// </summary>
     public SelectionScale? BeginScale()
     {
-        if (workspace.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
+        if (sceneDocuments.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
             return null;
         var scaling = selection.TopLevel().Where(e => e.Scene == document.Scene).ToList();
         if (scaling.Count == 0)
@@ -280,7 +280,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// </summary>
     public IReadOnlyList<Component> ResizableShapes()
     {
-        if (workspace.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
+        if (sceneDocuments.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
             return [];
         return Handles switch
         {
@@ -305,7 +305,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
             string.Equals(c.GetType().Name, component.Trim(), StringComparison.OrdinalIgnoreCase));
         if (shape is null || BeginResize(shape) is not { } resize)
             return;
-        workspace.Scene!.History.Seal();
+        sceneDocuments.Scene!.History.Seal();
         resize.To(size, keep);
         resize.End();
     }
@@ -317,11 +317,11 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// </summary>
     public ShapeResize? BeginResize(Component shape)
     {
-        if (workspace.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene ||
+        if (sceneDocuments.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene ||
             shape.Entity != primary || ShapeFrame.Of(shape) is not { } frame)
             return null;
 
-        PropertyDescriptor Property(Component c, string name) => workspace.Components.Get(c.GetType()).Properties.Single(p => p.Name == name);
+        PropertyDescriptor Property(Component c, string name) => projectSession.Components.Get(c.GetType()).Properties.Single(p => p.Name == name);
         if (ShapeFrame.AreaOf(shape) is var (sized, area))
             return new ShapeResize(document, shape, frame, Property(shape, sized.Name), area.Center is { } center ? Property(shape, center) : Property(primary.Transform, nameof(Transform.Position)));
         return shape switch
@@ -339,12 +339,12 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// </summary>
     public IReadOnlyList<SceneDistance> Distances()
     {
-        if (workspace.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
+        if (sceneDocuments.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
             return [];
         var distances = new List<SceneDistance>();
         foreach (var component in primary.Components)
         {
-            var properties = workspace.Components.Get(component.GetType()).Properties;
+            var properties = projectSession.Components.Get(component.GetType()).Properties;
             foreach (var property in properties.Where(p => p.Distance is not null))
             {
                 if (property.GetValue(component) is not float value || !(value > 0) || !float.IsFinite(value))
@@ -391,7 +391,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
 
         if (BeginDistance(found) is not { } drag)
             return;
-        workspace.Scene!.History.Seal();
+        sceneDocuments.Scene!.History.Seal();
         drag.To(Vector2.Distance(found.Center, to), snap);
         drag.End();
     }
@@ -402,7 +402,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// </summary>
     public DistanceDrag? BeginDistance(SceneDistance distance)
     {
-        if (workspace.Scene is not { } document || selection.Entity is not { } primary || distance.Component.Entity != primary)
+        if (sceneDocuments.Scene is not { } document || selection.Entity is not { } primary || distance.Component.Entity != primary)
             return null;
         return new DistanceDrag(document, distance);
     }
@@ -414,11 +414,11 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// </summary>
     public IReadOnlyList<EntityReferences.Link> Links()
     {
-        if (workspace.Scene is not { } document)
+        if (sceneDocuments.Scene is not { } document)
             return [];
         var selected = selection.Entities.Where(e => e.Scene == document.Scene).ToList();
-        return selected.SelectMany(e => EntityReferences.From(e, workspace.Components))
-            .Concat(selected.SelectMany(e => EntityReferences.To(e, workspace.Components)))
+        return selected.SelectMany(e => EntityReferences.From(e, projectSession.Components))
+            .Concat(selected.SelectMany(e => EntityReferences.To(e, projectSession.Components)))
             .Distinct()
             .ToList();
     }

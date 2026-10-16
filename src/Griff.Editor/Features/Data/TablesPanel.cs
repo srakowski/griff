@@ -25,7 +25,7 @@ namespace Griff.Editor.Features.Data;
 public sealed partial class TablesPanel : ToolPanel, IDocumentEditor
 {
     private readonly TableStore _store;
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
     private readonly IStatusService _status;
     private readonly IClipboard _clipboard;
     private string? _name;
@@ -37,10 +37,10 @@ public sealed partial class TablesPanel : ToolPanel, IDocumentEditor
     private int _pickedColumn = -2;
     private bool _typing;
 
-    public TablesPanel(TableStore store, IWorkspace workspace, IStatusService status, IClipboard clipboard)
+    public TablesPanel(TableStore store, IProjectSession projectSession, IStatusService status, IClipboard clipboard)
     {
         _store = store;
-        _workspace = workspace;
+        _projectSession = projectSession;
         _status = status;
         _clipboard = clipboard;
         store.Changed += (_, name) =>
@@ -981,7 +981,7 @@ public sealed partial class TablesPanel : ToolPanel, IDocumentEditor
     /// <summary>The values a column's cells offer to pick from: its choices, the rows of its table, or the project's pictures, sounds or prefabs.</summary>
     internal IReadOnlyList<string> OptionsFor(TableColumn column)
     {
-        var project = _workspace.Project;
+        var project = _projectSession.Project;
         return column.Type switch
         {
             ColumnType.Choice => column.Choices,
@@ -1023,7 +1023,7 @@ public sealed partial class TablesPanel : ToolPanel, IDocumentEditor
         if (value.IsEmpty)
             return (false, null);
         var text = value.ToString();
-        var project = _workspace.Project;
+        var project = _projectSession.Project;
         return column.Type switch
         {
             ColumnType.Dice => (false, $"Rolls {value.AsDice.Min} to {value.AsDice.Max}, {value.AsDice.Average:0.#} on average"),

@@ -36,7 +36,7 @@ public sealed class SceneViewPictureTests : IDisposable
     public void EveryScene_IsShownAsTheRenderersFrameOfIt(string template) => EditorHost.Run(services =>
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         EditorHost.Pump(workspace.CreateProjectAsync(_root, template, ProjectTemplates.Get(template)));
         var project = workspace.Project!;
         var view = services.GetRequiredService<SceneViewControl>();

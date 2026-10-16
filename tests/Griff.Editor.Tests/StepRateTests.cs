@@ -27,7 +27,7 @@ public sealed class StepRateTests : IDisposable
     public void StepRate_PicksARate_TicksIt_AndUndoes_WithoutUnsavingTheScene() => EditorHost.Run(services =>
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         var project = workspace.Project!;
         var command = services.GetRequiredService<StepRateCommand>();

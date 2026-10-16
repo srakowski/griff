@@ -22,14 +22,14 @@ public sealed class FightingEditorModule : IEditorModule
 /// button, its clip, its startup, active and recovery frames drawn as a bar with what it leaves on hit and on block, where
 /// it must be blocked, and what it cancels into. Each change is one undo step. It follows the selection.
 /// </summary>
-public sealed class OpenMoveListCommand(MoveListEditor editor, IWorkspace workspace) : EditorCommand
+public sealed class OpenMoveListCommand(MoveListEditor editor, IProjectSession projectSession) : EditorCommand
 {
     public override string Id => "Fighting.EditMoves";
     public override string Text => "Edit _Moves...";
     public override string? Icon => Icons.Rename;
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 5);
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {

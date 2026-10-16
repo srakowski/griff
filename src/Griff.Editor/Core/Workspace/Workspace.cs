@@ -15,145 +15,16 @@ using Microsoft.Extensions.Logging;
 namespace Griff.Editor.Core.Workspace;
 
 /// <summary>
-/// The open project, its scene and the prefabs open in tabs of their own. Everything that edits game content starts
-/// here.
+/// The open project, its scene and the prefabs open in tabs of their own: what a project is made of, one object behind four
+/// faces that services take as they need them: <see cref="IProjectSession"/> (the project), <see cref="ISceneDocuments"/>
+/// (its scene and prefabs), <see cref="IPlaySession"/> (playing it) and <see cref="IScriptSession"/> (its scripts). Everything
+/// that edits game content starts here.
 /// </summary>
-public interface IWorkspace : INotifyPropertyChanged
-{
-    Project? Project { get; }
-
-    /// <summary>
-    /// What the Hierarchy, Inspector and Scene view edit: the open scene, a prefab whose tab is showing (see
-    /// <see cref="OpenPrefabAsync"/>), or the running copy of the scene while playing.
-    /// </summary>
-    SceneDocument? Scene { get; }
-
-    /// <summary>The prefabs open in tabs of their own, in the order they were opened, each with its own undo history.</summary>
-    ReadOnlyObservableCollection<SceneDocument> Prefabs { get; }
-
-    ComponentRegistry Components { get; }
-
-    SceneSerializer Serializer { get; }
-
-    /// <summary>
-    /// The project's prefabs, scenes, input actions, collision layers, messages and fonts as they are now (the open scene's as
-    /// it's being edited, not as last saved), which fields naming them pick from. Null with no project open.
-    /// </summary>
-    Griff.Editing.KnownNames? Names { get; }
-
-    IReadOnlyList<string> RecentProjects { get; }
-
-    /// <summary>True while a play-mode copy of the scene is open in place of the edit scene.</summary>
-    bool IsPlaying { get; }
-
-    /// <summary>
-    /// The scene being edited, whatever's showing: the same as <see cref="Scene"/> unless playing or a prefab's tab is
-    /// showing.
-    /// </summary>
-    SceneDocument? EditScene { get; }
-
-    /// <summary>Shows <paramref name="runtime"/> in place of the edit scene until <see cref="ExitPlayMode"/>.</summary>
-    void EnterPlayMode(SceneDocument runtime);
-
-    void ExitPlayMode();
-
-    /// <summary>Replaces the play-mode copy (e.g. after rewinding) without leaving play mode.</summary>
-    void ReplacePlayScene(SceneDocument runtime);
-
-    Task CreateProjectAsync(string location, string name, ProjectTemplate? template = null);
-
-    /// <summary>Opens the project at a folder or project.griff path. Returns false if the user cancelled.</summary>
-    Task<bool> OpenProjectAsync(string path);
-
-    /// <summary>
-    /// Saves what's showing: the scene, or a prefab (to its file, then bringing every copy of it up to date, as
-    /// <see cref="PrefabFiles.UpdateCopies"/> does).
-    /// </summary>
-    /// <returns>False if the user cancelled or the save failed.</returns>
-    Task<bool> SaveSceneAsync();
-
-    /// <summary>Saves every open prefab with unsaved changes, then the scene if it has any. False if one couldn't be saved.</summary>
-    Task<bool> SaveAllAsync();
-
-    /// <summary>Prompts to save the scene's unsaved changes. Returns true if it's safe to close the scene.</summary>
-    Task<bool> ConfirmCloseAsync();
-
-    /// <summary>
-    /// Prompts to save everything unsaved in the project: open scripts (see <see cref="AddCloseGuard"/>), open prefabs
-    /// and the scene.
-    /// </summary>
-    Task<bool> ConfirmCloseProjectAsync();
-
-    /// <summary>Adds a check that runs before the project closes; it returns false to keep the project open.</summary>
-    void AddCloseGuard(Func<Task<bool>> guard);
-
-    /// <summary>
-    /// Adds something that keeps a kind of file in Assets loaded (the tables), told by <see cref="AssetChanged"/> when one
-    /// is written or deleted from outside the editor's own windows (an agent's asset_write). It returns what it made of the
-    /// file, or null if the file isn't its kind.
-    /// </summary>
-    void AddAssetListener(Func<string, Griff.Agent.AssetFeedback?> listener);
-
-    /// <summary>
-    /// Says a file in Assets (its path there, with '/') was written or deleted, to whatever keeps it loaded (see
-    /// <see cref="AddAssetListener"/>), and returns what they made of it: a table that doesn't read, say.
-    /// </summary>
-    IReadOnlyList<Griff.Agent.AssetFeedback> AssetChanged(string assetPath);
-
-    /// <summary>Opens another scene from the project. Returns false if the user cancelled.</summary>
-    Task<bool> OpenSceneAsync(string path);
-
-    /// <summary>
-    /// Opens a prefab to edit on its own, in a tab of its own, and shows it (or shows its tab, if it's open already).
-    /// <paramref name="path"/> is the prefab file's full path, its path in Assets ("Prefabs/Coin.prefab") or its name.
-    /// False while playing or before a scene is open, or if the project has no such prefab or it can't be read.
-    /// </summary>
-    Task<bool> OpenPrefabAsync(string path);
-
-    /// <summary>Shows the scene again in place of a prefab. The prefab stays open in its tab.</summary>
-    void ShowScene();
-
-    /// <summary>Shows <paramref name="document"/>: the scene, or one of the open <see cref="Prefabs"/>. Not while playing.</summary>
-    void Show(SceneDocument document);
-
-    /// <summary>Closes a prefab's tab, asking to save its changes first. False if the user cancelled or the save failed.</summary>
-    Task<bool> ClosePrefabAsync(SceneDocument prefab);
-
-    /// <summary>Creates Assets/Scenes/&lt;name&gt;.scene with a camera and opens it.</summary>
-    Task<bool> CreateSceneAsync(string name);
-
-    Task SetStartSceneAsync(string path);
-
-    /// <summary>Raised after scripts compile and are swapped in. Script components may have been replaced.</summary>
-    event EventHandler<ReloadResult>? ScriptsReloaded;
-
-    /// <summary>Raised when the scene is to be brought to the front: by <see cref="ShowScene"/> (even when it's showing already, behind another tab) and when a project opens.</summary>
-    event EventHandler? SceneShown;
-
-    /// <summary>Every type the project's loaded scripts define (components, balance simulations); empty before they build.</summary>
-    IReadOnlyList<Type> ScriptTypes { get; }
-
-    /// <summary>Compiles the project's scripts now and swaps them into the open scenes if they build.</summary>
-    ReloadResult? ReloadScripts();
-
-    /// <summary>
-    /// The breakpoint probes of the scripts loaded now: the editor builds scripts with a probe on each line of code, which
-    /// a breakpoint switches on (see <see cref="ScriptInstrumenter"/>).
-    /// </summary>
-    ProbeTable ScriptProbes { get; }
-
-    /// <summary>
-    /// Adds scenes that run outside the workspace's own documents (the other players' games in Play with Players), asked
-    /// for at each script reload, so the new scripts reach them too.
-    /// </summary>
-    void AddLiveScenes(Func<IEnumerable<Scene>> scenes);
-}
-
 public sealed class Workspace(
     ISettingsStore settings,
     IStatusService status,
     IDialogService dialogs,
-    ILogger<Workspace> logger) : ObservableObject, IWorkspace, IDisposable
+    ILogger<Workspace> logger) : ObservableObject, IProjectSession, ISceneDocuments, IPlaySession, IScriptSession, IDisposable
 {
     private const int MaxRecentProjects = 10;
 
@@ -169,6 +40,10 @@ public sealed class Workspace(
     private DispatcherTimer? _scriptDebounce;
     private DispatcherTimer? _recoveryTimer;
     private readonly List<Func<Task<bool>>> _closeGuards = [];
+    private PrefabFiles? _prefabFiles;
+
+    // For bringing the copies of a prefab up to date as it is saved.
+    private PrefabFiles PrefabFilesFor() => _prefabFiles ??= new PrefabFiles(this, this, this);
 
     public Project? Project
     {
@@ -516,7 +391,7 @@ public sealed class Workspace(
         logger.LogInformation("Saved prefab {Prefab}", prefab.Name);
         if (Project is { } project)
         {
-            var update = PrefabFiles.UpdateCopies(this, PrefabFiles.AssetPathOf(project, prefab.FilePath), json, oldJson, roots[0]);
+            var update = PrefabFilesFor().UpdateCopies(PrefabFiles.AssetPathOf(project, prefab.FilePath), json, oldJson, roots[0]);
             if (update.Problems.Count > 0)
                 dialogs.ShowError("Some copies weren't updated", string.Join("\n", update.Problems));
             status.Show($"Saved the {prefab.Name} prefab. {update.Summary}".Trim());

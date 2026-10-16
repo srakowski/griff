@@ -13,9 +13,12 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Griff.Editor.Features.Agent;
 
 /// <summary>The editor's service registrations, kept so the agent can reach every service a module registers.</summary>
-public sealed class ServiceCatalog(IServiceCollection services)
+public sealed class ServiceCatalog(IServiceCollection services, IServiceProvider provider)
 {
     public IEnumerable<ServiceDescriptor> Descriptors => services;
+
+    /// <summary>The service registered as <paramref name="type"/>, or null if none is.</summary>
+    public object? Resolve(Type type) => provider.GetService(type);
 }
 
 /// <summary>
@@ -24,7 +27,7 @@ public sealed class ServiceCatalog(IServiceCollection services)
 /// keeps them (its services, its panels, its windows), so a new service, panel or window is reachable the moment it
 /// exists. Read with ui_inspect, change with ui_set, act with ui_invoke.
 /// </summary>
-public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catalog, IEnumerable<PanelDescriptor> panels, IAgentScene scene) : IAgentToolSource
+public sealed class SurfaceTools(ServiceCatalog catalog, IEnumerable<PanelDescriptor> panels, IAgentScene scene, Core.Undo.ActiveDocument documents, Core.EditorWindow editorWindow) : IAgentToolSource
 {
     // ui_set and ui_invoke find the entities their values name as the scene tools do: a name, id or path in the open scene.
     private readonly Func<string, Griff.Scenes.Entity?> _entities = SceneTools.EntitiesIn(scene);
@@ -104,21 +107,20 @@ public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catal
             if (descriptor.Lifetime != ServiceLifetime.Singleton || descriptor.IsKeyedService || !IsReachable(descriptor.ServiceType) || panelTypes.Contains(descriptor.ServiceType))
                 continue;
             var name = NameOf(descriptor.ServiceType);
-            if (!seen.Add(name) || services.GetService(descriptor.ServiceType) is not { } service)
+            if (!seen.Add(name) || catalog.Resolve(descriptor.ServiceType) is not { } service)
                 continue;
             roots.Add((name, "service", service));
         }
 
         foreach (var panel in panels)
         {
-            if (services.GetService(panel.PanelType) is ToolPanel instance && seen.Add(instance.Id))
+            if (panel.Panel() is { } instance && seen.Add(instance.Id))
                 roots.Add((instance.Id, "panel", instance));
         }
 
-        var app = Application.Current;
-        foreach (var window in app?.Windows.OfType<Window>() ?? [])
+        foreach (var window in editorWindow.OtherWindows)
         {
-            if (window == app!.MainWindow || !window.IsVisible || window.DataContext is not { } model)
+            if (window.DataContext is not { } model)
                 continue;
             var name = string.IsNullOrWhiteSpace(window.Title) ? model.GetType().Name : window.Title;
             if (seen.Add(name))
@@ -161,7 +163,7 @@ public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catal
     private void WorkIn(object root)
     {
         if (root is Core.Undo.IDocumentEditor editor)
-            services.GetService<Core.Undo.ActiveDocument>()?.Activate(editor);
+            documents.Activate(editor);
     }
 
     private async Task<ToolResult> InvokeAsync(ToolArgs args)
@@ -177,7 +179,7 @@ public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catal
         var run = Application.Current.Dispatcher.InvokeAsync(() => ObjectSurface.InvokeAsync(root, path, arguments, _entities), DispatcherPriority.Normal).Task.Unwrap();
         if (await Task.WhenAny(run, Task.Delay(wait)) != run)
         {
-            var windows = Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible && w != Application.Current.MainWindow).Select(w => $"\"{w.Title}\"");
+            var windows = editorWindow.OtherWindows.Select(w => $"\"{w.Title}\"");
             return ToolResult.Ok($"{path} is still going. Open windows: {string.Join(", ", windows)}.");
         }
 

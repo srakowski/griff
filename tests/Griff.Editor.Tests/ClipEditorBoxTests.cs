@@ -31,7 +31,7 @@ public sealed class ClipEditorBoxTests
         scene.Add(fighter);
 
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         services.GetRequiredService<ISelection>().Select(fighter);
         var clips = services.GetRequiredService<ClipEditor>();
         clips.SelectClip("Punch");

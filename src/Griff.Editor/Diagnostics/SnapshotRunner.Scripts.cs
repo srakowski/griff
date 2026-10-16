@@ -45,7 +45,7 @@ internal static partial class SnapshotRunner
 
         """;
 
-    private static async Task ScriptEditorSnapshots(IServiceProvider services, Window main, IWorkspace workspace, string outputDir)
+    private static async Task ScriptEditorSnapshots(IServiceProvider services, Window main, Workspace workspace, string outputDir)
     {
         var checks = new List<string>();
         var path = Path.Combine(workspace.Project!.AssetsPath, "Scripts", "Ship.cs");

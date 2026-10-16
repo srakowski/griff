@@ -22,13 +22,13 @@ namespace Griff.Editor.Features.Agent;
 /// here changes. Questions the command asks are answered from "answers" (see <see cref="AgentDialogs"/>), and a command
 /// that opens a window returns while it's open, so the window can be worked through the ui_ tools.
 /// </summary>
-public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefinition> menus, ISelection selection, IWorkspace workspace, PlayMode play, Debugger debugger,
+public sealed class CommandTools(Lazy<CommandRegistry> registry, Core.EditorWindow editorWindow, IEnumerable<MenuDefinition> menus, ISelection selection, IProjectSession projectSession, ISceneDocuments sceneDocuments, PlayMode play, Debugger debugger,
     ActiveDocument documents) : IAgentToolSource
 {
     public IEnumerable<AgentTool> GetTools()
     {
         // Looked up when asked, not when built: the agent's own commands (and anything else needing the server) are commands too.
-        var commands = services.GetRequiredService<CommandRegistry>();
+        var commands = registry.Value;
         foreach (var command in commands.All.OrderBy(c => c.Id, StringComparer.Ordinal))
         {
             yield return new AgentTool
@@ -100,7 +100,7 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
     {
         if (args.OptionalString("entity") is { } reference)
         {
-            var scene = workspace.Scene?.Scene ?? throw new AgentException("No scene is open.");
+            var scene = sceneDocuments.Scene?.Scene ?? throw new AgentException("No scene is open.");
             selection.Select(SceneTools.Resolve(scene, reference));
         }
 
@@ -201,9 +201,7 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
     }
 
     // The editor's windows open besides its main one.
-    private static List<Window> OpenWindows() => Application.Current is { } app
-        ? [.. app.Windows.OfType<Window>().Where(w => w.IsVisible && w != app.MainWindow)]
-        : [];
+    private IReadOnlyList<Window> OpenWindows() => editorWindow.OtherWindows;
 
     private string WhyNot(EditorCommand command, object? target) =>
         command.WhyNot(target) is { Length: > 0 } why ? $" ({why.TrimEnd('.')})"
@@ -213,8 +211,8 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         : command is RewindBeforeExceptionCommand ? " (no script has thrown since the game started, its moment has left the rewind timeline, or more than one player is playing)"
         : command is StepOverCommand or StepOutCommand ? " (the game isn't stopped at a line of script: set a breakpoint with ui_invoke Debugger SetBreakpoint and run the game to it; paused between frames, Debug_StepInto plays to the next line)"
         : command is StepIntoCommand or ContinueCommand ? " (the game isn't stopped at a line of script or paused)"
-        : workspace.Project is null ? " (no project is open)"
-        : workspace.Scene is null ? " (no scene is open)"
+        : projectSession.Project is null ? " (no project is open)"
+        : sceneDocuments.Scene is null ? " (no scene is open)"
         : selection.Entity is null ? " (perhaps it needs an entity selected: pass \"entity\")"
         : "";
 }

@@ -14,7 +14,7 @@ namespace Griff.Editor.Diagnostics;
 // tab hosts, a second window joins), moves and shoots as each, and captures both players' screens on the GPU.
 internal static partial class SnapshotRunner
 {
-    private static async Task MultiplayerSnapshots(IServiceProvider services, IWorkspace workspace, string projectDir, string outputDir)
+    private static async Task MultiplayerSnapshots(IServiceProvider services, Workspace workspace, string projectDir, string outputDir)
     {
         var checks = new List<string>();
         await workspace.CreateProjectAsync(projectDir, "Snapshot Arena", Griff.Projects.ProjectTemplates.Get("Multiplayer"));

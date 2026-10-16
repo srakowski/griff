@@ -5,6 +5,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using Griff.Editor.Core.Commands;
+using Griff.Editor.Features.Editing;
 
 namespace Griff.Editor.Features.Data;
 
@@ -25,23 +26,23 @@ public partial class TablesPanelView : UserControl
     {
         InitializeComponent();
         _commands = commands;
-        NewTableButton.Command = commands.Get("Data.NewTable");
-        AddRowButton.Command = commands.Get("Data.AddRow");
-        AddColumnButton.Command = commands.Get("Data.AddColumn");
-        DeleteRowsButton.Command = commands.Get("Data.DeleteRows");
-        DeleteColumnButton.Command = commands.Get("Data.DeleteColumn");
-        MoveUpButton.Command = commands.Get("Data.MoveRowsUp");
-        MoveDownButton.Command = commands.Get("Data.MoveRowsDown");
-        MoveLeftButton.Command = commands.Get("Data.MoveColumnLeft");
-        MoveRightButton.Command = commands.Get("Data.MoveColumnRight");
-        SortUpButton.Command = commands.Get("Data.SortAscending");
-        SortDownButton.Command = commands.Get("Data.SortDescending");
-        FillDownButton.Command = commands.Get("Data.FillDown");
-        UndoButton.Command = commands.Get("Edit.Undo");
-        RedoButton.Command = commands.Get("Edit.Redo");
-        ImportButton.Command = commands.Get("Data.ImportCsv");
-        ExportButton.Command = commands.Get("Data.ExportCsv");
-        GenerateButton.Command = commands.Get("Data.GenerateCurve");
+        NewTableButton.Command = commands.Get<NewTableCommand>();
+        AddRowButton.Command = commands.Get<AddRowCommand>();
+        AddColumnButton.Command = commands.Get<AddColumnCommand>();
+        DeleteRowsButton.Command = commands.Get<DeleteRowsCommand>();
+        DeleteColumnButton.Command = commands.Get<DeleteColumnCommand>();
+        MoveUpButton.Command = commands.Get<MoveRowsUpCommand>();
+        MoveDownButton.Command = commands.Get<MoveRowsDownCommand>();
+        MoveLeftButton.Command = commands.Get<MoveColumnLeftCommand>();
+        MoveRightButton.Command = commands.Get<MoveColumnRightCommand>();
+        SortUpButton.Command = commands.Get<SortAscendingCommand>();
+        SortDownButton.Command = commands.Get<SortDescendingCommand>();
+        FillDownButton.Command = commands.Get<FillDownCommand>();
+        UndoButton.Command = commands.Get<UndoCommand>();
+        RedoButton.Command = commands.Get<RedoCommand>();
+        ImportButton.Command = commands.Get<ImportCsvCommand>();
+        ExportButton.Command = commands.Get<ExportCsvCommand>();
+        GenerateButton.Command = commands.Get<GenerateCurveCommand>();
 
         DataContextChanged += (_, _) => Attach(DataContext as TablesPanel);
         Grid.SelectedCellsChanged += (_, _) => ReportSelection();
@@ -177,14 +178,14 @@ public partial class TablesPanelView : UserControl
     private ContextMenu ColumnMenu(string column)
     {
         var menu = new ContextMenu();
-        void Add(string id)
+        void Add<T>() where T : EditorCommand
         {
-            var command = _commands.Get(id);
+            var command = _commands.Get<T>();
             menu.Items.Add(new MenuItem { Header = command.Text, Command = command, Icon = command.Icon is { } icon ? Themes.Icons.Create(icon) : null });
         }
 
-        Add("Data.SortAscending");
-        Add("Data.SortDescending");
+        Add<SortAscendingCommand>();
+        Add<SortDescendingCommand>();
         if (column.Length > 0)
         {
             menu.Items.Add(new Separator());
@@ -197,10 +198,10 @@ public partial class TablesPanelView : UserControl
             }
 
             menu.Items.Add(types);
-            Add("Data.MoveColumnLeft");
-            Add("Data.MoveColumnRight");
-            Add("Data.AddColumn");
-            Add("Data.DeleteColumn");
+            Add<MoveColumnLeftCommand>();
+            Add<MoveColumnRightCommand>();
+            Add<AddColumnCommand>();
+            Add<DeleteColumnCommand>();
         }
 
         return menu;
@@ -303,26 +304,25 @@ public partial class TablesPanelView : UserControl
         var typing = Keyboard.FocusedElement is TextBox or ComboBox;
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         var modifiers = Keyboard.Modifiers;
-        string? id = (modifiers, key) switch
+        Type? type = (modifiers, key) switch
         {
-            (ModifierKeys.Control, Key.C) when !typing => "Data.CopyCells",
-            (ModifierKeys.Control, Key.X) when !typing => "Data.CutCells",
-            (ModifierKeys.Control, Key.V) when !typing => "Data.PasteCells",
-            (ModifierKeys.Control, Key.D) when !typing => "Data.FillDown",
-            (ModifierKeys.None, Key.Delete) when !typing => "Data.ClearCells",
-            (ModifierKeys.Control, Key.Enter) => "Data.AddRow",
-            (ModifierKeys.Alt, Key.Up) => "Data.MoveRowsUp",
-            (ModifierKeys.Alt, Key.Down) => "Data.MoveRowsDown",
-            (ModifierKeys.Alt, Key.Left) => "Data.MoveColumnLeft",
-            (ModifierKeys.Alt, Key.Right) => "Data.MoveColumnRight",
+            (ModifierKeys.Control, Key.C) when !typing => typeof(CopyCellsCommand),
+            (ModifierKeys.Control, Key.X) when !typing => typeof(CutCellsCommand),
+            (ModifierKeys.Control, Key.V) when !typing => typeof(PasteCellsCommand),
+            (ModifierKeys.Control, Key.D) when !typing => typeof(FillDownCommand),
+            (ModifierKeys.None, Key.Delete) when !typing => typeof(ClearCellsCommand),
+            (ModifierKeys.Control, Key.Enter) => typeof(AddRowCommand),
+            (ModifierKeys.Alt, Key.Up) => typeof(MoveRowsUpCommand),
+            (ModifierKeys.Alt, Key.Down) => typeof(MoveRowsDownCommand),
+            (ModifierKeys.Alt, Key.Left) => typeof(MoveColumnLeftCommand),
+            (ModifierKeys.Alt, Key.Right) => typeof(MoveColumnRightCommand),
             _ => null,
         };
-        if (id is null)
+        if (type is null)
             return;
         e.Handled = true;
         if (typing)
             Grid.CommitEdit(DataGridEditingUnit.Row, exitEditingMode: true);
-        var command = _commands.Get(id);
-        _ = command.ExecuteAsync();
+        _ = _commands.Of(type).ExecuteAsync();
     }
 }

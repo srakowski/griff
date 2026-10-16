@@ -12,13 +12,15 @@ namespace Griff.Editor.Features.Audio;
 /// </summary>
 public sealed class EditorAudio
 {
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
     private Voice? _preview;
     private SoundMakerWindow? _maker;
 
-    public EditorAudio(IWorkspace workspace)
+    private readonly Core.EditorWindow _editorWindow;
+    public EditorAudio(IProjectSession projectSession, Core.EditorWindow editorWindow)
     {
-        _workspace = workspace;
+        _projectSession = projectSession;
+        _editorWindow = editorWindow;
     }
 
     public static readonly string[] Extensions = [".wav", ".mp3", ".ogg"];
@@ -31,7 +33,7 @@ public sealed class EditorAudio
     /// <summary>Raised when a preview starts or stops being asked for.</summary>
     public event EventHandler? PreviewChanged;
 
-    public string? AssetsPath => _workspace.Project?.AssetsPath;
+    public string? AssetsPath => _projectSession.Project?.AssetsPath;
 
     /// <summary>Every sound in the project, as asset paths ("Sounds/jump.wav"), sounds before music.</summary>
     public IReadOnlyList<string> Sounds()
@@ -107,7 +109,7 @@ public sealed class EditorAudio
         var model = new SoundMakerViewModel(this, mode) { Saved = saved };
         if (editing is not null)
             model.Open(editing);
-        _maker = new SoundMakerWindow(model) { Owner = Application.Current?.MainWindow };
+        _maker = new SoundMakerWindow(model) { Owner = _editorWindow.Main };
         _maker.Closed += (_, _) =>
         {
             _maker = null;

@@ -32,7 +32,9 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
 
     private readonly SimulationStore _store;
     private readonly TableStore _tables;
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
+    private readonly ISceneDocuments _sceneDocuments;
+    private readonly IScriptSession _scriptSession;
     private readonly IStatusService _status;
     private readonly Dictionary<string, (SimulationResults Results, string Settings)> _results = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer _progressTimer;
@@ -49,13 +51,15 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
     private Action? _stop;
     private (string Path, DateTime Written, Scene Scene)? _arena;
 
-    public SimulationsPanel(SimulationStore store, TableStore tables, IWorkspace workspace, IStatusService status)
+    public SimulationsPanel(SimulationStore store, TableStore tables, IScriptSession scriptSession, IProjectSession projectSession, ISceneDocuments sceneDocuments, IStatusService status)
     {
         _store = store;
         _tables = tables;
-        _workspace = workspace;
+        _projectSession = projectSession;
+        _sceneDocuments = sceneDocuments;
+        _scriptSession = scriptSession;
         _status = status;
-        store.Check = simulation => _workspace.Project is null ? [] : SimulationRunner.Problems(simulation, Host());
+        store.Check = simulation => _projectSession.Project is null ? [] : SimulationRunner.Problems(simulation, Host());
         store.Changed += (_, name) =>
         {
             if (_name is not null && store.Entry(_name) is null)
@@ -68,10 +72,10 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
         };
         tables.Changed += (_, _) => Refresh();
         // New scripts may be simulations to pick, or put right one the settings name.
-        workspace.ScriptsReloaded += (_, _) => Refresh();
-        workspace.PropertyChanged += (_, e) =>
+        scriptSession.ScriptsReloaded += (_, _) => Refresh();
+        projectSession.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.Project))
+            if (e.PropertyName == nameof(IProjectSession.Project))
             {
                 _results.Clear();
                 _arena = null;
@@ -165,7 +169,7 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
 
     /// <summary>The project's scenes, to pick the arena from.</summary>
     public IReadOnlyList<string> Scenes =>
-        _workspace.Project is { } project ? [.. project.FindScenes().Select(Path.GetFileNameWithoutExtension).OfType<string>()] : [];
+        _projectSession.Project is { } project ? [.. project.FindScenes().Select(Path.GetFileNameWithoutExtension).OfType<string>()] : [];
 
     /// <summary>The arena's entity that plays the first side, e.g. "Hero".</summary>
     public string? FirstEntity
@@ -271,7 +275,7 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
     }
 
     /// <summary>The project's script simulations, to pick from.</summary>
-    public IReadOnlyList<string> ScriptNames => [.. _workspace.ScriptTypes.Where(t => t.IsSubclassOf(typeof(SimulationScript)) && !t.IsAbstract).Select(t => t.Name).Order(StringComparer.OrdinalIgnoreCase)];
+    public IReadOnlyList<string> ScriptNames => [.. _scriptSession.ScriptTypes.Where(t => t.IsSubclassOf(typeof(SimulationScript)) && !t.IsAbstract).Select(t => t.Name).Order(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>The script simulations to pick from, none (play the arena) first.</summary>
     public IReadOnlyList<string> ScriptChoices => ["", .. ScriptNames];
@@ -364,7 +368,7 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
 
     private (IReadOnlyList<string> Problems, string Size) Check()
     {
-        if (Simulation is not { } simulation || _workspace.Project is null)
+        if (Simulation is not { } simulation || _projectSession.Project is null)
             return ([], "");
         var host = Host();
         var problems = SimulationRunner.Problems(simulation, host);
@@ -414,9 +418,9 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
     /// </summary>
     public Simulation Suggest()
     {
-        var project = _workspace.Project;
-        var arena = _workspace.EditScene is { IsPrefab: false } open ? open.Name : project?.FindScenes().Select(Path.GetFileNameWithoutExtension).FirstOrDefault();
-        var scene = _workspace.EditScene is { IsPrefab: false } edit && edit.Name == arena ? edit.Scene : arena is null ? null : Load(arena);
+        var project = _projectSession.Project;
+        var arena = _sceneDocuments.EditScene is { IsPrefab: false } open ? open.Name : project?.FindScenes().Select(Path.GetFileNameWithoutExtension).FirstOrDefault();
+        var scene = _sceneDocuments.EditScene is { IsPrefab: false } edit && edit.Name == arena ? edit.Scene : arena is null ? null : Load(arena);
         var fighters = scene?.Entities.Where(e => e.GetComponent<TableValues>() is not null).ToList() ?? [];
         if (fighters.Count < 2)
             fighters = scene?.Entities.Where(e => e.GetComponent<Health>() is not null).ToList() ?? [];
@@ -515,17 +519,17 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
     /// </summary>
     public SimulationHost Host()
     {
-        var project = _workspace.Project ?? throw new InvalidOperationException("No project is open.");
-        var components = _workspace.Components;
+        var project = _projectSession.Project ?? throw new InvalidOperationException("No project is open.");
+        var components = _projectSession.Components;
         var tables = new TableSet(_tables.Tables.Select(t => t.Value).OfType<Table>());
         var prefabs = new PrefabLibrary(project, components);
-        var open = _workspace.EditScene is { IsPrefab: false } document ? (document.Name, Text: _workspace.Serializer.SaveToString(document.Scene)) : default;
+        var open = _sceneDocuments.EditScene is { IsPrefab: false } document ? (document.Name, Text: _projectSession.Serializer.SaveToString(document.Scene)) : default;
         return new SimulationHost
         {
             Tables = tables,
             Components = components,
             StepRate = project.StepRate,
-            ScriptTypes = _workspace.ScriptTypes,
+            ScriptTypes = _scriptSession.ScriptTypes,
             LoadScene = name => open.Text is not null && string.Equals(open.Name, name, StringComparison.OrdinalIgnoreCase)
                 ? new SceneSerializer(components).LoadFromString(open.Text)
                 : GameLoader.LoadScene(project, components, name),
@@ -541,7 +545,7 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
     {
         try
         {
-            return _workspace.Project is { } project ? GameLoader.LoadScene(project, _workspace.Components, name) : null;
+            return _projectSession.Project is { } project ? GameLoader.LoadScene(project, _projectSession.Components, name) : null;
         }
         catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or IOException or System.Text.Json.JsonException)
         {
@@ -552,9 +556,9 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
     // The arena as the editor has it (the open scene) or its file, read again only when the file changes.
     private Scene? ArenaScene()
     {
-        if (Arena is not { } arena || _workspace.Project is not { } project)
+        if (Arena is not { } arena || _projectSession.Project is not { } project)
             return null;
-        if (_workspace.EditScene is { IsPrefab: false } open && string.Equals(open.Name, arena, StringComparison.OrdinalIgnoreCase))
+        if (_sceneDocuments.EditScene is { IsPrefab: false } open && string.Equals(open.Name, arena, StringComparison.OrdinalIgnoreCase))
             return open.Scene;
         if (project.FindScene(arena) is not { } path)
             return null;

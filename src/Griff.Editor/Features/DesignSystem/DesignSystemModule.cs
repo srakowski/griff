@@ -1,3 +1,4 @@
+using Griff.Editor.Core;
 using System.Windows;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Modules;
@@ -11,12 +12,13 @@ public sealed class DesignSystemModule : IEditorModule
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddTransient<DesignSystemWindow>();
+        services.AddFactory<DesignSystemWindow>();
         services.AddCommand<ShowDesignSystemCommand>();
     }
 }
 
 /// <summary>Shows the editor's design system: its colors, type and controls (for people working on Griff itself).</summary>
-public sealed class ShowDesignSystemCommand(IServiceProvider services) : EditorCommand
+public sealed class ShowDesignSystemCommand(Func<DesignSystemWindow> createWindow, Core.EditorWindow editorWindow) : EditorCommand
 {
     private DesignSystemWindow? _window;
 
@@ -33,8 +35,8 @@ public sealed class ShowDesignSystemCommand(IServiceProvider services) : EditorC
             return Task.CompletedTask;
         }
 
-        _window = services.GetRequiredService<DesignSystemWindow>();
-        _window.Owner = Application.Current.MainWindow;
+        _window = createWindow();
+        _window.Owner = editorWindow.Main;
         _window.Closed += (_, _) => _window = null;
         _window.Show();
         return Task.CompletedTask;

@@ -93,25 +93,30 @@ public sealed class AssetNode(string fullPath, string assetsRoot, AssetKind kind
 /// </summary>
 public sealed class AssetsPanel : ToolPanel, IDisposable
 {
-    private readonly IWorkspace _workspace;
+    private readonly PrefabFiles _prefabFiles;
+    private readonly IProjectSession _projectSession;
     private readonly IDialogService _dialogs;
     private readonly IStatusService _status;
     private readonly HashSet<string> _expanded = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer _refresh;
     private FileSystemWatcher? _watcher;
 
-    public AssetsPanel(IWorkspace workspace, IDialogService dialogs, IStatusService status)
+    public AssetsPanel(PrefabFiles prefabFiles, IProjectSession projectSession, ISceneDocuments sceneDocuments, IDialogService dialogs, IStatusService status)
     {
-        _workspace = workspace;
+        _prefabFiles = prefabFiles;
+        _projectSession = projectSession;
         _dialogs = dialogs;
         _status = status;
         _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) => Rebuild(), Dispatcher.CurrentDispatcher);
         _refresh.Stop();
-        workspace.PropertyChanged += (_, e) =>
+        projectSession.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.Project))
+            if (e.PropertyName == nameof(IProjectSession.Project))
                 Track();
-            if (e.PropertyName == nameof(IWorkspace.Scene))
+        };
+        sceneDocuments.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ISceneDocuments.Scene))
                 MarkStartScene();
         };
         Track();
@@ -133,9 +138,9 @@ public sealed class AssetsPanel : ToolPanel, IDisposable
 
     public ObservableCollection<AssetNode> Roots { get; } = [];
 
-    public bool HasProject => _workspace.Project is not null;
+    public bool HasProject => _projectSession.Project is not null;
 
-    public string? AssetsPath => _workspace.Project?.AssetsPath;
+    public string? AssetsPath => _projectSession.Project?.AssetsPath;
 
     /// <summary>
     /// Renames a prefab (its path in Assets, "Prefabs/Coin.prefab"), asking for the new name. Every copy stays linked.
@@ -144,7 +149,7 @@ public sealed class AssetsPanel : ToolPanel, IDisposable
     /// </summary>
     public string? RenamePrefab(string assetPath)
     {
-        if (_workspace.Project is not { } project || project.FindPrefab(assetPath) is not { } file)
+        if (_projectSession.Project is not { } project || project.FindPrefab(assetPath) is not { } file)
             return null;
         var folder = Path.GetDirectoryName(file)!;
         var old = Path.GetFileNameWithoutExtension(file);
@@ -163,7 +168,7 @@ public sealed class AssetsPanel : ToolPanel, IDisposable
     /// </summary>
     public string? MovePrefab(string assetPath, string folder)
     {
-        if (_workspace.Project is not { } project || project.FindPrefab(assetPath) is not { } file)
+        if (_projectSession.Project is not { } project || project.FindPrefab(assetPath) is not { } file)
             return null;
         var target = Path.GetFullPath(Path.Combine(project.AssetsPath, folder.Replace('/', Path.DirectorySeparatorChar)));
         if (!Directory.Exists(target))
@@ -190,7 +195,7 @@ public sealed class AssetsPanel : ToolPanel, IDisposable
     /// </summary>
     public string? NewFolder(string parent)
     {
-        if (_workspace.Project is not { } project)
+        if (_projectSession.Project is not { } project)
             return null;
         var inside = Path.Combine(project.AssetsPath, parent.Replace('/', Path.DirectorySeparatorChar));
         var name = _dialogs.Prompt("New Folder", "Folder name", "New Folder", n =>
@@ -214,7 +219,7 @@ public sealed class AssetsPanel : ToolPanel, IDisposable
         PrefabUpdate update;
         try
         {
-            update = PrefabFiles.Move(_workspace, fromAsset, toAsset);
+            update = _prefabFiles.Move(fromAsset, toAsset);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -238,7 +243,7 @@ public sealed class AssetsPanel : ToolPanel, IDisposable
             _expanded.Add(node.FullPath);
 
         Roots.Clear();
-        if (_workspace.Project is not { } project || !Directory.Exists(project.AssetsPath))
+        if (_projectSession.Project is not { } project || !Directory.Exists(project.AssetsPath))
             return;
 
         foreach (var node in Children(project.AssetsPath, project.AssetsPath))
@@ -252,7 +257,7 @@ public sealed class AssetsPanel : ToolPanel, IDisposable
         _watcher = null;
         _expanded.Clear();
 
-        if (_workspace.Project is { } project && Directory.Exists(project.AssetsPath))
+        if (_projectSession.Project is { } project && Directory.Exists(project.AssetsPath))
         {
             _watcher = new FileSystemWatcher(project.AssetsPath)
             {
@@ -304,7 +309,7 @@ public sealed class AssetsPanel : ToolPanel, IDisposable
 
     private void MarkStartScene()
     {
-        var start = _workspace.Project?.StartScenePath;
+        var start = _projectSession.Project?.StartScenePath;
         foreach (var node in Flatten(Roots))
             node.IsStartScene = node.Kind == AssetKind.Scene && string.Equals(node.FullPath, start, StringComparison.OrdinalIgnoreCase);
     }

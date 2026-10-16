@@ -27,27 +27,27 @@ public sealed class ActiveDocument : ObservableObject
 
     private static int s_hooked;
 
-    private readonly IServiceProvider? _services;
+    private readonly EditorWindow _editorWindow;
     private readonly HashSet<IDocumentEditor> _watched = [];
     private IDocumentEditor _editor;
     private SceneDocument? _scene;
 
-    public ActiveDocument(IWorkspace workspace, IEnumerable<IDocumentEditor> editors, IServiceProvider? services = null)
+    public ActiveDocument(ISceneDocuments sceneDocuments, IEnumerable<IDocumentEditor> editors, EditorWindow editorWindow)
     {
-        _services = services;
-        Scene = new SceneEditor(workspace);
+        _editorWindow = editorWindow;
+        Scene = new SceneEditor(sceneDocuments);
         _editor = Scene;
         foreach (var editor in editors)
             Watch(editor);
-        workspace.PropertyChanged += (_, e) =>
+        sceneDocuments.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.Scene))
+            if (e.PropertyName == nameof(ISceneDocuments.Scene))
             {
-                Track(workspace.Scene);
+                Track(sceneDocuments.Scene);
                 OnPropertyChanged(string.Empty);
             }
         };
-        Track(workspace.Scene);
+        Track(sceneDocuments.Scene);
         t_current = new WeakReference<ActiveDocument>(this);
         Hook();
     }
@@ -210,29 +210,22 @@ public sealed class ActiveDocument : ObservableObject
     /// </summary>
     public void Opened(Window window)
     {
-        if (window.DataContext is not IDocumentEditor editor || window == Application.Current?.MainWindow)
+        if (window.DataContext is not IDocumentEditor editor || _editorWindow.IsMain(window))
             return;
         Watch(editor);
         window.Closed += (_, _) => Forget(editor);
-        if (_services?.GetService<CommandRegistry>() is not { } commands)
-            return;
-        foreach (var id in new[] { "Edit.Undo", "Edit.Redo" })
-        {
-            var command = commands.Get(id);
-            foreach (var gesture in new[] { command.Gesture, command.AlternateGesture }.OfType<KeyGesture>())
-            {
-                if (!window.InputBindings.OfType<KeyBinding>().Any(b => b.Key == gesture.Key && b.Modifiers == gesture.Modifiers))
-                    window.InputBindings.Add(new KeyBinding(command, gesture) { CommandParameter = editor });
-            }
-        }
+        EditorWindowOpened?.Invoke(window, editor);
     }
 
-    // The open scene or prefab, as a document.
-    private sealed class SceneEditor(IWorkspace workspace) : IDocumentEditor
-    {
-        public EditHistory? History => workspace.Scene?.History;
+    /// <summary>Raised when <see cref="Opened"/> finds a window of a document of its own, e.g. for Undo and Redo to bind their keys in it.</summary>
+    public event Action<Window, IDocumentEditor>? EditorWindowOpened;
 
-        public string? DocumentName => workspace.Scene is { } document ? $"the {document.Name} {(document.IsPrefab ? "prefab" : "scene")}" : null;
+    // The open scene or prefab, as a document.
+    private sealed class SceneEditor(ISceneDocuments sceneDocuments) : IDocumentEditor
+    {
+        public EditHistory? History => sceneDocuments.Scene?.History;
+
+        public string? DocumentName => sceneDocuments.Scene is { } document ? $"the {document.Name} {(document.IsPrefab ? "prefab" : "scene")}" : null;
 
         // Its changes come through the scene's own history, which the active document follows.
         public event EventHandler? Edited

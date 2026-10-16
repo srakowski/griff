@@ -14,7 +14,7 @@ namespace Griff.Editor.Features.Prefabs;
 /// unsaved-changes dot and a close button (middle-click closes too). Picking a prefab's tab shows it in the panels and
 /// moves the Scene view into it; picking the Scene tab shows the scene again. Prefab tabs are disabled while playing.
 /// </summary>
-public sealed class PrefabTabs(IWorkspace workspace)
+public sealed class PrefabTabs(ISceneDocuments sceneDocuments, IPlaySession playSession)
 {
     private TabControl? _tabs;
     private TabItem? _sceneTab;
@@ -26,33 +26,36 @@ public sealed class PrefabTabs(IWorkspace workspace)
         _tabs = tabs;
         _sceneTab = sceneTab;
         _sceneView = sceneView;
-        ((INotifyCollectionChanged)workspace.Prefabs).CollectionChanged += OnPrefabsChanged;
-        workspace.SceneShown += (_, _) =>
+        ((INotifyCollectionChanged)sceneDocuments.Prefabs).CollectionChanged += OnPrefabsChanged;
+        sceneDocuments.SceneShown += (_, _) =>
         {
             Follow();
-            if (!workspace.IsPlaying && workspace.Scene is { IsPrefab: false })
+            if (!playSession.IsPlaying && sceneDocuments.Scene is { IsPrefab: false })
                 tabs.SelectedItem = sceneTab;
         };
-        workspace.PropertyChanged += (_, e) =>
+        sceneDocuments.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.Scene))
+            if (e.PropertyName == nameof(ISceneDocuments.Scene))
                 Follow();
-            else if (e.PropertyName == nameof(IWorkspace.IsPlaying))
+        };
+        playSession.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(IPlaySession.IsPlaying))
             {
                 foreach (var tab in PrefabTabItems())
-                    tab.IsEnabled = !workspace.IsPlaying;
+                    tab.IsEnabled = !playSession.IsPlaying;
             }
         };
 
         // Picking a tab shows what's in it; the Game tab and script tabs leave the panels as they are.
         tabs.SelectionChanged += (_, e) =>
         {
-            if (e.OriginalSource != tabs || workspace.IsPlaying)
+            if (e.OriginalSource != tabs || playSession.IsPlaying)
                 return;
             if (tabs.SelectedItem == sceneTab)
-                workspace.ShowScene();
+                sceneDocuments.ShowScene();
             else if (tabs.SelectedItem is TabItem { Tag: SceneDocument prefab })
-                workspace.Show(prefab);
+                sceneDocuments.Show(prefab);
         };
     }
 
@@ -65,7 +68,7 @@ public sealed class PrefabTabs(IWorkspace workspace)
         if (_tabs is null || _sceneTab is null || _sceneView is null)
             return;
 
-        var showing = workspace.Scene is { IsPrefab: true } prefab ? TabFor(prefab) : null;
+        var showing = sceneDocuments.Scene is { IsPrefab: true } prefab ? TabFor(prefab) : null;
         var home = showing ?? _sceneTab;
         if (home.Content != _sceneView)
         {
@@ -107,11 +110,11 @@ public sealed class PrefabTabs(IWorkspace workspace)
         // New prefab tabs go after the last one (or after Scene and Game), before any scripts.
         foreach (SceneDocument prefab in e.NewItems ?? Array.Empty<SceneDocument>())
         {
-            var tab = new TabItem { Tag = prefab, Header = Header(prefab), IsEnabled = !workspace.IsPlaying };
+            var tab = new TabItem { Tag = prefab, Header = Header(prefab), IsEnabled = !playSession.IsPlaying };
             tab.MouseUp += async (_, args) =>
             {
                 if (args.ChangedButton == MouseButton.Middle)
-                    await workspace.ClosePrefabAsync(prefab);
+                    await sceneDocuments.ClosePrefabAsync(prefab);
             };
             var last = PrefabTabItems().LastOrDefault();
             var index = last is not null ? _tabs.Items.IndexOf(last) + 1 : Math.Min(2, _tabs.Items.Count);
@@ -139,7 +142,7 @@ public sealed class PrefabTabs(IWorkspace workspace)
             ToolTip = "Close (middle-click)",
         };
         close.SetResourceReference(FrameworkElement.StyleProperty, "Style.Button.Toolbar");
-        close.Click += async (_, _) => await workspace.ClosePrefabAsync(prefab);
+        close.Click += async (_, _) => await sceneDocuments.ClosePrefabAsync(prefab);
 
         var header = new StackPanel
         {

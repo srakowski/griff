@@ -34,7 +34,7 @@ public class SceneViewSelectionTests
         Add("Hidden", 3, -3).IsEnabled = false;
 
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         return (document, services.GetRequiredService<ISelection>(), services.GetRequiredService<SceneViewModel>());
     }
 
@@ -149,7 +149,7 @@ public class SceneViewSelectionTests
         Assert.Equal(new Vector3(4.25f, 2, 0), board.Transform.Position);
 
         // Typed into the Inspector (or set by an agent), it lands on the level's cells too.
-        var position = services.GetRequiredService<IWorkspace>().Components.Get(typeof(Transform)).Properties.Single(p => p.Name == "Position");
+        var position = services.GetRequiredService<Workspace>().Components.Get(typeof(Transform)).Properties.Single(p => p.Name == "Position");
         document.Execute(new Griff.Editing.SetPropertyEdit(board.Transform, position, new Vector3(1.1f, 0.7f, 0)));
         Assert.Equal(new Vector3(0.25f, 0, 0), board.Transform.Position);
     });

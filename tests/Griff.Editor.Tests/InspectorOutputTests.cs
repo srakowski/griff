@@ -27,7 +27,7 @@ public sealed class InspectorOutputTests
         scene.Add(label);
 
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         return (document, services.GetRequiredService<ISelection>(), services.GetRequiredService<InspectorPanel>());
     }
 

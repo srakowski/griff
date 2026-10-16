@@ -32,7 +32,7 @@ public sealed class SmallFixesTests : IDisposable
     public void Exit_AsksItsSaveQuestionThroughTheDialogs_SoAnAgentCanAnswerIt() => EditorHost.Run(services =>
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         workspace.Scene!.Execute(new AddEntityEdit(workspace.Scene.Scene, new Entity("Extra")));
         Assert.True(workspace.Scene.IsDirty);
@@ -54,7 +54,7 @@ public sealed class SmallFixesTests : IDisposable
     public void ShowScene_BringsTheSceneTabBack_FromAScriptOrTheGameTab() => EditorHost.Run(services =>
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         var tabs = new TabControl();
         TabItem scene = new() { Header = "Scene" }, game = new() { Header = "Game" }, script = new() { Header = "Script", Tag = "script" };
         tabs.Items.Add(scene);

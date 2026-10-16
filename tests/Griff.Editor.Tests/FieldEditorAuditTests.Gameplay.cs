@@ -14,7 +14,7 @@ public sealed partial class FieldEditorAuditTests
     [Fact]
     public void GameplayAndUiComponentsFields_GetTheEditorsTheAuditGaveThem() => EditorHost.Run(services =>
     {
-        var registry = services.GetRequiredService<Griff.Editor.Core.Workspace.IWorkspace>().Components;
+        var registry = services.GetRequiredService<Griff.Editor.Core.Workspace.Workspace>().Components;
         var host = services.GetRequiredService<InspectorPanel>();
         var table = new List<string>();
         var plainKinds = new HashSet<FieldKind> { FieldKind.Bool, FieldKind.Number, FieldKind.Enum, FieldKind.Color };

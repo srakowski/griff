@@ -21,8 +21,27 @@ public sealed class EditingModule : IEditorModule
 /// ActiveDocument says which, and what this would undo). Given one (a panel's undo button gives its own), it undoes that
 /// one's.
 /// </summary>
-public sealed class UndoCommand(ActiveDocument documents, IStatusService status) : EditorCommand
+public sealed class UndoCommand : EditorCommand
 {
+    private readonly ActiveDocument documents;
+    private readonly IStatusService status;
+
+    public UndoCommand(ActiveDocument documents, IStatusService status)
+    {
+        (this.documents, this.status) = (documents, status);
+        documents.EditorWindowOpened += (window, editor) => BindKeys(window, editor, this);
+    }
+
+    // A window of a document of its own has Undo and Redo's shortcuts of its own, going to its document whatever was active.
+    internal static void BindKeys(System.Windows.Window window, IDocumentEditor editor, EditorCommand command)
+    {
+        foreach (var gesture in new[] { command.Gesture, command.AlternateGesture }.OfType<KeyGesture>())
+        {
+            if (!window.InputBindings.OfType<KeyBinding>().Any(b => b.Key == gesture.Key && b.Modifiers == gesture.Modifiers))
+                window.InputBindings.Add(new KeyBinding(command, gesture) { CommandParameter = editor });
+        }
+    }
+
     public override string Id => "Edit.Undo";
     public override string Text => "_Undo";
     public override string? Icon => Icons.Undo;
@@ -55,8 +74,17 @@ public sealed class UndoCommand(ActiveDocument documents, IStatusService status)
 }
 
 /// <summary>Redoes the last change undone to the document being worked on (see Undo), or to the one it's given.</summary>
-public sealed class RedoCommand(ActiveDocument documents, IStatusService status) : EditorCommand
+public sealed class RedoCommand : EditorCommand
 {
+    private readonly ActiveDocument documents;
+    private readonly IStatusService status;
+
+    public RedoCommand(ActiveDocument documents, IStatusService status)
+    {
+        (this.documents, this.status) = (documents, status);
+        documents.EditorWindowOpened += (window, editor) => UndoCommand.BindKeys(window, editor, this);
+    }
+
     public override string Id => "Edit.Redo";
     public override string Text => "_Redo";
     public override string? Icon => Icons.Redo;

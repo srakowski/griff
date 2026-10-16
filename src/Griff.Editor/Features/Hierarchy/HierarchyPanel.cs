@@ -176,7 +176,8 @@ public sealed class EntityNodes : ObservableCollection<EntityNode>
 /// </summary>
 public sealed class HierarchyPanel : ToolPanel
 {
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
+    private readonly ISceneDocuments _sceneDocuments;
     private readonly ISelection _selection;
     private readonly HashSet<Guid> _expanded = [];
     private Dictionary<Guid, EntityNode> _nodes = [];
@@ -190,19 +191,20 @@ public sealed class HierarchyPanel : ToolPanel
     // What was open before a filter opened the rows its matches are in; put back when it's emptied.
     private HashSet<Guid>? _expandedBeforeFilter;
 
-    // The commands, looked up when the palette opens: commands that open panels are made before the panels are.
-    private readonly IServiceProvider _services;
+    // The commands, asked for when the palette opens: commands that open panels are made after the panels are.
+    private readonly Lazy<CommandRegistry> _commands;
     private EntityPaletteViewModel? _palette;
 
-    public HierarchyPanel(IWorkspace workspace, ISelection selection, IServiceProvider services)
+    public HierarchyPanel(ISceneDocuments sceneDocuments, IProjectSession projectSession, ISelection selection, Lazy<CommandRegistry> commands)
     {
-        _workspace = workspace;
+        _projectSession = projectSession;
+        _sceneDocuments = sceneDocuments;
         _selection = selection;
-        _services = services;
-        workspace.PropertyChanged += OnWorkspaceChanged;
+        _commands = commands;
+        sceneDocuments.PropertyChanged += OnWorkspaceChanged;
         selection.PropertyChanged += (_, _) => SyncSelectionToTree();
         selection.RenameRequested += (_, _) => BeginRename();
-        Track(workspace.Scene);
+        Track(sceneDocuments.Scene);
     }
 
     public override string Id => "Hierarchy";
@@ -232,7 +234,7 @@ public sealed class HierarchyPanel : ToolPanel
         {
             if (value == IsAddOpen)
                 return;
-            Palette = value && HasScene ? new EntityPaletteViewModel(_services.GetRequiredService<CommandRegistry>()) : null;
+            Palette = value && HasScene ? new EntityPaletteViewModel(_commands.Value) : null;
             OnPropertyChanged();
         }
     }
@@ -376,7 +378,7 @@ public sealed class HierarchyPanel : ToolPanel
 
         var name = node.EditName.Trim();
         if (_document is not null && name.Length > 0 && name != node.Entity.Name)
-            _document.Execute(EntityReferences.Rename(node.Entity, name, _workspace.Components));
+            _document.Execute(EntityReferences.Rename(node.Entity, name, _projectSession.Components));
     }
 
     public void CancelRename(EntityNode node) => node.IsEditing = false;
@@ -455,8 +457,8 @@ public sealed class HierarchyPanel : ToolPanel
 
     private void OnWorkspaceChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(IWorkspace.Scene))
-            Track(_workspace.Scene);
+        if (e.PropertyName == nameof(ISceneDocuments.Scene))
+            Track(_sceneDocuments.Scene);
     }
 
     private void Track(SceneDocument? document)

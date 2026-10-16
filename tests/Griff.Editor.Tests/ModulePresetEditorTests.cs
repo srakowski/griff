@@ -38,7 +38,9 @@ public sealed class ModulePresetEditorTests
         foreach (var preset in EntityPreset.All)
         {
             var command = commands.Get(preset.Id);
-            Assert.Equal(Griff.Runtime.GameModule.Of(preset.GetType())!.Name, command.Category);
+            // A module's preset is under its module's name; one of Griff's own under the [Category] it names (Basics, UI, Audio...).
+            var expected = Griff.Runtime.GameModule.Of(preset.GetType())?.Name ?? preset.GetType().GetCustomAttributes(typeof(Griff.Scenes.CategoryAttribute), false).Cast<Griff.Scenes.CategoryAttribute>().Single().Name;
+            Assert.Equal(expected, command.Category);
             Assert.NotNull(preset.Icon);
             Assert.Equal(Griff.Editor.Themes.Icons.Named(preset.Icon), command.Icon);
         }

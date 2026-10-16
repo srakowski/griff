@@ -25,7 +25,7 @@ namespace Griff.Editor.Diagnostics.Demo;
 /// The guided demo: builds "Ember Hollow", a small platformer, from an empty project, narrating each step and
 /// driving the editor with real input.
 /// </summary>
-internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection selection, PlayMode play, SceneViewControl sceneView, DemoOptions options) : IDisposable
+internal sealed class DemoScript(DemoUi ui, Workspace workspace, ISelection selection, PlayMode play, SceneViewControl sceneView, DemoOptions options) : IDisposable
 {
     private const string ProjectName = "Ember Hollow";
 

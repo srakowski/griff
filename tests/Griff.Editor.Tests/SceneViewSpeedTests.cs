@@ -37,7 +37,7 @@ public sealed class SceneViewSpeedTests(ITestOutputHelper output) : IDisposable
     public void PanningAndZooming_ABigScene_StaysQuick() => EditorHost.Run(services =>
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         EditorHost.Pump(workspace.CreateProjectAsync(_root, "Speed", ProjectTemplates.Get("Roguelike")));
         var level = Griff.Runtime.GameLoader.LoadScene(workspace.Project!, ComponentRegistry.CreateDefault(), "Crypt");
         var tiles = level.Entities.Select(e => e.GetComponent<Tilemap>()).First(t => t is { Image.Length: > 0 })!;

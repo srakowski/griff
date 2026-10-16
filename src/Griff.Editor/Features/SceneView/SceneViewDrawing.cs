@@ -21,7 +21,7 @@ namespace Griff.Editor.Features.SceneView;
 /// <see cref="SceneViewInput"/>'s.
 /// </summary>
 internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel model, TilePalette palette, ISelection selection,
-    IWorkspace workspace, SceneHandleGeometry handles, SceneViewInput input, SceneViewStyle style, SceneViewPicture picture)
+    IProjectSession projectSession, SceneHandleGeometry handles, SceneViewInput input, SceneViewStyle style, SceneViewPicture picture)
 {
     // The tile palette's pictures of the tiles.
     private readonly Dictionary<string, BitmapSource?> _images = new(StringComparer.OrdinalIgnoreCase);
@@ -1030,7 +1030,7 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
 
     private BitmapSource? LoadImage(string? relativePath)
     {
-        if (string.IsNullOrWhiteSpace(relativePath) || workspace.Project is not { } project)
+        if (string.IsNullOrWhiteSpace(relativePath) || projectSession.Project is not { } project)
             return null;
 
         var path = Path.Combine(project.AssetsPath, relativePath.Replace('/', Path.DirectorySeparatorChar));

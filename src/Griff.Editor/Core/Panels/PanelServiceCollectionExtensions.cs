@@ -4,7 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Core.Panels;
 
-public sealed record PanelDescriptor(Type PanelType, Type ViewType);
+/// <summary>A panel and its view: their types, and how to get the panel (a singleton) and make a view for it.</summary>
+public sealed record PanelDescriptor(Type PanelType, Type ViewType, Func<ToolPanel> Panel, Func<FrameworkElement> View);
 
 public static class PanelServiceCollectionExtensions
 {
@@ -18,7 +19,7 @@ public static class PanelServiceCollectionExtensions
     {
         services.AddSingleton<TPanel>();
         services.AddTransient<TView>();
-        services.AddSingleton(new PanelDescriptor(typeof(TPanel), typeof(TView)));
+        services.AddSingleton(sp => new PanelDescriptor(typeof(TPanel), typeof(TView), () => sp.GetRequiredService<TPanel>(), () => sp.GetRequiredService<TView>()));
         if (typeof(IDocumentEditor).IsAssignableFrom(typeof(TPanel)))
             services.AddSingleton(sp => (IDocumentEditor)sp.GetRequiredService<TPanel>());
         return services;

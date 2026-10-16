@@ -36,6 +36,9 @@ public abstract class EntityPreset
     /// <summary>The name of the editor's icon for it (one of its Icons, e.g. "Star"), or null for a plain one.</summary>
     public virtual string? Icon => null;
 
+    /// <summary>A keyboard shortcut for it, as the editor writes one ("Ctrl+Alt+N"), or null for none.</summary>
+    public virtual string? Shortcut => null;
+
     /// <summary>The new entity's name, given the scene it's made in.</summary>
     public abstract string EntityName(Scene scene);
 
@@ -44,6 +47,14 @@ public abstract class EntityPreset
 
     /// <summary>Entities to put inside the new one. Added in the same undo step.</summary>
     public virtual IEnumerable<Entity> CreateChildren(Scene scene) => [];
+
+    /// <summary>
+    /// Last touches once the new entity and its children are made, given what it goes <paramref name="inside"/> (see
+    /// <see cref="InsideOf"/>): e.g. a menu control's draw order above its panel's (<see cref="Runtime.Views.OrderAbove"/>).
+    /// </summary>
+    public virtual void Arrange(Entity entity, IReadOnlyList<Entity> children, Entity? inside)
+    {
+    }
 
     /// <summary>Changes to what's already in the scene that go with the new entity. Made in the same undo step.</summary>
     public virtual IEnumerable<IEdit> EditScene(Scene scene) => [];

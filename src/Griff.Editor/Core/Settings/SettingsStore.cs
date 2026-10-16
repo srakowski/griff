@@ -13,6 +13,9 @@ public sealed class EditorSettings
     /// <summary>Most recent first. The first entry is reopened on startup.</summary>
     public List<string> RecentProjects { get; set; } = [];
 
+    /// <summary>How big the script editor's text is (Ctrl + mouse wheel in a script), shared by every script tab.</summary>
+    public double CodeFontSize { get; set; } = Features.Scripts.Editor.CodeTheme.FontSize;
+
     /// <summary>Whether the MCP server (for agents like Claude Code) runs while the editor is open.</summary>
     public bool AgentServer { get; set; } = true;
 

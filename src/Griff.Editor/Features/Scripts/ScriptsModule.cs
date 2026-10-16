@@ -28,7 +28,7 @@ public sealed partial class ScriptsModule : IEditorModule
 /// and opens it in the script editor.
 /// </summary>
 public sealed partial class NewScriptCommand(
-    IWorkspace workspace,
+    IProjectSession projectSession, ISceneDocuments sceneDocuments, IPlaySession playSession, IScriptSession scriptSession,
     ISelection selection,
     IDialogService dialogs,
     ScriptEditors editors,
@@ -57,11 +57,11 @@ public sealed partial class NewScriptCommand(
     public override string? Icon => Icons.Code;
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 2, Order: 0);
 
-    protected override bool CanExecuteCore() => workspace.Project is not null && !workspace.IsPlaying;
+    protected override bool CanExecuteCore() => projectSession.Project is not null && !playSession.IsPlaying;
 
     protected override Task ExecuteCoreAsync()
     {
-        if (workspace.Project is not { } project)
+        if (projectSession.Project is not { } project)
             return Task.CompletedTask;
 
         var folder = Path.Combine(project.AssetsPath, "Scripts");
@@ -75,11 +75,11 @@ public sealed partial class NewScriptCommand(
         logger.LogInformation("Created {Path}", project.GetRelativePath(path));
 
         // Compile now (rather than waiting for the file watcher) so it can be attached straight away.
-        var result = workspace.ReloadScripts();
+        var result = scriptSession.ReloadScripts();
         if (result?.Success == true &&
             selection.Entity is { } entity &&
-            workspace.Scene is { } document &&
-            workspace.Components.Find(name) is { } descriptor)
+            sceneDocuments.Scene is { } document &&
+            projectSession.Components.Find(name) is { } descriptor)
         {
             document.Execute(new AddComponentEdit(entity, descriptor.CreateInstance()));
         }
@@ -94,7 +94,7 @@ public sealed partial class NewScriptCommand(
             return "Use letters, digits and underscores, starting with a letter, e.g. PlayerController.";
         if (File.Exists(Path.Combine(folder, name + ".cs")))
             return $"{name}.cs already exists.";
-        if (workspace.Components.Find(name) is not null)
+        if (projectSession.Components.Find(name) is not null)
             return $"A component named {name} already exists.";
         return null;
     }

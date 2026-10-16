@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Griff.Editing;
 using Griff.Scenes;
+using Griff.Editor.Features.Story;
 
 namespace Griff.Editor.Features.Inspector;
 
@@ -428,7 +429,7 @@ public sealed class DialogueLinesEditor(PropertyField field, DialogueLinesAttrib
     }
 
     /// <summary>Opens the Dialogue Editor on the selected entity's dialogue (Entity > Edit Dialogue).</summary>
-    public void OpenDialogueEditor() => Host.RunCommand("Story.EditDialogue");
+    public void OpenDialogueEditor() => Host.RunCommand<OpenDialogueEditorCommand>();
 
     public IRelayCommand OpenDialogueEditorCommand => _open ??= new RelayCommand(OpenDialogueEditor);
 

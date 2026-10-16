@@ -18,8 +18,8 @@ public sealed class TableStore : FileStore<Table>
 {
     private readonly PlayMode _play;
 
-    public TableStore(IWorkspace workspace, PlayMode play, ILogger<TableStore> logger)
-        : base(workspace, logger)
+    public TableStore(IProjectSession session, PlayMode play, ILogger<TableStore> logger)
+        : base(session, logger)
     {
         _play = play;
         Start();
@@ -103,7 +103,7 @@ public sealed class TableStore : FileStore<Table>
     /// </summary>
     public Table Create(string name)
     {
-        var project = Workspace.Project ?? throw new InvalidOperationException("No project is open.");
+        var project = Session.Project ?? throw new InvalidOperationException("No project is open.");
         name = name.Trim();
         if (NameProblem(name) is { } problem)
             throw new ArgumentException(problem, nameof(name));

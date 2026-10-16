@@ -36,10 +36,10 @@ public sealed class PrefabTabTests : IDisposable
 
     // An empty project with a Coin prefab (a sprite and a Pickup worth 1) and a copy of it placed in the open scene, and a
     // second scene, Level 2, holding another copy.
-    private (IWorkspace Workspace, Project Project, Entity Copy) Open(IServiceProvider services)
+    private (Workspace Workspace, Project Project, Entity Copy) Open(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         var project = workspace.Project!;
 
@@ -50,10 +50,10 @@ public sealed class PrefabTabTests : IDisposable
         File.WriteAllText(project.DefaultPrefabPath("Coin"), workspace.Serializer.SavePrefabToString(coin));
 
         var level2 = new Scene();
-        level2.Add(PrefabFiles.Instantiate(workspace, "Prefabs/Coin.prefab")!);
+        level2.Add(services.GetRequiredService<PrefabFiles>().Instantiate("Prefabs/Coin.prefab")!);
         File.WriteAllText(project.CreateScene("Level 2"), workspace.Serializer.SaveToString(level2));
 
-        var copy = PrefabFiles.Instantiate(workspace, "Prefabs/Coin.prefab")!;
+        var copy = services.GetRequiredService<PrefabFiles>().Instantiate("Prefabs/Coin.prefab")!;
         copy.Transform.Position = new Vector3(4, 2, 0);
         workspace.Scene!.Execute(new AddEntityEdit(workspace.Scene.Scene, copy));
         return (workspace, project, copy);
@@ -68,7 +68,7 @@ public sealed class PrefabTabTests : IDisposable
     }
 
     // Sets a Pickup's Amount through the document's undo history, as the Inspector does.
-    private static void SetAmount(IWorkspace workspace, SceneDocument document, Entity entity, int amount)
+    private static void SetAmount(Workspace workspace, SceneDocument document, Entity entity, int amount)
     {
         var property = workspace.Components.Get(typeof(Pickup)).Properties.Single(p => p.Name == nameof(Pickup.Amount));
         document.Execute(new SetPropertyEdit(entity.GetComponent<Pickup>()!, property, amount));
@@ -115,7 +115,7 @@ public sealed class PrefabTabTests : IDisposable
     {
         var (workspace, project, copy) = Open(services);
         var scene = workspace.Scene!;
-        var changed = PrefabFiles.Instantiate(workspace, "Prefabs/Coin.prefab")!;
+        var changed = services.GetRequiredService<PrefabFiles>().Instantiate("Prefabs/Coin.prefab")!;
         changed.Name = "Red Coin";
         changed.GetComponent<Sprite>()!.Tint = new Color(1, 0, 0);
         scene.Execute(new AddEntityEdit(scene.Scene, changed));
@@ -255,7 +255,7 @@ public sealed class PrefabTabTests : IDisposable
         var target = inspector.Components.Single(c => c.Title == "Chase").Properties.Single(p => p.Label == "Target");
         Assert.False(target.IsUnmatched);
 
-        IAgentScene host = new EditorAgentScene(workspace, services.GetRequiredService<ISelection>());
+        IAgentScene host = new EditorAgentScene(workspace, workspace, workspace, services.GetRequiredService<ISelection>());
         Assert.True(host.IsPrefab);
         Assert.Equal("Prefabs/Enemy.prefab", host.ScenePath);
     });

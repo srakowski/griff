@@ -71,8 +71,8 @@ public interface IPropertyHost
     /// <summary>Whether Transforms show in 3D (X, Y and Z) rather than 2D (X and Y, and one rotation angle).</summary>
     bool Transform3D => true;
 
-    /// <summary>Runs one of the editor's commands by its id, as a field's editor does to open what edits it more fully ("Art.Clips").</summary>
-    void RunCommand(string id)
+    /// <summary>Runs one of the editor's commands, as a field's editor does to open what edits it more fully (the Clip Editor's).</summary>
+    void RunCommand<TCommand>() where TCommand : Core.Commands.EditorCommand
     {
     }
 

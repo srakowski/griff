@@ -5,14 +5,15 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Themes;
+using Griff.Editor.Features.Entities;
 
 namespace Griff.Editor.Features.Hierarchy;
 
 public partial class HierarchyView : UserControl
 {
-    private static readonly string[] EditCommands = ["Entity.Rename", "Entity.Duplicate", "Entity.Delete", "Entity.Lock", "Entity.Hide"];
-    private static readonly string[] ClipboardCommands = ["Entity.Cut", "Entity.Copy", "Entity.Paste"];
-    private static readonly string[] PrefabCommands = ["Entity.SaveAsPrefab", "Entity.UnlinkPrefab"];
+    private static readonly Type[] EditCommands = [typeof(RenameEntityCommand), typeof(DuplicateEntityCommand), typeof(DeleteEntityCommand), typeof(LockEntityCommand), typeof(HideEntityCommand)];
+    private static readonly Type[] ClipboardCommands = [typeof(CutEntityCommand), typeof(CopyEntityCommand), typeof(PasteEntityCommand)];
+    private static readonly Type[] PrefabCommands = [typeof(SaveAsPrefabCommand), typeof(UnlinkPrefabCommand)];
 
     private readonly CommandRegistry _commands;
     private Point _dragStart;
@@ -36,13 +37,13 @@ public partial class HierarchyView : UserControl
     public static ContextMenu BuildMenu(CommandRegistry commands)
     {
         var menu = new ContextMenu();
-        menu.Items.Add(Shell.CommandMenuItems.Item(commands.Get("Entity.AddEntity")));
+        menu.Items.Add(Shell.CommandMenuItems.Item(commands.Get<AddEntityCommand>()));
         Shell.CommandMenuItems.AddCategories(menu.Items, commands.Categorized);
         foreach (var group in new[] { EditCommands, ClipboardCommands, PrefabCommands })
         {
             menu.Items.Add(new Separator());
-            foreach (var id in group)
-                menu.Items.Add(Shell.CommandMenuItems.Item(commands.Get(id)));
+            foreach (var type in group)
+                menu.Items.Add(Shell.CommandMenuItems.Item(commands.Of(type)));
         }
 
         // On/off commands (Lock, Hide) show their tick as the menu opens.
@@ -161,7 +162,7 @@ public partial class HierarchyView : UserControl
         if (e.Key != Key.H || Keyboard.Modifiers != ModifierKeys.None || e.OriginalSource is TextBox)
             return;
 
-        var hide = _commands.Get("Entity.Hide");
+        var hide = _commands.Get<HideEntityCommand>();
         if (hide.CanExecute())
             _ = hide.ExecuteAsync();
         e.Handled = true;

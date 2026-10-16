@@ -76,7 +76,7 @@ public sealed class GenericFieldEditorTests : IDisposable
     private (SceneDocument Document, Component Shop, InspectorPanel Inspector) Open(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         EditorHost.Pump(workspace.CreateProjectAsync(_root, "Game"));
         var script = Path.Combine(workspace.Project!.AssetsPath, "Scripts", "Shop.cs");
         Directory.CreateDirectory(Path.GetDirectoryName(script)!);
@@ -262,7 +262,7 @@ public sealed class GenericFieldEditorTests : IDisposable
         ObjectSurface.InvokeAsync(inspector, "Components[Shop].Properties[OpenKey].Pick", pick.RootElement).GetAwaiter().GetResult();
         Assert.Equal(Griff.Input.Key.Space, Get(shop, "OpenKey"));
 
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         var described = ComponentDescription.Of(workspace.Components, workspace.Components.Find("Shop")!);
         Assert.Contains("Names and their values, one per line, each written \"Name: Value\", the values numbers", described);
         Assert.Contains("A list, one item per line.", described);

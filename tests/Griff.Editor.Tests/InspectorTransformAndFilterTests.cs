@@ -1,3 +1,4 @@
+using Griff.Editor.Core.Commands;
 using System.Numerics;
 using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Settings;
@@ -37,7 +38,7 @@ public class InspectorTransformAndFilterTests
         scene.Add(new Entity("Big Slime"));
 
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         return (document, services.GetRequiredService<ISelection>(), services.GetRequiredService<InspectorPanel>());
     }
 
@@ -87,8 +88,8 @@ public class InspectorTransformAndFilterTests
         selection.Select(Named(document, "Coin"));
         Assert.True(Section(inspector, "Transform").Is3D);
 
-        var next = new InspectorPanel(services.GetRequiredService<IWorkspace>(), selection, services.GetRequiredService<ScriptEditors>(),
-            services.GetRequiredService<EditorArt>(), services.GetRequiredService<EditorAudio>(), services.GetRequiredService<IDialogService>(), services.GetRequiredService<IStatusService>(), settings);
+        var next = new InspectorPanel(services.GetRequiredService<Workspace>(), services.GetRequiredService<Workspace>(), services.GetRequiredService<Workspace>(), selection, services.GetRequiredService<ScriptEditors>(),
+            services.GetRequiredService<EditorArt>(), services.GetRequiredService<EditorAudio>(), services.GetRequiredService<IDialogService>(), services.GetRequiredService<IStatusService>(), settings, services.GetRequiredService<Lazy<CommandRegistry>>(), services.GetRequiredService<PrefabFiles>());
         Assert.True(next.Transform3D);
         Assert.Equal(["X", "Y", "Z"], Shown(Field(next, "Transform", "Scale")));
 

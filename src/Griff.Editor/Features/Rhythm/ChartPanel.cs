@@ -40,7 +40,8 @@ public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
     private static readonly string DefaultColors = "#F2607E #F2BC4B #4BC4F2 #9A72F2";
 
     private readonly TableStore _tables;
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
+    private readonly ISceneDocuments _sceneDocuments;
     private readonly ISelection _selection;
     private readonly PlayMode _play;
     private readonly DispatcherTimer _timer;
@@ -76,10 +77,11 @@ public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
     private volatile bool _padPolling;
     private Mixer? _output;
 
-    public ChartPanel(TableStore tables, IWorkspace workspace, ISelection selection, PlayMode play)
+    public ChartPanel(TableStore tables, ISceneDocuments sceneDocuments, IProjectSession projectSession, ISelection selection, PlayMode play)
     {
         _tables = tables;
-        _workspace = workspace;
+        _projectSession = projectSession;
+        _sceneDocuments = sceneDocuments;
         _selection = selection;
         _play = play;
         _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(15), DispatcherPriority.Render, (_, _) => Tick(), Dispatcher.CurrentDispatcher);
@@ -96,21 +98,21 @@ public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
             if (e.PropertyName == nameof(ISelection.Entity) && selection.Entity?.GetComponent<NoteLanes>() is { } lanes)
                 FollowLanes(lanes);
         };
-        workspace.PropertyChanged += (_, e) =>
+        projectSession.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.Project))
+            if (e.PropertyName == nameof(IProjectSession.Project))
             {
                 Stop(keep: false);
                 (_chart, _lanesEntity, _song, _songData, _selected, _takes) = (null, null, null, null, null, 0);
                 _audioOffset = SavedAudioOffset();
                 Refresh();
             }
-            else if (e.PropertyName == nameof(IWorkspace.Scene))
+            else if (e.PropertyName == nameof(ISceneDocuments.Scene))
             {
-                Track(workspace.EditScene);
+                Track(sceneDocuments.EditScene);
             }
         };
-        Track(workspace.EditScene);
+        Track(sceneDocuments.EditScene);
         _audioOffset = SavedAudioOffset();
         Refresh();
     }
@@ -200,7 +202,7 @@ public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
     private NoteLanes? LanesNow => _lanesEntity is null ? null : SceneLanes().FirstOrDefault(l => l.Entity?.Name == _lanesEntity);
 
     private IEnumerable<NoteLanes> SceneLanes() =>
-        _workspace.EditScene?.Scene.Entities.Select(e => e.GetComponent<NoteLanes>()).OfType<NoteLanes>() ?? [];
+        _sceneDocuments.EditScene?.Scene.Entities.Select(e => e.GetComponent<NoteLanes>()).OfType<NoteLanes>() ?? [];
 
     // The scene's Note Lanes that play the chart: those naming it, or whose song is named like it.
     private NoteLanes? LanesPlaying(string chart) => SceneLanes().FirstOrDefault(l =>
@@ -208,17 +210,17 @@ public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
 
     private BeatClock? Clock => LanesNow is { } lanes
         ? (string.IsNullOrWhiteSpace(lanes.Clock) ? lanes.Entity?.GetComponent<BeatClock>() ?? FirstClock()
-            : _workspace.EditScene?.Scene.Entities.FirstOrDefault(e => e.Name == lanes.Clock.Trim())?.GetComponent<BeatClock>())
+            : _sceneDocuments.EditScene?.Scene.Entities.FirstOrDefault(e => e.Name == lanes.Clock.Trim())?.GetComponent<BeatClock>())
         : null;
 
-    private BeatClock? FirstClock() => _workspace.EditScene?.Scene.Entities.Select(e => e.GetComponent<BeatClock>()).OfType<BeatClock>().FirstOrDefault();
+    private BeatClock? FirstClock() => _sceneDocuments.EditScene?.Scene.Entities.Select(e => e.GetComponent<BeatClock>()).OfType<BeatClock>().FirstOrDefault();
 
     /// <summary>The music in the project to pick a song from.</summary>
     public IReadOnlyList<string> SongNames
     {
         get
         {
-            if (_workspace.Project?.AssetsPath is not { } root || Path.Combine(root, "Music") is var music && !Directory.Exists(music))
+            if (_projectSession.Project?.AssetsPath is not { } root || Path.Combine(root, "Music") is var music && !Directory.Exists(music))
                 return [];
             return [.. Directory.EnumerateFiles(music, "*.*", SearchOption.AllDirectories)
                 .Where(p => EditorAudio.Extensions.Contains(Path.GetExtension(p).ToLowerInvariant()))
@@ -252,7 +254,7 @@ public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
     {
         get
         {
-            if (_song is null || _workspace.Project?.AssetsPath is not { } root)
+            if (_song is null || _projectSession.Project?.AssetsPath is not { } root)
                 return null;
             var path = Path.Combine(root, _song.Replace('/', Path.DirectorySeparatorChar));
             if (!File.Exists(path))
@@ -330,7 +332,7 @@ public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
     private InputState Controls()
     {
         var input = new InputState();
-        if (_workspace.Project is { } project)
+        if (_projectSession.Project is { } project)
             input.UseControls(project.Controls);
         return input;
     }
@@ -477,7 +479,7 @@ public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
             value = float.IsFinite(value) ? Math.Clamp(value, -1000, 1000) : 0;
             if (!SetProperty(ref _audioOffset, value))
                 return;
-            if (_workspace.Project is { } project)
+            if (_projectSession.Project is { } project)
             {
                 try
                 {
@@ -494,7 +496,7 @@ public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
 
     private float SavedAudioOffset()
     {
-        if (_workspace.Project is not { } project)
+        if (_projectSession.Project is not { } project)
             return 0;
         try
         {
@@ -627,7 +629,7 @@ public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
 
     /// <summary>Why there's nothing to edit, or null.</summary>
     public string? Notice =>
-        _workspace.Project is null ? "Open a project to chart a song."
+        _projectSession.Project is null ? "Open a project to chart a song."
         : _chart is null ? ChartNames.Count == 0
             ? "No charts yet. Entity > Genres > Rhythm > Create Note Lanes makes a song and its chart; or Data > New Table with Beat, Lane, Hold and Difficulty columns."
             : "Pick a chart, or select Note Lanes."
@@ -1044,7 +1046,7 @@ public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
     {
         if (_chart is not null && _tables.Entry(_chart) is null)
             (_chart, _selected) = (null, null);
-        if (_chart is null && !_recording && _workspace.Project is not null)
+        if (_chart is null && !_recording && _projectSession.Project is not null)
         {
             // A chart to show: the selected lanes', the scene's lanes', or the project's only one.
             var lanes = _selection.Entity?.GetComponent<NoteLanes>() ?? SceneLanes().FirstOrDefault();

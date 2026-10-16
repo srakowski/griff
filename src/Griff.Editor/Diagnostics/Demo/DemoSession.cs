@@ -13,7 +13,7 @@ namespace Griff.Editor.Diagnostics.Demo;
 /// when that chapter began (from a snapshot taken then), a jump forward hurries through, Exit stops cleanly. Shared by
 /// every demo, the guided tour and the <c>.demo</c> scripts alike.
 /// </summary>
-internal sealed class DemoSession(DemoUi ui, IWorkspace workspace, ISelection selection, PlayMode play, DemoControl control, Action<string> log)
+internal sealed class DemoSession(DemoUi ui, Workspace workspace, ISelection selection, PlayMode play, DemoControl control, Action<string> log)
 {
     // Where each chapter's starting state is kept, so the viewer can rewind to it.
     private static readonly string SnapshotRoot = Path.Combine(Path.GetTempPath(), "griff-demo-snapshots");

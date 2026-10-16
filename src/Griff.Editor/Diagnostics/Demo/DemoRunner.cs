@@ -140,7 +140,7 @@ internal static class DemoRunner
                 Screenshot = async (view, width) => (await agentTools.CaptureAsync(view, width)).Png,
                 Agent = agentServer.CallAsync,
             };
-            var workspace = services.GetRequiredService<IWorkspace>();
+            var workspace = services.GetRequiredService<Workspace>();
             var selection = services.GetRequiredService<ISelection>();
             var sceneView = services.GetRequiredService<SceneViewControl>();
 
@@ -152,7 +152,7 @@ internal static class DemoRunner
             }
             else
             {
-                restart = await new DemoFile(scriptPath, ui, workspace, selection, play, sceneView, options, services.GetRequiredService<Core.Undo.ActiveDocument>()).Run();
+                restart = await new DemoFile(scriptPath, ui, workspace, selection, play, sceneView, options, services.GetRequiredService<Core.Undo.ActiveDocument>(), services.GetRequiredService<PrefabFiles>()).Run();
             }
 
             Log(restart ? "starting over" : "demo finished");
@@ -183,7 +183,7 @@ internal static class DemoRunner
         if (Environment.GetEnvironmentVariable("GRIFF_DEMO_EXIT") == "1" && !restart)
         {
             services.GetRequiredService<Features.Scripts.ScriptEditors>().DiscardAll();
-            services.GetRequiredService<IWorkspace>().Scene?.MarkSaved();
+            services.GetRequiredService<Workspace>().Scene?.MarkSaved();
             Environment.Exit(failed ? 1 : 0);
         }
 
@@ -191,7 +191,7 @@ internal static class DemoRunner
         if (restart && Environment.ProcessPath is { } exe)
         {
             services.GetRequiredService<Features.Scripts.ScriptEditors>().DiscardAll();
-            services.GetRequiredService<IWorkspace>().Scene?.MarkSaved();
+            services.GetRequiredService<Workspace>().Scene?.MarkSaved();
             Process.Start(new ProcessStartInfo(exe) { UseShellExecute = false });
             Environment.Exit(0);
         }

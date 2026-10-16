@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.Input;
 using Griff.Scenes;
+using Griff.Editor.Features.Art;
 
 namespace Griff.Editor.Features.Inspector;
 
@@ -59,7 +60,7 @@ public sealed class ClipsEditor : FieldEditor<ClipsAttribute>
     }
 
     /// <summary>Opens the Clip Editor on the selected entity, to see its clips play and pick their frames off the sheet.</summary>
-    public void OpenClipEditor() => Host.RunCommand("Art.Clips");
+    public void OpenClipEditor() => Host.RunCommand<OpenClipEditorCommand>();
 
     public IRelayCommand AddCommand => _add ??= new RelayCommand(() => Add());
 

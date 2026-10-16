@@ -31,14 +31,14 @@ public sealed class ArtModule : IEditorModule
 }
 
 /// <summary>Opens the Sprite Painter on a new sprite.</summary>
-public sealed class NewSpriteCommand(EditorArt art, IWorkspace workspace) : EditorCommand
+public sealed class NewSpriteCommand(EditorArt art, IProjectSession projectSession) : EditorCommand
 {
     public override string Id => "Art.NewSprite";
     public override string Text => "New _Sprite...";
     public override string? Icon => Icons.Image;
     public override MenuPlacement? Placement { get; } = new(ArtModule.Menu, Group: 0, Order: 0);
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {
@@ -48,14 +48,14 @@ public sealed class NewSpriteCommand(EditorArt art, IWorkspace workspace) : Edit
 }
 
 /// <summary>Opens the Sprite Painter on a new tileset.</summary>
-public sealed class NewTilesetCommand(EditorArt art, IWorkspace workspace) : EditorCommand
+public sealed class NewTilesetCommand(EditorArt art, IProjectSession projectSession) : EditorCommand
 {
     public override string Id => "Art.NewTileset";
     public override string Text => "New _Tileset...";
     public override string? Icon => Icons.Palette;
     public override MenuPlacement? Placement { get; } = new(ArtModule.Menu, Group: 0, Order: 1);
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {
@@ -152,14 +152,14 @@ public sealed class AddTilemapLayerCommand(SceneView.SceneViewModel scene) : Edi
 /// added, renamed, removed and picked to start with there, and given their frames (picked off the sprite sheet), speed
 /// and looping. It follows the selection.
 /// </summary>
-public sealed class OpenClipEditorCommand(ClipEditor clips, IWorkspace workspace) : EditorCommand
+public sealed class OpenClipEditorCommand(ClipEditor clips, IProjectSession projectSession) : EditorCommand
 {
     public override string Id => "Art.Clips";
     public override string Text => "Animation _Clips...";
     public override string? Icon => Icons.Play;
     public override MenuPlacement? Placement { get; } = new(ArtModule.Menu, Group: 1, Order: 3);
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {

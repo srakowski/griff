@@ -33,10 +33,10 @@ public sealed class RecoveryTests : IDisposable
 
     // Two projects, First and Second, with First open; Second's start scene has unsaved changes (an entity called Unsaved)
     // in a recovery copy newer than it.
-    private (IWorkspace Workspace, Project First, string Second) TwoProjects(IServiceProvider services)
+    private (Workspace Workspace, Project First, string Second) TwoProjects(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Second"));
         var second = workspace.Project!;
         KeepUnsaved(workspace, second);
@@ -44,7 +44,7 @@ public sealed class RecoveryTests : IDisposable
         return (workspace, workspace.Project!, second.RootPath);
     }
 
-    private static void KeepUnsaved(IWorkspace workspace, Project project)
+    private static void KeepUnsaved(Workspace workspace, Project project)
     {
         var path = project.StartScenePath!;
         var scene = workspace.Serializer.LoadFromString(File.ReadAllText(path));
@@ -53,7 +53,7 @@ public sealed class RecoveryTests : IDisposable
         File.SetLastWriteTimeUtc(RecoveryFiles.PathFor(project, path), DateTime.UtcNow.AddMinutes(1));
     }
 
-    private static bool Shows(IWorkspace workspace, string name) => workspace.Scene!.Scene.Entities.Any(e => e.Name == name);
+    private static bool Shows(Workspace workspace, string name) => workspace.Scene!.Scene.Entities.Any(e => e.Name == name);
 
     [Fact]
     public void Reopening_a_project_with_unsaved_changes_asks_before_anything_changes() => EditorHost.Run(services =>

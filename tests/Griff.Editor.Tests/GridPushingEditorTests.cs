@@ -29,7 +29,7 @@ public sealed class GridPushingEditorTests : IDisposable
     public void CreateCrate_InAGridScene_IsAGridCrate_AndTurnOrdersLeaveCratesOut() => EditorHost.Run(services =>
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         var commands = services.GetRequiredService<CommandRegistry>();
         var selection = services.GetRequiredService<ISelection>();

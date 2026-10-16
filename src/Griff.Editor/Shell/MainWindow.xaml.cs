@@ -12,12 +12,12 @@ namespace Griff.Editor.Shell;
 
 public partial class MainWindow : ChromeWindow
 {
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
     private bool _closeConfirmed;
 
     public MainWindow(
         MainWindowViewModel viewModel,
-        IWorkspace workspace,
+        IProjectSession projectSession,
         SceneViewControl sceneView,
         StartPage startPage,
         PlayMode play,
@@ -28,11 +28,13 @@ public partial class MainWindow : ChromeWindow
         PanelHost panelHost,
         Features.Scripts.ScriptTabs scriptTabs,
         Features.Prefabs.PrefabTabs prefabTabs,
-        Features.Debugging.Debugger debugger)
+        Features.Debugging.Debugger debugger,
+        Core.EditorWindow editorWindow)
     {
         InitializeComponent();
+        editorWindow.Attach(this, DocumentTabs, SceneTab, GameTab, CloseConfirmed);
         DataContext = viewModel;
-        _workspace = workspace;
+        _projectSession = projectSession;
         SceneTab.Content = sceneView;
         var gameView = new DockPanel();
         DockPanel.SetDock(timeline, Dock.Top);
@@ -106,7 +108,7 @@ public partial class MainWindow : ChromeWindow
 
         // Closing can't await, so cancel this attempt and close again once the user has answered.
         e.Cancel = true;
-        if (await _workspace.ConfirmCloseProjectAsync())
+        if (await _projectSession.ConfirmCloseProjectAsync())
         {
             _closeConfirmed = true;
             _ = Dispatcher.InvokeAsync(Close);

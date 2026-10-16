@@ -20,18 +20,18 @@ public sealed class ScenesModule : IEditorModule
 }
 
 /// <summary>Creates a new scene with a camera in Assets/Scenes and opens it.</summary>
-public sealed partial class NewSceneCommand(IWorkspace workspace, IDialogService dialogs) : EditorCommand
+public sealed partial class NewSceneCommand(IProjectSession projectSession, ISceneDocuments sceneDocuments, IPlaySession playSession, IDialogService dialogs) : EditorCommand
 {
     public override string Id => "Scene.New";
     public override string Text => "New Sc_ene...";
     public override string? Icon => Icons.SceneFile;
     public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 1, Order: 1);
 
-    protected override bool CanExecuteCore() => workspace.Project is not null && !workspace.IsPlaying;
+    protected override bool CanExecuteCore() => projectSession.Project is not null && !playSession.IsPlaying;
 
     protected override async Task ExecuteCoreAsync()
     {
-        if (workspace.Project is not { } project)
+        if (projectSession.Project is not { } project)
             return;
 
         var name = dialogs.Prompt("New Scene", "Scene name", "Level", n =>
@@ -39,7 +39,7 @@ public sealed partial class NewSceneCommand(IWorkspace workspace, IDialogService
             : project.FindScene("Scenes/" + n) is not null ? $"{n} already exists."
             : null);
         if (name is not null)
-            await workspace.CreateSceneAsync(name);
+            await sceneDocuments.CreateSceneAsync(name);
     }
 
     [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9 _-]*$")]
@@ -50,7 +50,7 @@ public sealed partial class NewSceneCommand(IWorkspace workspace, IDialogService
 /// Saves the open scene to its file, or, while a prefab's tab is showing, the prefab, bringing every copy of it up to date
 /// (keeping what each copy changed).
 /// </summary>
-public sealed class SaveSceneCommand(IWorkspace workspace) : EditorCommand
+public sealed class SaveSceneCommand(ISceneDocuments sceneDocuments) : EditorCommand
 {
     public override string Id => "Scene.Save";
     public override string Text => "_Save Scene";
@@ -59,13 +59,13 @@ public sealed class SaveSceneCommand(IWorkspace workspace) : EditorCommand
     public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 1, Order: 0);
     public override ToolbarPlacement? Toolbar { get; } = new(Group: 0, Order: 1);
 
-    protected override bool CanExecuteCore() => workspace.Scene is { IsRuntime: false };
+    protected override bool CanExecuteCore() => sceneDocuments.Scene is { IsRuntime: false };
 
-    protected override Task ExecuteCoreAsync() => workspace.SaveSceneAsync();
+    protected override Task ExecuteCoreAsync() => sceneDocuments.SaveSceneAsync();
 }
 
 /// <summary>Opens another of the project's scenes (asking to save the open one first if it has changes).</summary>
-public sealed class OpenSceneCommand(IWorkspace workspace, IDialogService dialogs) : EditorCommand
+public sealed class OpenSceneCommand(IProjectSession projectSession, ISceneDocuments sceneDocuments, IPlaySession playSession, IDialogService dialogs) : EditorCommand
 {
     public override string Id => "Scene.Open";
     public override string Text => "Open Scene...";
@@ -73,11 +73,11 @@ public sealed class OpenSceneCommand(IWorkspace workspace, IDialogService dialog
     public override KeyGesture? Gesture { get; } = new(Key.O, ModifierKeys.Control | ModifierKeys.Shift);
     public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 1, Order: 2);
 
-    protected override bool CanExecuteCore() => workspace.Project is not null && !workspace.IsPlaying;
+    protected override bool CanExecuteCore() => projectSession.Project is not null && !playSession.IsPlaying;
 
     protected override async Task ExecuteCoreAsync()
     {
-        if (workspace.Project is not { } project || dialogs.ShowOpenFileDialog("Griff scenes (*.scene)|*.scene") is not { } chosen)
+        if (projectSession.Project is not { } project || dialogs.ShowOpenFileDialog("Griff scenes (*.scene)|*.scene") is not { } chosen)
             return;
 
         // A scene's name or its path in Assets will do, as well as a full path.
@@ -88,7 +88,7 @@ public sealed class OpenSceneCommand(IWorkspace workspace, IDialogService dialog
             return;
         }
 
-        await workspace.OpenSceneAsync(path);
+        await sceneDocuments.OpenSceneAsync(path);
     }
 }
 
@@ -96,7 +96,7 @@ public sealed class OpenSceneCommand(IWorkspace workspace, IDialogService dialog
 /// Makes a scene the one the game starts in (when played from a menu or built): the submenu lists the project's scenes,
 /// by name, or by their path in Assets where two share a name. Without a pick, it's the open scene.
 /// </summary>
-public sealed class SetStartSceneCommand(IWorkspace workspace) : EditorCommand
+public sealed class SetStartSceneCommand(IProjectSession projectSession, ISceneDocuments sceneDocuments) : EditorCommand
 {
     public override string Id => "Scene.SetStart";
     public override string Text => "Set as S_tart Scene";
@@ -104,26 +104,26 @@ public sealed class SetStartSceneCommand(IWorkspace workspace) : EditorCommand
     public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 1, Order: 3);
     public override IReadOnlyList<string>? Choices => Scenes().Select(s => s.Label).ToList();
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync() =>
-        workspace.EditScene is { } scene ? workspace.SetStartSceneAsync(scene.FilePath)
+        sceneDocuments.EditScene is { } scene ? projectSession.SetStartSceneAsync(scene.FilePath)
         : throw new InvalidOperationException("Open a scene, or pick one, to make it the start scene.");
 
     protected override Task ChooseCoreAsync(string choice)
     {
-        if (workspace.Project is not { } project)
+        if (projectSession.Project is not { } project)
             return Task.CompletedTask;
         var path = Scenes().FirstOrDefault(s => s.Label.Equals(choice.Trim(), StringComparison.OrdinalIgnoreCase)).Path
             ?? project.FindScene(choice.Trim())
             ?? throw new ArgumentException($"The project has no scene \"{choice}\".", nameof(choice));
-        return string.Equals(project.StartScenePath, path, StringComparison.OrdinalIgnoreCase) ? Task.CompletedTask : workspace.SetStartSceneAsync(path);
+        return string.Equals(project.StartScenePath, path, StringComparison.OrdinalIgnoreCase) ? Task.CompletedTask : projectSession.SetStartSceneAsync(path);
     }
 
     // Each scene's name, or its path in Assets (without .scene) when another scene has the same name.
     private List<(string Label, string? Path)> Scenes()
     {
-        if (workspace.Project is not { } project || !Directory.Exists(project.AssetsPath))
+        if (projectSession.Project is not { } project || !Directory.Exists(project.AssetsPath))
             return [];
         var files = project.FindScenes().ToList();
         var names = files.GroupBy(f => Path.GetFileNameWithoutExtension(f), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);

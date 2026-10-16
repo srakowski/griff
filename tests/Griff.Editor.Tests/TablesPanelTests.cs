@@ -41,10 +41,10 @@ public sealed class TablesPanelTests : IDisposable
     }
 
     // A new project, with the Tables panel showing a Spells table made by New Table.
-    private (IWorkspace Workspace, TablesPanel Panel) Open(IServiceProvider services)
+    private (Workspace Workspace, TablesPanel Panel) Open(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         var panel = services.GetRequiredService<TablesPanel>();
         Assert.True(panel.IsEmpty);
@@ -53,7 +53,7 @@ public sealed class TablesPanelTests : IDisposable
         return (workspace, panel);
     }
 
-    private static string File(IWorkspace workspace, string table = "Spells") =>
+    private static string File(Workspace workspace, string table = "Spells") =>
         System.IO.File.ReadAllText(Path.Combine(workspace.Project!.AssetsPath, "Tables", table + ".table"));
 
     [Fact]

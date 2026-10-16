@@ -13,14 +13,14 @@ namespace Griff.Editor.Features.Data;
 /// against each enemy), 200 runs a pair; set the rest in the panel (or ui_set on the Simulations panel: Arena, FirstEntity,
 /// FirstTable, SecondEntity, SecondTable, Runs, Seed, Sweeps, SweepColumn...), then Data > Run Simulation.
 /// </summary>
-public sealed class NewSimulationCommand(IWorkspace workspace, SimulationStore store, SimulationsPanel panel, PanelLayout layout, IDialogService dialogs) : EditorCommand
+public sealed class NewSimulationCommand(IProjectSession projectSession, SimulationStore store, SimulationsPanel panel, PanelLayout layout, IDialogService dialogs) : EditorCommand
 {
     public override string Id => "Data.NewSimulation";
     public override string Text => "New _Simulation...";
     public override string? Icon => Icons.Simulation;
     public override MenuPlacement? Placement { get; } = new(DataModule.Menu, Group: 0, Order: 3);
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {

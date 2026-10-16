@@ -17,7 +17,7 @@ namespace Griff.Editor.Features.Art;
 /// editor's selection is used, and none selected just adds the font). Pick the font by name, e.g. "Press Start 2P"; a Font then names it by its
 /// path ("Fonts/PressStart2P-Regular.ttf"). The Inspector's font picker does the same when one is picked there.
 /// </summary>
-public sealed class AddFreeFontCommand(IWorkspace workspace, ISelection selection, IDialogService dialogs, IStatusService status) : EditorCommand
+public sealed class AddFreeFontCommand(IProjectSession projectSession, ISceneDocuments sceneDocuments, ISelection selection, IDialogService dialogs, IStatusService status) : EditorCommand
 {
     public override string Id => "Art.AddFreeFont";
     public override string Text => "Add Free _Font";
@@ -25,7 +25,7 @@ public sealed class AddFreeFontCommand(IWorkspace workspace, ISelection selectio
     public override MenuPlacement? Placement { get; } = new(ArtModule.Menu, Group: 3, Order: 0);
     public override IReadOnlyList<string>? Choices => [.. FreeFonts.All.Select(f => f.Name)];
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {
@@ -38,13 +38,13 @@ public sealed class AddFreeFontCommand(IWorkspace workspace, ISelection selectio
     {
         var font = FreeFonts.Find(choice)
                    ?? throw new ArgumentException($"There's no free font called \"{choice}\"; there are {string.Join(", ", FreeFonts.All.Select(f => f.Name))}.", nameof(choice));
-        if (workspace.Project is not { } project)
+        if (projectSession.Project is not { } project)
             return Task.CompletedTask;
         var path = font.AddTo(project.AssetsPath);
 
         var texts = selection.Entities.Select(e => e.GetComponent<Text>()).OfType<Text>().ToList();
-        var property = workspace.Components.Get(typeof(Text)).Properties.First(p => p.Name == nameof(Griff.Scenes.Text.Font));
-        if (texts.Count > 0 && workspace.Scene is { } document &&
+        var property = projectSession.Components.Get(typeof(Text)).Properties.First(p => p.Name == nameof(Griff.Scenes.Text.Font));
+        if (texts.Count > 0 && sceneDocuments.Scene is { } document &&
             SetPropertiesEdit.For(texts, property, [.. texts.Select(_ => (object?)path)]) is { } edit)
         {
             document.Execute(edit);

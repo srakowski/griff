@@ -23,7 +23,9 @@ namespace Griff.Editor.Features.Play;
 /// </summary>
 public sealed class PlayMode : ObservableObject, IDisposable
 {
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
+    private readonly ISceneDocuments _sceneDocuments;
+    private readonly IPlaySession _playSession;
     private readonly ISelection _selection;
     private readonly IStatusService _status;
     private readonly ILogger<PlayMode> _logger;
@@ -57,20 +59,25 @@ public sealed class PlayMode : ObservableObject, IDisposable
     /// <summary>A bad connection to pretend between the players of Play with Players: lag, jitter, a few lost packets.</summary>
     public static readonly NetConditions SlowConditions = new() { Latency = 0.06, Jitter = 0.03, Loss = 0.02 };
 
-    public PlayMode(IWorkspace workspace, ISelection selection, IStatusService status, ILogger<PlayMode> logger)
+    private readonly Core.EditorWindow _editorWindow;
+
+    public PlayMode(IPlaySession playSession, IScriptSession scriptSession, IProjectSession projectSession, ISceneDocuments sceneDocuments, ISelection selection, IStatusService status, ILogger<PlayMode> logger, Core.EditorWindow editorWindow)
     {
-        _workspace = workspace;
+        _editorWindow = editorWindow;
+        _projectSession = projectSession;
+        _sceneDocuments = sceneDocuments;
+        _playSession = playSession;
         _selection = selection;
         _status = status;
         _logger = logger;
 
         // A script reload reaches the other players' games as well as the Game tab's.
-        workspace.AddLiveScenes(() => _players.Select(p => p.Runner.Game.Scene).ToList());
+        scriptSession.AddLiveScenes(() => _players.Select(p => p.Runner.Game.Scene).ToList());
 
         // The workspace can leave play mode on its own (e.g. when closing); follow it.
-        workspace.PropertyChanged += (_, e) =>
+        playSession.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.IsPlaying) && !workspace.IsPlaying && _runner is not null)
+            if (e.PropertyName == nameof(IPlaySession.IsPlaying) && !playSession.IsPlaying && _runner is not null)
                 Stop();
         };
     }
@@ -241,24 +248,24 @@ public sealed class PlayMode : ObservableObject, IDisposable
 
     public void Play()
     {
-        if (IsPlaying || _workspace.EditScene is not { } edit || _workspace.Project is not { } project)
+        if (IsPlaying || _sceneDocuments.EditScene is not { } edit || _projectSession.Project is not { } project)
             return;
 
         // Same ids in the copy, so the selection carries across.
-        var serializer = _workspace.Serializer;
+        var serializer = _projectSession.Serializer;
         var warnings = new List<string>();
         var copy = serializer.LoadFromString(serializer.SaveToString(edit.Scene), warnings);
         var selectedId = _selection.Entity?.Id;
 
         _runtime = new SceneDocument(copy, edit.FilePath, isRuntime: true);
-        _workspace.EnterPlayMode(_runtime);
+        _playSession.EnterPlayMode(_runtime);
         if (selectedId is { } id)
             _selection.Select(copy.Find(id));
 
         Surface.AssetRoot = project.AssetsPath;
         // A big scene is snapshotted less often: copying one out costs a step half a millisecond on average at most (a
         // Debug editor copies 20,000 BunnyMark bunnies out in under 3 ms, so ten times a second).
-        _timeline = new Timeline(_workspace.Serializer) { CostPerStep = TimeSpan.FromMilliseconds(0.5), RememberBudget = RememberBudget };
+        _timeline = new Timeline(_projectSession.Serializer) { CostPerStep = TimeSpan.FromMilliseconds(0.5), RememberBudget = RememberBudget };
         _timeline.Record(copy, 0, force: true);
         _position = 0;
         _timeOffset = 0;
@@ -269,7 +276,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
 
         // Keys should drive the game, not whichever field had focus.
         Keyboard.ClearFocus();
-        Application.Current?.MainWindow?.Focus();
+        _editorWindow.Main?.Focus();
 
         Started?.Invoke(this, EventArgs.Empty);
         _status.Show("Playing");
@@ -297,14 +304,14 @@ public sealed class PlayMode : ObservableObject, IDisposable
         }
 
         var selectedId = _selection.Entity?.Id;
-        _workspace.ExitPlayMode();
+        _playSession.ExitPlayMode();
         _runtime = null;
         _timeline = null;
         _tables = null;
         _position = 0;
         (_exceptionSnapshot, _reported) = (null, null);
         _nextFrame.TrySetResult();
-        if (selectedId is { } id && _workspace.Scene?.Scene.Find(id) is { } original)
+        if (selectedId is { } id && _sceneDocuments.Scene?.Scene.Find(id) is { } original)
             _selection.Select(original);
 
         Stopped?.Invoke(this, EventArgs.Empty);
@@ -376,7 +383,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
     // `always` restores the snapshot even if it's the one shown: the game may have gone on from it while paused.
     private void Seek(int index, bool always)
     {
-        if (_runner is null || _timeline is not { Count: > 0 } timeline || _workspace.Project is null)
+        if (_runner is null || _timeline is not { Count: > 0 } timeline || _projectSession.Project is null)
             return;
 
         index = Math.Clamp(index, 0, timeline.Count - 1);
@@ -398,7 +405,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
 
         var scene = timeline.Restore(index);
         _runtime = new SceneDocument(scene, _runtime!.FilePath, isRuntime: true);
-        _workspace.ReplacePlayScene(_runtime);
+        _playSession.ReplacePlayScene(_runtime);
         _selection.Select(selectedId is { } id ? scene.Find(id) : null);
 
         _position = index;
@@ -413,16 +420,16 @@ public sealed class PlayMode : ObservableObject, IDisposable
     private void StartRunner(Scene scene, bool paused)
     {
         // Keys come from the whole window (or, with no window, as in tests, the game's own view).
-        _runner = new GameRunner(scene, Surface, (UIElement?)Application.Current?.MainWindow ?? Surface) { IsPaused = paused, TakesKeys = NotTypingCode };
+        _runner = new GameRunner(scene, Surface, (UIElement?)_editorWindow.Main ?? Surface) { IsPaused = paused, TakesKeys = NotTypingCode };
         _runner.Ticked += OnTicked;
         _runner.Faulted += OnFaulted;
-        if (_workspace.Project is { } project)
+        if (_projectSession.Project is { } project)
         {
             _runner.Game.SceneLoader = name => LoadScene(project, name);
-            _runner.Game.PrefabLoader = new PrefabLibrary(project, _workspace.Components).Instantiate;
+            _runner.Game.PrefabLoader = new PrefabLibrary(project, _projectSession.Components).Instantiate;
             _runner.Game.SaveData = new SaveData(SaveData.EditorPath(project.RootPath));
             _runner.Game.Title = project.Name;
-            _runner.Game.Components = _workspace.Components;
+            _runner.Game.Components = _projectSession.Components;
             _runner.Game.Net.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
             _runner.Game.UseProjectSettings(project);
             if (_tables is null)
@@ -602,7 +609,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
     // The Game tab hosts on a pretend network inside the editor, and each other player's window joins it there.
     private void StartPlayers(int players)
     {
-        if (_runner is null || _workspace.Project is not { } project)
+        if (_runner is null || _projectSession.Project is not { } project)
             return;
         _network = new MemoryNetwork();
         var host = _runner.Game;
@@ -617,7 +624,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
 
     private void OpenPlayer(Griff.Projects.Project project, int number, int players)
     {
-        var main = Application.Current.MainWindow!;
+        var main = _editorWindow.Main!;
         var surface = new GameSurface { AssetRoot = project.AssetsPath };
         var (left, top, width, height) = PlaceFor(main, number, players);
         var window = new Window
@@ -636,16 +643,16 @@ public sealed class PlayMode : ObservableObject, IDisposable
         };
 
         // Its own copy of the scene, which it swaps for the host's as soon as it's in.
-        var serializer = _workspace.Serializer;
-        var scene = _workspace.EditScene is { } edit ? serializer.LoadFromString(serializer.SaveToString(edit.Scene)) : new Scene();
+        var serializer = _projectSession.Serializer;
+        var scene = _sceneDocuments.EditScene is { } edit ? serializer.LoadFromString(serializer.SaveToString(edit.Scene)) : new Scene();
         window.Show();
         var runner = new GameRunner(scene, surface, window);
         var game = runner.Game;
         game.SceneLoader = name => LoadScene(project, name);
-        game.PrefabLoader = new PrefabLibrary(project, _workspace.Components).Instantiate;
+        game.PrefabLoader = new PrefabLibrary(project, _projectSession.Components).Instantiate;
         game.SaveData = new SaveData();
         game.Title = project.Name;
-        game.Components = _workspace.Components;
+        game.Components = _projectSession.Components;
         game.SceneName = _sceneName;
         game.Net.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
         game.Net.PlayerName = $"Player {number}";
@@ -708,14 +715,14 @@ public sealed class PlayMode : ObservableObject, IDisposable
     // other scenes load from disk.
     private Scene LoadScene(Griff.Projects.Project project, string name)
     {
-        if (_workspace.EditScene is { } edit && project.FindScene(name) is { } path &&
+        if (_sceneDocuments.EditScene is { } edit && project.FindScene(name) is { } path &&
             string.Equals(System.IO.Path.GetFullPath(path), System.IO.Path.GetFullPath(edit.FilePath), StringComparison.OrdinalIgnoreCase))
         {
-            var serializer = _workspace.Serializer;
+            var serializer = _projectSession.Serializer;
             return serializer.LoadFromString(serializer.SaveToString(edit.Scene));
         }
 
-        return GameLoader.LoadScene(project, _workspace.Components, name);
+        return GameLoader.LoadScene(project, _projectSession.Components, name);
     }
 
     // The game switched scenes (Game.LoadScene): show the new one everywhere.
@@ -727,7 +734,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         using var quiet = ScriptProbes.Quiet();
         _runtime = new SceneDocument(scene, _runtime.FilePath, isRuntime: true);
         _sceneName = (sender as Game)?.SceneName ?? _sceneName;
-        _workspace.ReplacePlayScene(_runtime);
+        _playSession.ReplacePlayScene(_runtime);
         _selection.Select(null);
         _logger.LogInformation("Game loaded another scene");
     }

@@ -37,7 +37,7 @@ public sealed class ClipEditorTests : IDisposable
         scene.Add(crate);
 
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         var selection = services.GetRequiredService<ISelection>();
         selection.Select(hero);
         return (document, selection, services.GetRequiredService<ClipEditor>());
@@ -187,7 +187,7 @@ public sealed class ClipEditorTests : IDisposable
         var (document, _, clips) = Open(services, start: null);
         var animation = AnimationOf(document);
         animation.Entity!.GetComponent<Sprite>()!.Rows = 2;
-        document.Execute(new SetPropertyEdit(animation, services.GetRequiredService<IWorkspace>().Components.Get(typeof(Animation)).Properties
+        document.Execute(new SetPropertyEdit(animation, services.GetRequiredService<Workspace>().Components.Get(typeof(Animation)).Properties
             .Single(p => p.Name == nameof(Animation.Clips)), null));
         animation.FirstFrame = 4;
         animation.FrameCount = 3;
@@ -224,7 +224,7 @@ public sealed class ClipEditorTests : IDisposable
     public void ThePreviewShowsFramesCutFromTheSpriteSheet() => EditorHost.Run(services =>
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
 
         // Four 16-pixel frames, each a different shade of red.

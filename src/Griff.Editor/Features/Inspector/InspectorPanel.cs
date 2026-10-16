@@ -25,7 +25,8 @@ namespace Griff.Editor.Features.Inspector;
 /// </summary>
 public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 {
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
+    private readonly ISceneDocuments _sceneDocuments;
     private readonly ISelection _selection;
     private readonly Scripts.ScriptEditors _scripts;
     private readonly Core.Dialogs.IDialogService _dialogs;
@@ -45,15 +46,19 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     private IReadOnlyList<Entity> _entities = [];
     private int[] _componentCounts = [];
 
-    public InspectorPanel(IWorkspace workspace, ISelection selection, Scripts.ScriptEditors scripts, Art.EditorArt art,
+    private readonly PrefabFiles _prefabFiles;
+
+    public InspectorPanel(ISceneDocuments sceneDocuments, IScriptSession scriptSession, IProjectSession projectSession, ISelection selection, Scripts.ScriptEditors scripts, Art.EditorArt art,
         Audio.EditorAudio audio, Core.Dialogs.IDialogService dialogs, Core.Status.IStatusService status, Core.Settings.ISettingsStore settings,
-        IServiceProvider? services = null)
+        Lazy<Core.Commands.CommandRegistry> commands, PrefabFiles prefabFiles)
     {
-        _services = services;
+        _prefabFiles = prefabFiles;
+        _commands = commands;
         _settings = settings;
         _art = art;
         _audio = audio;
-        _workspace = workspace;
+        _projectSession = projectSession;
+        _sceneDocuments = sceneDocuments;
         _selection = selection;
         _scripts = scripts;
         _dialogs = dialogs;
@@ -65,13 +70,13 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
             if (e.PropertyName == nameof(ISelection.Entities))
                 Rebuild();
         };
-        workspace.PropertyChanged += (_, e) =>
+        sceneDocuments.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.Scene))
-                Track(workspace.Scene);
+            if (e.PropertyName == nameof(ISceneDocuments.Scene))
+                Track(sceneDocuments.Scene);
         };
-        workspace.ScriptsReloaded += (_, _) => Rebuild();
-        Track(workspace.Scene);
+        scriptSession.ScriptsReloaded += (_, _) => Rebuild();
+        Track(sceneDocuments.Scene);
     }
 
     public override string Id => "Inspector";
@@ -136,14 +141,14 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 
     /// <summary>Components that can be added, alphabetically.</summary>
     public IEnumerable<ComponentDescriptor> AvailableComponents =>
-        _workspace.Components.All.Where(d => d.Type != typeof(Transform)).OrderBy(d => d.DisplayName);
+        _projectSession.Components.All.Where(d => d.Type != typeof(Transform)).OrderBy(d => d.DisplayName);
 
     /// <summary>
     /// Adds a component, and any components it requires that an entity is missing (a Patrol brings a Body and a
     /// BoxCollider), to every selected entity, as one undo step.
     /// </summary>
     public void AddComponent(ComponentDescriptor descriptor) =>
-        ExecuteOnEach($"Add {descriptor.DisplayName}", entity => Griff.Editing.ComponentCatalog.AddWithRequirements(_workspace.Components, descriptor, entity));
+        ExecuteOnEach($"Add {descriptor.DisplayName}", entity => Griff.Editing.ComponentCatalog.AddWithRequirements(_projectSession.Components, descriptor, entity));
 
     /// <summary>
     /// Adds the component named <paramref name="component"/> ("Patrol" or "Platformer Movement"), with what it needs, to
@@ -157,7 +162,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     }
 
     /// <summary>The component catalog, checked against the primary selected entity.</summary>
-    public ComponentCatalogViewModel CreateCatalog() => new(_workspace.Components, _selection.Entity);
+    public ComponentCatalogViewModel CreateCatalog() => new(_projectSession.Components, _selection.Entity);
 
     /// <summary>The primary selected entity, which the catalog checks components against.</summary>
     public Entity? Entity => _selection.Entity;
@@ -203,10 +208,10 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     /// </summary>
     internal void AddRequirement(IReadOnlyList<Component> components, ComponentLink requirement)
     {
-        if (Griff.Editing.ComponentCatalog.Satisfier(_workspace.Components, requirement.Type) is not { } satisfier)
+        if (Griff.Editing.ComponentCatalog.Satisfier(_projectSession.Components, requirement.Type) is not { } satisfier)
             return;
         var edits = components.Select(c => c.Entity).OfType<Entity>().Where(e => !requirement.IsMetBy(e))
-            .Select(e => Griff.Editing.ComponentCatalog.AddWithRequirements(_workspace.Components, satisfier, e)).ToList();
+            .Select(e => Griff.Editing.ComponentCatalog.AddWithRequirements(_projectSession.Components, satisfier, e)).ToList();
         if (edits.Count > 0)
             Execute(edits.Count == 1 ? edits[0] : new CompositeEdit($"Add {satisfier.DisplayName} to {edits.Count} entities", edits));
     }
@@ -233,11 +238,11 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     internal string? DependentsNote(IReadOnlyList<Component> components)
     {
         var dependents = components
-            .SelectMany(c => Griff.Editing.ComponentCatalog.Dependents(_workspace.Components, c).Select(d => (Entity: c.Entity!, Dependent: d)))
+            .SelectMany(c => Griff.Editing.ComponentCatalog.Dependents(_projectSession.Components, c).Select(d => (Entity: c.Entity!, Dependent: d)))
             .ToList();
         if (dependents.Count == 0)
             return null;
-        var names = dependents.Select(d => Humanize(_workspace.Components.Get(d.Dependent.GetType()).DisplayName)).Distinct().ToList();
+        var names = dependents.Select(d => Humanize(_projectSession.Components.Get(d.Dependent.GetType()).DisplayName)).Distinct().ToList();
         var entities = dependents.Select(d => d.Entity).Distinct().ToList();
         var where = entities.Count == 1 ? entities[0].Name : $"{entities.Count} entities";
         return $"{ComponentCatalogViewModel.Join(names)} {(names.Count == 1 ? "needs" : "need")} it on {where}, and won't work without it.";
@@ -263,17 +268,17 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 
     internal void Execute(IEdit edit) => _document?.Execute(edit);
 
-    private readonly IServiceProvider? _services;
+    // Asked for when a field's editor runs a command: the commands that open panels are made after the panels are.
+    private readonly Lazy<Core.Commands.CommandRegistry> _commands;
 
-    /// <summary>Runs one of the editor's commands by its id, as a field's editor does ("Art.Clips" opens the Clip Editor).</summary>
-    public void RunCommand(string id)
+    /// <summary>Runs one of the editor's commands, as a field's editor does (the Clip Editor's opens it).</summary>
+    public void RunCommand<TCommand>() where TCommand : Core.Commands.EditorCommand
     {
-        if (_services?.GetService(typeof(Core.Commands.CommandRegistry)) is Core.Commands.CommandRegistry commands)
-            _ = commands.Get(id).ExecuteAsync();
+        _ = _commands.Value.Get<TCommand>().ExecuteAsync();
     }
 
     /// <summary>Renames an entity, and the fields in the scene that name it, as one undo step.</summary>
-    internal void Rename(Entity entity, string name) => Execute(EntityReferences.Rename(entity, name, _workspace.Components));
+    internal void Rename(Entity entity, string name) => Execute(EntityReferences.Rename(entity, name, _projectSession.Components));
 
     private KnownNames? _names;
     private bool _namesRead;
@@ -289,7 +294,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
             if (!_namesRead)
             {
                 _namesRead = true;
-                _names = _workspace.Names;
+                _names = _projectSession.Names;
             }
 
             return _names;
@@ -302,17 +307,17 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     private readonly FontPreviews _fontPreviews = new();
 
     /// <summary>The font picker's preview of a font: its name drawn in it, as the game draws it.</summary>
-    public ImageSource? FontPreview(string? font, string text) => _fontPreviews.Preview(_workspace.Project?.AssetsPath, font, text);
+    public ImageSource? FontPreview(string? font, string text) => _fontPreviews.Preview(_projectSession.Project?.AssetsPath, font, text);
 
     /// <summary>
     /// True while a prefab's tab is showing: fields naming things outside the entity they're on aren't flagged, as they
     /// name things in whatever scene the prefab is placed in.
     /// </summary>
-    public bool InPrefab => _workspace.Scene?.IsPrefab == true;
+    public bool InPrefab => _sceneDocuments.Scene?.IsPrefab == true;
 
     /// <summary>Whether the prefab file at <paramref name="assetPath"/> (in Assets) is there.</summary>
     internal bool PrefabExists(string assetPath) =>
-        _workspace.Project is { } project && System.IO.File.Exists(System.IO.Path.Combine(project.AssetsPath, assetPath));
+        _projectSession.Project is { } project && System.IO.File.Exists(System.IO.Path.Combine(project.AssetsPath, assetPath));
 
     /// <summary>The prefab's own component that <paramref name="component"/>, on a placed copy or inside one, was made from.</summary>
     public Component? PrefabComponent(Component component) => _prefabParts.GetValueOrDefault(component);
@@ -323,14 +328,14 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     /// <summary>A placed copy's prefab, as an entity made from its file (read again when the file changes), or null.</summary>
     internal Entity? PrefabOf(Entity copy)
     {
-        if (copy.Prefab is not { } link || _workspace.Project?.FindPrefab(link) is not { } path)
+        if (copy.Prefab is not { } link || _projectSession.Project?.FindPrefab(link) is not { } path)
             return null;
-        return _prefabs[path] = PrefabFiles.Read(_workspace, path);
+        return _prefabs[path] = _prefabFiles.Read(path);
     }
 
     /// <summary>What a placed copy changes from its prefab (nothing if it isn't one, or its prefab can't be read).</summary>
     internal IReadOnlyList<PrefabOverride> OverridesOf(Entity copy) =>
-        PrefabOf(copy) is { } prefab ? PrefabOverrides.Find(copy, prefab, _workspace.Components) : [];
+        PrefabOf(copy) is { } prefab ? PrefabOverrides.Find(copy, prefab, _projectSession.Components) : [];
 
     /// <summary>
     /// Sets the field in each selected copy's prefab to the copy's value, and brings the prefab's other copies up to
@@ -338,7 +343,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     /// </summary>
     public void ApplyToPrefab(IReadOnlyList<Component> components, PropertyDescriptor property)
     {
-        var update = PrefabFiles.ApplyField(_workspace, components, property);
+        var update = _prefabFiles.ApplyField(components, property);
         if (update.Problems.Count > 0)
             _dialogs.ShowError("Couldn't apply it to the prefab", string.Join("\n", update.Problems));
         else
@@ -355,7 +360,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     /// <summary>Puts a painted picture on components: a sprite or tilemap also takes its frames or tiles.</summary>
     public void UseImage(IReadOnlyList<Component> components, PropertyDescriptor property, string image, Griff.Art.SheetLayout layout)
     {
-        var edits = components.Select(c => ArtEdits.UseSheet(_workspace.Components, c, property.Name, image, layout)).OfType<IEdit>().ToList();
+        var edits = components.Select(c => ArtEdits.UseSheet(_projectSession.Components, c, property.Name, image, layout)).OfType<IEdit>().ToList();
         if (edits.Count > 0)
             Execute(edits.Count == 1 ? edits[0] : new CompositeEdit($"Use {image}", edits));
         Seal();
@@ -405,7 +410,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     };
 
     // A prefab file the selection's copies come from was saved since it was read.
-    private bool PrefabsChanged() => _prefabs.Any(p => !ReferenceEquals(PrefabFiles.Read(_workspace, p.Key), p.Value));
+    private bool PrefabsChanged() => _prefabs.Any(p => !ReferenceEquals(_prefabFiles.Read(p.Key), p.Value));
 
     private void Rebuild()
     {
@@ -432,12 +437,12 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
         if (entities.Count == 0)
             return;
 
-        PrefabNames = _workspace.Project?.FindPrefabs().Select(System.IO.Path.GetFileNameWithoutExtension).OfType<string>().ToHashSet() ?? [];
+        PrefabNames = _projectSession.Project?.FindPrefabs().Select(System.IO.Path.GetFileNameWithoutExtension).OfType<string>().ToHashSet() ?? [];
         foreach (var entity in entities)
             MatchPrefab(entity);
 
         foreach (var (components, lacking) in Sections(entities))
-            Components.Add(new ComponentSection(components, this, _workspace.Components, lacking));
+            Components.Add(new ComponentSection(components, this, _projectSession.Components, lacking));
         if (entities.Count > 1 && entities.Any(e => e.Components.Any(c => c is MissingComponent)))
             HiddenNote = "Components whose type couldn't be found are left out.";
         ApplyFilter();
@@ -596,16 +601,16 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     /// <summary>Copies the component's values for Paste Values.</summary>
     internal void Copy(Component component)
     {
-        if (ComponentEdits.Copy(_workspace.Components, component) is not { } values)
+        if (ComponentEdits.Copy(_projectSession.Components, component) is not { } values)
             return;
         Copied = values;
-        _status.Show($"Copied {Humanize(_workspace.Components.Get(values.Type).DisplayName)}'s values.");
+        _status.Show($"Copied {Humanize(_projectSession.Components.Get(values.Type).DisplayName)}'s values.");
     }
 
     /// <summary>Sets the components to the copied values (they must be of the copied type), as one undo step.</summary>
     internal void Paste(IReadOnlyList<Component> components)
     {
-        if (Copied is { } values && ComponentEdits.Paste(_workspace.Components, values, components) is { } edit)
+        if (Copied is { } values && ComponentEdits.Paste(_projectSession.Components, values, components) is { } edit)
             Execute(edit);
         Seal();
     }
@@ -613,7 +618,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     /// <summary>Sets the components back to what a new one starts with, as one undo step.</summary>
     internal void Reset(IReadOnlyList<Component> components)
     {
-        if (ComponentEdits.Reset(_workspace.Components, components) is { } edit)
+        if (ComponentEdits.Reset(_projectSession.Components, components) is { } edit)
             Execute(edit);
         Seal();
     }
@@ -628,7 +633,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     /// <summary>Adds a copy of <paramref name="source"/>, its values too, to each entity in <paramref name="lacking"/>, as one undo step.</summary>
     internal void AddCopies(Component source, IReadOnlyList<Entity> lacking)
     {
-        if (ComponentEdits.AddCopies(_workspace.Components, source, lacking) is { } edit)
+        if (ComponentEdits.AddCopies(_projectSession.Components, source, lacking) is { } edit)
             Execute(edit);
     }
 

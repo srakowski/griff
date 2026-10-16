@@ -35,7 +35,7 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
 
     private static readonly string[] SuggestedNames = ["Idle", "Run", "Jump", "Fall", "Attack", "Hurt", "Die"];
 
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
     private readonly ISelection _selection;
     private readonly EditorArt _art;
     private readonly IDialogService _dialogs;
@@ -53,9 +53,11 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
     private (int First, int Last)? _highlight;
     private ClipEditorWindow? _window;
 
-    public ClipEditor(IWorkspace workspace, ISelection selection, EditorArt art, IDialogService dialogs)
+    private readonly Core.EditorWindow _editorWindow;
+    public ClipEditor(ISceneDocuments sceneDocuments, IProjectSession projectSession, ISelection selection, EditorArt art, IDialogService dialogs, Core.EditorWindow editorWindow)
     {
-        _workspace = workspace;
+        _projectSession = projectSession;
+        _editorWindow = editorWindow;
         _selection = selection;
         _art = art;
         _dialogs = dialogs;
@@ -79,12 +81,12 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
             if (e.PropertyName == nameof(ISelection.Entity))
                 Follow();
         };
-        workspace.PropertyChanged += (_, e) =>
+        sceneDocuments.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.Scene))
-                Track(workspace.Scene);
+            if (e.PropertyName == nameof(ISceneDocuments.Scene))
+                Track(sceneDocuments.Scene);
         };
-        Track(workspace.Scene);
+        Track(sceneDocuments.Scene);
     }
 
     public string Title => "Clip Editor";
@@ -236,7 +238,7 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
     {
         if (_window is null)
         {
-            _window = new ClipEditorWindow(this) { Owner = Application.Current?.MainWindow };
+            _window = new ClipEditorWindow(this) { Owner = _editorWindow.Main };
             _window.Closed += (_, _) => _window = null;
             _window.Show();
         }
@@ -838,7 +840,7 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
         lines is null || Hitboxes is not { } hitboxes || lines.SequenceEqual(hitboxes.Boxes) ? null : BoxesEdit(hitboxes, lines);
 
     private SetPropertyEdit BoxesEdit(Hitboxes hitboxes, IReadOnlyList<string> lines) =>
-        new(hitboxes, _workspace.Components.Get(typeof(Hitboxes)).Properties.Single(p => p.Name == nameof(Griff.Modules.Fighting.Hitboxes.Boxes)), lines);
+        new(hitboxes, _projectSession.Components.Get(typeof(Hitboxes)).Properties.Single(p => p.Name == nameof(Griff.Modules.Fighting.Hitboxes.Boxes)), lines);
 
     // Lists the boxes of the frame showing (and the frame before, for the onion skin) when the frame changes or they do.
     private void RefreshBoxes()
@@ -1119,7 +1121,7 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
     {
         if (Animation is not { } animation || _document is not { } document || changes.Length == 0)
             return;
-        var properties = _workspace.Components.Get(typeof(Animation)).Properties;
+        var properties = _projectSession.Components.Get(typeof(Animation)).Properties;
         var edits = changes.Select(c => (IEdit)new SetPropertyEdit(animation, properties.Single(p => p.Name == c.Property), c.Value)).ToList();
         if (boxes is not null)
             edits.Add(boxes);

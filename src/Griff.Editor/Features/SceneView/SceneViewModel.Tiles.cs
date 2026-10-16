@@ -110,7 +110,7 @@ public sealed partial class SceneViewModel
             throw new ArgumentOutOfRangeException(nameof(index), $"The tilemap has {layers.Count} layer{(layers.Count == 1 ? "" : "s")}, numbered from 0.");
         var entity = layers[index].Entity!;
         if (entity.IsHidden)
-            workspace.Scene!.Execute(new SetEntitiesHiddenEdit([entity], false));
+            sceneDocuments.Scene!.Execute(new SetEntitiesHiddenEdit([entity], false));
         selection.Select(entity);
     }
 
@@ -123,7 +123,7 @@ public sealed partial class SceneViewModel
     public string AddLayer()
     {
         var target = PaintTarget ?? throw NothingToPaint();
-        if (workspace.Scene is not { } document)
+        if (sceneDocuments.Scene is not { } document)
             throw NothingToPaint();
         var baseMap = target.BaseMap;
         var layers = target.Layers();
@@ -156,7 +156,7 @@ public sealed partial class SceneViewModel
         var tilemap = (PaintTarget ?? throw NothingToPaint()).BaseMap;
         if (string.IsNullOrWhiteSpace(image))
             throw new ArgumentException("Name an image in the project's Assets, like Tiles/props.png.", nameof(image));
-        if (workspace.Scene is not { } document)
+        if (sceneDocuments.Scene is not { } document)
             throw NothingToPaint();
         image = image.Trim().Replace('\\', '/');
         (columns, rows) = (Math.Clamp(columns, 1, 1024), Math.Clamp(rows, 1, 1024));
@@ -200,7 +200,7 @@ public sealed partial class SceneViewModel
     /// enabled and not hidden. Null otherwise (then the Scene view selects and moves as usual).
     /// </summary>
     public Tilemap? PaintTarget =>
-        selection.Entities is [var entity] && entity.Scene == workspace.Scene?.Scene && IsShown(entity)
+        selection.Entities is [var entity] && entity.Scene == sceneDocuments.Scene?.Scene && IsShown(entity)
             ? entity.GetComponent<Tilemap>()
             : null;
 
@@ -268,14 +268,14 @@ public sealed partial class SceneViewModel
     /// is for the Scene view's drags only; agents paint with <see cref="PaintTile"/>). Null with no tilemap to paint.
     /// </summary>
     internal TileStroke? BeginTileStroke(bool erase = false) =>
-        workspace.Scene is { } document && PaintTarget is { } tilemap
+        sceneDocuments.Scene is { } document && PaintTarget is { } tilemap
             ? new TileStroke(document, tilemap, erase ? -1 : BrushTile, Property(tilemap, nameof(Tilemap.Tiles)), Property(tilemap.Entity!.Transform, nameof(Transform.Position)))
             : null;
 
     // Puts new tiles on the map, moving the entity back by the cells added left of and above the old grid, as one step.
     private void Apply(Tilemap tilemap, IReadOnlyList<string> tiles, int shiftX, int shiftY, string description)
     {
-        if (workspace.Scene is not { } document || tiles.SequenceEqual(tilemap.Tiles))
+        if (sceneDocuments.Scene is not { } document || tiles.SequenceEqual(tilemap.Tiles))
             return;
         document.History.Seal();
         using (document.History.BeginGroup(description))

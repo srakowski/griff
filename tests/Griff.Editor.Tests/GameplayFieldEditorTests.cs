@@ -37,7 +37,7 @@ public sealed class GameplayFieldEditorTests : IDisposable
     private (SceneDocument Document, ISelection Selection, InspectorPanel Inspector) Open(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         EditorHost.Pump(workspace.CreateProjectAsync(_root, "Game"));
         var project = workspace.Project!;
         Directory.CreateDirectory(Path.GetDirectoryName(project.DefaultPrefabPath("Explosion"))!);

@@ -43,7 +43,7 @@ internal static partial class SnapshotRunner
             Show(main);
             Render(main, Path.Combine(outputDir, "start.png"));
 
-            var workspace = services.GetRequiredService<IWorkspace>();
+            var workspace = services.GetRequiredService<Workspace>();
             var projectDir = Path.Combine(Path.GetTempPath(), "griff-snapshot-" + Guid.NewGuid().ToString("N")[..8]);
             await workspace.CreateProjectAsync(projectDir, "Snapshot Game");
             BuildSampleScene(workspace, services.GetRequiredService<ISelection>());
@@ -474,7 +474,7 @@ internal static partial class SnapshotRunner
         }
     }
 
-    private static void BuildSampleScene(IWorkspace workspace, ISelection selection)
+    private static void BuildSampleScene(Workspace workspace, ISelection selection)
     {
         var document = workspace.Scene!;
         var scene = document.Scene;
@@ -506,7 +506,7 @@ internal static partial class SnapshotRunner
         selection.Select(player);
     }
 
-    private static void BuildShowcase(IWorkspace workspace)
+    private static void BuildShowcase(Workspace workspace)
     {
         var document = workspace.Scene!;
         var scene = document.Scene;
@@ -622,7 +622,7 @@ internal static partial class SnapshotRunner
         document.Execute(new AddEntityEdit(scene, popper));
     }
 
-    private static void BuildTier(IWorkspace workspace)
+    private static void BuildTier(Workspace workspace)
     {
         var document = workspace.Scene!;
         var scene = document.Scene;
@@ -721,7 +721,7 @@ internal static partial class SnapshotRunner
         document.Execute(new AddEntityEdit(scene, counter));
     }
 
-    private static void BuildPuzzles(IWorkspace workspace)
+    private static void BuildPuzzles(Workspace workspace)
     {
         var document = workspace.Scene!;
         var scene = document.Scene;
@@ -762,7 +762,7 @@ internal static partial class SnapshotRunner
 
     // A floor of three autotiled cells (only the piece joining left and right, tile 10, is green) and a platformer player
     // above it. Returns the player.
-    private static Entity BuildMovement(IWorkspace workspace)
+    private static Entity BuildMovement(Workspace workspace)
     {
         var document = workspace.Scene!;
         var scene = document.Scene;

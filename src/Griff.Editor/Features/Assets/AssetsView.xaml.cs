@@ -1,3 +1,4 @@
+using Griff.Editor.Features.Scripts;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -7,12 +8,16 @@ using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Themes;
+using Griff.Editor.Features.Art;
+using Griff.Editor.Features.Audio;
+using Griff.Editor.Features.Data;
+using Griff.Editor.Features.Scenes;
 
 namespace Griff.Editor.Features.Assets;
 
 public partial class AssetsView : UserControl
 {
-    private readonly IWorkspace _workspace;
+    private readonly ISceneDocuments _sceneDocuments;
     private readonly CommandRegistry _commands;
     private readonly IDialogService _dialogs;
     private readonly Scripts.ScriptEditors _scripts;
@@ -22,13 +27,13 @@ public partial class AssetsView : UserControl
     private readonly Audio.EditorAudio _audio;
     private readonly Art.EditorArt _art;
 
-    public AssetsView(IWorkspace workspace, CommandRegistry commands, IDialogService dialogs, Scripts.ScriptEditors scripts, Audio.EditorAudio audio, Art.EditorArt art)
+    public AssetsView(ISceneDocuments sceneDocuments, CommandRegistry commands, IDialogService dialogs, Scripts.ScriptEditors scripts, Audio.EditorAudio audio, Art.EditorArt art)
     {
         InitializeComponent();
         _audio = audio;
         _art = art;
         _scripts = scripts;
-        _workspace = workspace;
+        _sceneDocuments = sceneDocuments;
         _commands = commands;
         _dialogs = dialogs;
     }
@@ -39,9 +44,9 @@ public partial class AssetsView : UserControl
             return;
 
         if (node.Kind == AssetKind.Scene)
-            await _workspace.OpenSceneAsync(node.FullPath);
+            await _sceneDocuments.OpenSceneAsync(node.FullPath);
         else if (node.Kind == AssetKind.Prefab)
-            await _workspace.OpenPrefabAsync(node.FullPath);
+            await _sceneDocuments.OpenPrefabAsync(node.FullPath);
         else if (node.Kind == AssetKind.Script)
             _scripts.Open(node.FullPath);
         else if (node.Kind == AssetKind.Audio)
@@ -49,11 +54,11 @@ public partial class AssetsView : UserControl
         else if (node.Kind == AssetKind.Image)
             _art.OpenPainter(editing: node.AssetPath);
         else if (node.Kind == AssetKind.Simulation)
-            Choose("Data.OpenSimulation", node.AssetPath);
+            Choose<OpenSimulationCommand>(node.AssetPath);
         else if (node.Kind == AssetKind.Table)
-            Choose("Data.OpenTable", node.AssetPath);
+            Choose<OpenTableCommand>(node.AssetPath);
         else if (node.Kind != AssetKind.Folder)
-            Choose("Asset.OpenExternally", node.AssetPath);
+            Choose<OpenAssetExternallyCommand>(node.AssetPath);
     }
 
     // ----- Context menu -----
@@ -65,22 +70,22 @@ public partial class AssetsView : UserControl
 
         if (node is { Kind: AssetKind.Scene })
         {
-            Add(menu, "Open Scene", Icons.Open, async () => await _workspace.OpenSceneAsync(node.FullPath));
-            Add(menu, "Set as Start Scene", Icons.Play, () => Choose("Scene.SetStart", node.AssetPath));
+            Add(menu, "Open Scene", Icons.Open, async () => await _sceneDocuments.OpenSceneAsync(node.FullPath));
+            Add(menu, "Set as Start Scene", Icons.Play, () => Choose<SetStartSceneCommand>(node.AssetPath));
             menu.Items.Add(new Separator());
         }
         else if (node is { Kind: AssetKind.Prefab })
         {
-            Add(menu, "Edit Prefab", Icons.Package, async () => await _workspace.OpenPrefabAsync(node.FullPath));
-            Add(menu, "Add to Scene", Icons.Add, () => Choose("Asset.AddToScene", node.AssetPath));
+            Add(menu, "Edit Prefab", Icons.Package, async () => await _sceneDocuments.OpenPrefabAsync(node.FullPath));
+            Add(menu, "Add to Scene", Icons.Add, () => Choose<AddAssetToSceneCommand>(node.AssetPath));
             Add(menu, "Rename...", Icons.Rename, () => Panel?.RenamePrefab(node.AssetPath));
-            Add(menu, "Open in Another Editor", Icons.Open, () => Choose("Asset.OpenExternally", node.AssetPath));
+            Add(menu, "Open in Another Editor", Icons.Open, () => Choose<OpenAssetExternallyCommand>(node.AssetPath));
             menu.Items.Add(new Separator());
         }
         else if (node is { Kind: AssetKind.Script })
         {
             Add(menu, "Edit Script", Icons.Code, () => _scripts.Open(node.FullPath));
-            Add(menu, "Open in Another Editor", Icons.Open, () => Choose("Asset.OpenExternally", node.AssetPath));
+            Add(menu, "Open in Another Editor", Icons.Open, () => Choose<OpenAssetExternallyCommand>(node.AssetPath));
             menu.Items.Add(new Separator());
         }
         else if (node is { Kind: AssetKind.Audio })
@@ -88,45 +93,45 @@ public partial class AssetsView : UserControl
             Add(menu, "Play", Icons.Play, () => _audio.Preview(node.AssetPath));
             if (_audio.CanEdit(node.AssetPath))
                 Add(menu, "Edit in Sound Maker", Icons.Audio, () => _audio.OpenMaker(editing: node.AssetPath));
-            Add(menu, "Open in Another Program", Icons.Open, () => Choose("Asset.OpenExternally", node.AssetPath));
+            Add(menu, "Open in Another Program", Icons.Open, () => Choose<OpenAssetExternallyCommand>(node.AssetPath));
             menu.Items.Add(new Separator());
         }
         else if (node is { Kind: AssetKind.Image })
         {
             Add(menu, "Paint in Sprite Painter", Icons.Palette, () => _art.OpenPainter(editing: node.AssetPath));
-            Add(menu, "Open in Another Program", Icons.Open, () => Choose("Asset.OpenExternally", node.AssetPath));
+            Add(menu, "Open in Another Program", Icons.Open, () => Choose<OpenAssetExternallyCommand>(node.AssetPath));
             menu.Items.Add(new Separator());
         }
         else if (node is { Kind: AssetKind.Simulation })
         {
-            Add(menu, "Open in Simulations Panel", Icons.Simulation, () => Choose("Data.OpenSimulation", node.AssetPath));
-            Add(menu, "Open in Another Editor", Icons.Open, () => Choose("Asset.OpenExternally", node.AssetPath));
+            Add(menu, "Open in Simulations Panel", Icons.Simulation, () => Choose<OpenSimulationCommand>(node.AssetPath));
+            Add(menu, "Open in Another Editor", Icons.Open, () => Choose<OpenAssetExternallyCommand>(node.AssetPath));
             menu.Items.Add(new Separator());
         }
         else if (node is { Kind: AssetKind.Table })
         {
-            Add(menu, "Open in Tables Panel", Icons.Table, () => Choose("Data.OpenTable", node.AssetPath));
-            Add(menu, "Open in Another Editor", Icons.Open, () => Choose("Asset.OpenExternally", node.AssetPath));
+            Add(menu, "Open in Tables Panel", Icons.Table, () => Choose<OpenTableCommand>(node.AssetPath));
+            Add(menu, "Open in Another Editor", Icons.Open, () => Choose<OpenAssetExternallyCommand>(node.AssetPath));
             menu.Items.Add(new Separator());
         }
         else if (node is { Kind: not AssetKind.Folder })
         {
-            Add(menu, "Open", Icons.Open, () => Choose("Asset.OpenExternally", node.AssetPath));
+            Add(menu, "Open", Icons.Open, () => Choose<OpenAssetExternallyCommand>(node.AssetPath));
             menu.Items.Add(new Separator());
         }
 
-        AddCommand(menu, "Scene.New");
-        AddCommand(menu, "Script.New");
-        AddCommand(menu, "Audio.NewSound");
-        AddCommand(menu, "Audio.NewMusic");
-        AddCommand(menu, "Art.NewSprite");
-        AddCommand(menu, "Art.NewTileset");
-        AddCommand(menu, "Data.NewTable");
-        AddCommand(menu, "Data.NewSimulation");
-        AddCommand(menu, "Data.ImportCsv");
+        AddCommand<NewSceneCommand>(menu);
+        AddCommand<NewScriptCommand>(menu);
+        AddCommand<NewSoundCommand>(menu);
+        AddCommand<NewMusicCommand>(menu);
+        AddCommand<NewSpriteCommand>(menu);
+        AddCommand<NewTilesetCommand>(menu);
+        AddCommand<NewTableCommand>(menu);
+        AddCommand<NewSimulationCommand>(menu);
+        AddCommand<ImportCsvCommand>(menu);
         menu.Items.Add(new Separator());
         Add(menu, "New Folder...", Icons.Folder, () => Panel?.NewFolder(FolderOf(node)));
-        Add(menu, "Show in Explorer", Icons.Folder, () => Choose("Asset.ShowInExplorer", node?.AssetPath ?? ""));
+        Add(menu, "Show in Explorer", Icons.Folder, () => Choose<ShowAssetInExplorerCommand>(node?.AssetPath ?? ""));
 
         menu.PlacementTarget = Tree;
         menu.IsOpen = true;
@@ -140,9 +145,9 @@ public partial class AssetsView : UserControl
         menu.Items.Add(item);
     }
 
-    private void AddCommand(ContextMenu menu, string id)
+    private void AddCommand<T>(ContextMenu menu) where T : EditorCommand
     {
-        var command = _commands.Get(id);
+        var command = _commands.Get<T>();
         menu.Items.Add(new MenuItem
         {
             Header = command.Text,
@@ -205,9 +210,9 @@ public partial class AssetsView : UserControl
     // ----- Helpers -----
 
     // Runs a command on the asset, as an agent would with its choice; what goes wrong is said, not thrown.
-    private async void Choose(string commandId, string assetPath)
+    private async void Choose<T>(string assetPath) where T : EditorCommand
     {
-        var command = _commands.Get(commandId);
+        var command = _commands.Get<T>();
         try
         {
             await command.ChooseAsync(assetPath);

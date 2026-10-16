@@ -1,0 +1,22 @@
+title: What the Entity menu makes
+intro: Everything the Entity menu creates is a preset that lives with the engine, so the editor, a template and an agent all make it the same way. A button made on a panel draws over it, and a turn order sits above whatever it's made in.
+project: Empty | Honest Presets
+
+chapter: A button on a panel | Drawn over its backdrop
+deselect
+menu: Entity > UI > Panel
+expectselected: Panel
+expectvalue: Panel.Sprite.Order = 300
+say: A panel is a backdrop pinned to the middle of the screen. Whatever you make while it is selected goes inside it.
+menu: Entity > UI > Button
+expectselected: Button
+expectvalue: Button.Sprite.Order = 310
+explain: component:Button | Over the panel | The button's order is ten above the panel's backdrop, so it draws over it. The Hierarchy shows it inside the panel.
+
+chapter: Turns | Created with its End Turn button
+deselect
+menu: Entity > Gameplay > Turn Order
+expectselected: Turns
+expectvalue: Turns.Text.Order = 150
+say: One preset makes the turn order with its text and its End Turn button, as one undo step. Agents call the same thing as a tool, Entity Create Turn Order, and get what you got.
+expectundo: Add Turns

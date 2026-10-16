@@ -56,10 +56,10 @@ public sealed class BreakpointTests : IDisposable
         Counter[..Counter.IndexOf(text, StringComparison.Ordinal)].Count(c => c == '\n') + 1;
 
     // A project with the Counter script on an entity of the open scene.
-    private (IWorkspace Workspace, string Script, Entity Entity) Open(IServiceProvider services)
+    private (Workspace Workspace, string Script, Entity Entity) Open(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         var project = workspace.Project!;
         var script = Path.Combine(project.AssetsPath, "Scripts", "Counter.cs");

@@ -11,14 +11,14 @@ namespace Griff.Editor.Features.Assets;
 /// panel's right-click menu does: a prefab as a linked copy where it was saved from, an image as a sprite sized to its
 /// shape at 0, 0. The new entity is selected. Pick the asset by its path in Assets, e.g. "Prefabs/Coin.prefab".
 /// </summary>
-public sealed class AddAssetToSceneCommand(IWorkspace workspace, AssetPlacement placement, IDialogService dialogs) : EditorCommand
+public sealed class AddAssetToSceneCommand(ISceneDocuments sceneDocuments, AssetPlacement placement, IDialogService dialogs) : EditorCommand
 {
     public override string Id => "Asset.AddToScene";
     public override string Text => "Add to Scene";
     public override string? Icon => Icons.Add;
     public override IReadOnlyList<string>? Choices => placement.Placeable();
 
-    protected override bool CanExecuteCore() => workspace.Scene is not null;
+    protected override bool CanExecuteCore() => sceneDocuments.Scene is not null;
 
     protected override Task ExecuteCoreAsync()
     {
@@ -39,24 +39,24 @@ public sealed class AddAssetToSceneCommand(IWorkspace workspace, AssetPlacement 
 /// Opens a file in Assets with the program Windows has for it (an image editor, a sound editor, a code editor), given by
 /// its path in Assets, e.g. "Sounds/jump.wav". Programs and scripts that would run instead of open are refused.
 /// </summary>
-public sealed class OpenAssetExternallyCommand(IWorkspace workspace, IExternalPrograms programs, IDialogService dialogs) : EditorCommand
+public sealed class OpenAssetExternallyCommand(IProjectSession projectSession, IExternalPrograms programs, IDialogService dialogs) : EditorCommand
 {
     public override string Id => "Asset.OpenExternally";
     public override string Text => "Open in Another Program";
     public override string? Icon => Icons.Open;
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {
         var asset = dialogs.Prompt("Open in Another Program", "File (in Assets)", "",
-            text => AssetFiles.Find(workspace, text) is { } file && File.Exists(file) ? null : "There's no such file in Assets.");
+            text => AssetFiles.Find(projectSession, text) is { } file && File.Exists(file) ? null : "There's no such file in Assets.");
         return asset is null ? Task.CompletedTask : ChooseCoreAsync(asset);
     }
 
     protected override Task ChooseCoreAsync(string choice)
     {
-        if (AssetFiles.Find(workspace, choice) is not { } file || !File.Exists(file))
+        if (AssetFiles.Find(projectSession, choice) is not { } file || !File.Exists(file))
             throw new ArgumentException($"There's no file \"{choice}\" in Assets.", nameof(choice));
         programs.Open(file);
         return Task.CompletedTask;
@@ -67,19 +67,19 @@ public sealed class OpenAssetExternallyCommand(IWorkspace workspace, IExternalPr
 /// Shows a file or folder in Assets in File Explorer, given by its path in Assets ("Sprites/hero.png", "Sprites"); with
 /// none, the Assets folder itself.
 /// </summary>
-public sealed class ShowAssetInExplorerCommand(IWorkspace workspace, IExternalPrograms programs) : EditorCommand
+public sealed class ShowAssetInExplorerCommand(IProjectSession projectSession, IExternalPrograms programs) : EditorCommand
 {
     public override string Id => "Asset.ShowInExplorer";
     public override string Text => "Show in Explorer";
     public override string? Icon => Icons.Folder;
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync() => ChooseCoreAsync("");
 
     protected override Task ChooseCoreAsync(string choice)
     {
-        if (AssetFiles.Find(workspace, choice) is not { } path || !(File.Exists(path) || Directory.Exists(path)))
+        if (AssetFiles.Find(projectSession, choice) is not { } path || !(File.Exists(path) || Directory.Exists(path)))
             throw new ArgumentException($"There's no file or folder \"{choice}\" in Assets.", nameof(choice));
         programs.ShowInExplorer(path);
         return Task.CompletedTask;
@@ -89,9 +89,9 @@ public sealed class ShowAssetInExplorerCommand(IWorkspace workspace, IExternalPr
 internal static class AssetFiles
 {
     /// <summary>The full path of a path in Assets ("" for Assets itself), or null if it would lead outside Assets.</summary>
-    public static string? Find(IWorkspace workspace, string assetPath)
+    public static string? Find(IProjectSession projectSession, string assetPath)
     {
-        if (workspace.Project is not { } project)
+        if (projectSession.Project is not { } project)
             return null;
         var root = Path.GetFullPath(project.AssetsPath);
         var full = Path.GetFullPath(Path.Combine(root, assetPath.Trim().Replace('/', Path.DirectorySeparatorChar)));

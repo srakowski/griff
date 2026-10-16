@@ -31,7 +31,7 @@ public sealed class WalkAreaEditorTests
         scene.Add(door);
 
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         return (document, services.GetRequiredService<ISelection>(), services.GetRequiredService<SceneViewModel>());
     }
 
@@ -83,7 +83,7 @@ public sealed class WalkAreaEditorTests
     [Fact]
     public void CreateWalker_MakesAPlayerOnAFloorOfItsOwn_InOneUndoStep() => EditorHost.Run(services =>
     {
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         var document = new SceneDocument(new Scene(), "Test.scene");
         workspace.EnterPlayMode(document);
         var commands = services.GetRequiredService<CommandRegistry>();

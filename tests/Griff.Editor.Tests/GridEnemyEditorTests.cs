@@ -26,10 +26,10 @@ public sealed class GridEnemyEditorTests : IDisposable
         EditorHost.Pump(task);
     }
 
-    private IWorkspace Open(IServiceProvider services)
+    private Workspace Open(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         return workspace;
     }

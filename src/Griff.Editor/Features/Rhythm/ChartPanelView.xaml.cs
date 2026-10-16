@@ -5,6 +5,7 @@ using System.Windows.Input;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Themes;
 using Griff.Platform.Windows;
+using Griff.Editor.Features.Editing;
 
 namespace Griff.Editor.Features.Rhythm;
 
@@ -20,10 +21,10 @@ public partial class ChartPanelView : UserControl
     public ChartPanelView(CommandRegistry commands)
     {
         InitializeComponent();
-        PlayButton.Command = commands.Get("Rhythm.PlayChart");
-        RecordButton.Command = commands.Get("Rhythm.RecordChart");
-        UndoButton.Command = commands.Get("Edit.Undo");
-        RedoButton.Command = commands.Get("Edit.Redo");
+        PlayButton.Command = commands.Get<PlayChartCommand>();
+        RecordButton.Command = commands.Get<RecordChartCommand>();
+        UndoButton.Command = commands.Get<UndoCommand>();
+        RedoButton.Command = commands.Get<RedoCommand>();
         StartButton.Click += (_, _) =>
         {
             if (Model is { IsRecording: false } model)

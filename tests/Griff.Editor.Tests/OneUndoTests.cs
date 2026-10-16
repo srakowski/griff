@@ -33,10 +33,10 @@ public sealed class OneUndoTests : IDisposable
     }
 
     // A new project with its scene open, and a Spells table in the Tables panel.
-    private (IWorkspace Workspace, TablesPanel Tables) Open(IServiceProvider services)
+    private (Workspace Workspace, TablesPanel Tables) Open(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         EditorHost.Pump(workspace.CreateProjectAsync(_root, "Game"));
         using (AgentDialogs.Answering(JsonDocument.Parse("""{"Table name": "Spells"}""").RootElement))
             EditorHost.Pump(services.GetRequiredService<NewTableCommand>().ExecuteAsync());
@@ -119,13 +119,13 @@ public sealed class OneUndoTests : IDisposable
     public void AWindowWithADocumentOfItsOwn_HasUndosShortcuts_GoingToIt() => EditorHost.Run(services =>
     {
         Open(services);
+        var commands = services.GetRequiredService<CommandRegistry>();
         var documents = services.GetRequiredService<ActiveDocument>();
         var painter = new SpritePainterViewModel(services.GetRequiredService<EditorArt>(), SheetLayout.Sprite());
         var window = new Window { DataContext = painter };
         documents.Opened(window);
 
         var bindings = window.InputBindings.OfType<KeyBinding>().ToList();
-        var commands = services.GetRequiredService<CommandRegistry>();
         Assert.Contains(bindings, b => (b.Key, b.Modifiers) == (Key.Z, ModifierKeys.Control) && b.Command == commands.Get("Edit.Undo") && b.CommandParameter == painter);
         Assert.Contains(bindings, b => (b.Key, b.Modifiers) == (Key.Y, ModifierKeys.Control) && b.Command == commands.Get("Edit.Redo") && b.CommandParameter == painter);
         Assert.Contains(bindings, b => (b.Key, b.Modifiers) == (Key.Z, ModifierKeys.Control | ModifierKeys.Shift) && b.Command == commands.Get("Edit.Redo"));

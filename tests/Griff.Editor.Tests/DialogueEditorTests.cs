@@ -25,10 +25,10 @@ public sealed class DialogueEditorTests : IDisposable
     }
 
     // A new project with a stage made by Create Stage, selected.
-    private (IWorkspace Workspace, DialogueEditor Editor, Entity Stage) Stage(IServiceProvider services)
+    private (Workspace Workspace, DialogueEditor Editor, Entity Stage) Stage(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         EditorHost.Pump(workspace.CreateProjectAsync(_root, "Game"));
         EditorHost.Pump(services.GetRequiredService<CommandRegistry>().Get("Entity.CreateStage").ExecuteAsync());
         var stage = workspace.Scene!.Scene.Entities.Single(e => e.GetComponent<Stage>() is not null);

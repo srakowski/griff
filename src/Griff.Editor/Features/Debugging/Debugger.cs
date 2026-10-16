@@ -78,7 +78,8 @@ public sealed partial class Breakpoint : ObservableObject
 /// </summary>
 public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposable
 {
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
+    private readonly IScriptSession _scriptSession;
     private readonly PlayMode _play;
     private readonly ScriptEditors _editors;
     private readonly ISettingsStore _settings;
@@ -114,9 +115,10 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     // A step from where a script threw: the exception ends the frame, and the step is over once it has (see Step).
     private (StepKind Kind, TaskCompletionSource Done, string Path, GameRunner Runner)? _endingFrame;
 
-    public Debugger(IWorkspace workspace, PlayMode play, ScriptEditors editors, ISettingsStore settings, IStatusService status, ILogger<Debugger> logger)
+    public Debugger(IScriptSession scriptSession, IProjectSession projectSession, PlayMode play, ScriptEditors editors, ISettingsStore settings, IStatusService status, ILogger<Debugger> logger)
     {
-        _workspace = workspace;
+        _projectSession = projectSession;
+        _scriptSession = scriptSession;
         _play = play;
         _editors = editors;
         _settings = settings;
@@ -126,7 +128,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
 
         ScriptProbes.Handler = this;
         PauseOnExceptions = settings.Settings.PauseOnExceptions;
-        workspace.ScriptsReloaded += (_, _) => Arm();
+        scriptSession.ScriptsReloaded += (_, _) => Arm();
         play.Stopped += (_, _) =>
         {
             EndStep();
@@ -138,9 +140,9 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
             if (e.PropertyName == nameof(PlayMode.IsPaused) && StepEnded is not null && (!play.IsPaused || !play.IsPlaying))
                 SetStepEnded(null, null);
         };
-        workspace.PropertyChanged += (_, e) =>
+        projectSession.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.Project))
+            if (e.PropertyName == nameof(IProjectSession.Project))
                 Load();
         };
         editors.Documents.CollectionChanged += OnDocumentsChanged;
@@ -439,7 +441,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     {
         if (!CanStep(kind))
             return Task.CompletedTask;
-        var table = _workspace.ScriptProbes;
+        var table = _scriptSession.ScriptProbes;
         // Where a script threw, nothing more of its method runs: the exception ends the frame, and the game pauses after it.
         if (_play.IsAtBreakpoint && _paused is { Exception: not null } thrown)
         {
@@ -500,7 +502,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
         if (_stepRunner is { } runner)
             runner.FrameEnded -= OnStepFrameEnded;
         _stepRunner = null;
-        var table = _workspace.ScriptProbes;
+        var table = _scriptSession.ScriptProbes;
         table.SetAll(false);
         if (_armedIn == table)
         {
@@ -590,7 +592,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
             return true;
         if (_armedIds.Contains(hit.Probe) && hit.Probes == _armedIn?.Switches)
             return true;
-        if (GameRunner.Running != _stepRunner || hit.Probes != _workspace.ScriptProbes.Switches || _workspace.ScriptProbes[hit.Probe] is not { } probe)
+        if (GameRunner.Running != _stepRunner || hit.Probes != _scriptSession.ScriptProbes.Switches || _scriptSession.ScriptProbes[hit.Probe] is not { } probe)
             return false;
         return step.EndsAt(probe, hit.Stack, ScriptProbes.CallStack);
     }
@@ -600,11 +602,11 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
         // Only a game's own frame stops, on the editor's thread: not code the editor runs (reading a property for the
         // Inspector, say), and not a build of the scripts replaced since.
         if (GameRunner.Running is not { } runner || _play.IsAtBreakpoint
-            || hit.Probes != _workspace.ScriptProbes.Switches || _workspace.ScriptProbes[hit.Probe] is not { } probe)
+            || hit.Probes != _scriptSession.ScriptProbes.Switches || _scriptSession.ScriptProbes[hit.Probe] is not { } probe)
             return false;
 
         var path = Path.GetFullPath(probe.Path);
-        var built = _workspace.ScriptProbes.SourceOf(path);
+        var built = _scriptSession.ScriptProbes.SourceOf(path);
         var line = CurrentLine(path, built, probe.Line);
         var values = new List<DebugValue>();
         // A type the scripts declare shows its own fields, rather than its public properties as Griff's and .NET's do.
@@ -645,7 +647,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     ScriptFaultHold IScriptBreakHandler.Fault(Exception exception)
     {
         if (!PauseOnExceptions || GameRunner.Running is not { } runner || _play.IsAtBreakpoint
-            || _workspace.ScriptProbes is not { Switches: { } switches } table)
+            || _scriptSession.ScriptProbes is not { Switches: { } switches } table)
             return ScriptFaultHold.NotHeld;
         var scripts = switches.Assembly;
         if (ThrowingFrame(exception, scripts) is not var (method, builtPath, builtLine))
@@ -778,7 +780,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     // has changed since), and off every other.
     private void Arm()
     {
-        var table = _workspace.ScriptProbes;
+        var table = _scriptSession.ScriptProbes;
         if (_armedIn is not null && _armedIn != table)
             _armed.Clear();
 
@@ -846,7 +848,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
         {
             foreach (var breakpoint in _breakpoints.ToList())
                 Remove(breakpoint);
-            if (_workspace.Project is { } project)
+            if (_projectSession.Project is { } project)
             {
                 foreach (var saved in _settings.Settings.Breakpoints.Where(b => Same(b.Project, project.RootPath)))
                 {
@@ -867,7 +869,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     // Saved a moment after the last change (lines move with every line typed above them).
     private void Save()
     {
-        if (_loading || _workspace.Project is null)
+        if (_loading || _projectSession.Project is null)
             return;
         _saveSoon ??= new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(600), System.Windows.Threading.DispatcherPriority.Background, (_, _) =>
         {
@@ -882,7 +884,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
 
     private void SaveNow()
     {
-        if (_workspace.Project is not { } project)
+        if (_projectSession.Project is not { } project)
             return;
         var all = _settings.Settings.Breakpoints;
         all.RemoveAll(b => Same(b.Project, project.RootPath));
@@ -1021,7 +1023,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     {
         if (Path.IsPathRooted(script) && File.Exists(script))
             return Path.GetFullPath(script);
-        if (_workspace.Project is not { } project)
+        if (_projectSession.Project is not { } project)
             throw new InvalidOperationException("No project is open.");
 
         var wanted = script.Replace('\\', '/').Trim().TrimStart('/');
@@ -1045,7 +1047,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     }
 
     private string RelativePath(string path) =>
-        _workspace.Project is { } project ? Path.GetRelativePath(project.AssetsPath, path).Replace('\\', '/') : Path.GetFileName(path);
+        _projectSession.Project is { } project ? Path.GetRelativePath(project.AssetsPath, path).Replace('\\', '/') : Path.GetFileName(path);
 
     // The script's text as it reads now: open in the editor (unsaved edits too), or on disk.
     private string CurrentText(string path) =>

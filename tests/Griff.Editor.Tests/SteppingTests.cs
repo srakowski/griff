@@ -65,10 +65,10 @@ public sealed class SteppingTests : IDisposable
     private static int R(string text) => Rules[..Rules.IndexOf(text, StringComparison.Ordinal)].Count(c => c == '\n') + 1;
 
     // A project with the Walker script on `walkers` entities of the open scene.
-    private (IWorkspace Workspace, List<Entity> Walkers) Open(IServiceProvider services, int walkers = 1)
+    private (Workspace Workspace, List<Entity> Walkers) Open(IServiceProvider services, int walkers = 1)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         var scripts = Path.Combine(workspace.Project!.AssetsPath, "Scripts");
         Directory.CreateDirectory(scripts);
@@ -132,7 +132,7 @@ public sealed class SteppingTests : IDisposable
         }
     }
 
-    private static object? Count(IWorkspace workspace, Entity entity) =>
+    private static object? Count(Workspace workspace, Entity entity) =>
         workspace.Scene!.Scene.Find(entity.Id)!.Components.Single(c => c.GetType().Name == "Walker").GetType().GetProperty("Count")!
             .GetValue(workspace.Scene.Scene.Find(entity.Id)!.Components.Single(c => c.GetType().Name == "Walker"));
 

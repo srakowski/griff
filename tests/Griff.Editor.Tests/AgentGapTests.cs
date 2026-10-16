@@ -42,10 +42,10 @@ public sealed class AgentGapTests : IDisposable
     private static void Wait(Task task) => Wait(task.ContinueWith(t => { t.GetAwaiter().GetResult(); return true; }, TaskScheduler.Default));
 
     // A new project with a Coin prefab, a 32x16 picture and a second scene, Level 2.
-    private (IWorkspace Workspace, Project Project) Open(IServiceProvider services)
+    private (Workspace Workspace, Project Project) Open(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         var project = workspace.Project!;
 
@@ -252,7 +252,7 @@ public sealed class AgentGapTests : IDisposable
     public void CreatingAProject_WithAnEmptyOrRelativeLocation_IsRejected_NotMadeInTheWorkingDirectory(string location) => EditorHost.Run(services =>
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         var before = Directory.GetDirectories(Directory.GetCurrentDirectory()).Length;
 
         var error = Assert.Throws<ArgumentException>(() => Wait(workspace.CreateProjectAsync(location, "Game")));

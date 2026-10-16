@@ -42,7 +42,7 @@ public class SceneDistanceTests
         scene.Add(guard);
 
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         return (document, services.GetRequiredService<ISelection>(), services.GetRequiredService<SceneViewModel>());
     }
 
@@ -84,7 +84,7 @@ public class SceneDistanceTests
     public void Scripts_MarkTheirOwnDistances() => EditorHost.Run(services =>
     {
         var (document, selection, model) = Open(services);
-        services.GetRequiredService<IWorkspace>().Components.Register<Watcher>();
+        services.GetRequiredService<Workspace>().Components.Register<Watcher>();
         var lamp = Named(document, "Lamp");
         var watcher = lamp.AddComponent<Watcher>();
         selection.Select(lamp);

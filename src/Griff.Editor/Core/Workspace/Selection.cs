@@ -54,20 +54,20 @@ public static class SelectionExtensions
 
 public sealed class Selection : ObservableObject, ISelection
 {
-    private readonly IWorkspace _workspace;
+    private readonly ISceneDocuments _sceneDocuments;
     private SceneDocument? _document;
     private List<Entity> _entities = [];
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<SceneDocument, IReadOnlyList<Entity>> _kept = new();
 
-    public Selection(IWorkspace workspace)
+    public Selection(ISceneDocuments sceneDocuments)
     {
-        _workspace = workspace;
-        workspace.PropertyChanged += (_, e) =>
+        _sceneDocuments = sceneDocuments;
+        sceneDocuments.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.Scene))
-                Track(workspace.Scene);
+            if (e.PropertyName == nameof(ISceneDocuments.Scene))
+                Track(sceneDocuments.Scene);
         };
-        Track(workspace.Scene);
+        Track(sceneDocuments.Scene);
     }
 
     public event EventHandler? RenameRequested;
@@ -83,7 +83,7 @@ public sealed class Selection : ObservableObject, ISelection
         var list = new List<Entity>();
         foreach (var entity in entities)
         {
-            if (entity.Scene != _workspace.Scene?.Scene)
+            if (entity.Scene != _sceneDocuments.Scene?.Scene)
                 throw new ArgumentException($"{entity.Name} isn't in the open scene.", nameof(entities));
             // Picking one again moves it to the end, making it the primary one.
             list.Remove(entity);

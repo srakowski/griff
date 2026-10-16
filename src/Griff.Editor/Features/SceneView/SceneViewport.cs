@@ -14,7 +14,7 @@ namespace Griff.Editor.Features.SceneView;
 /// is (<see cref="Zoom"/>; 64 is 100%). Y is up in the world and down on screen. Each tab (the scene's, a prefab's)
 /// keeps where it was left, and a scene first opens showing its camera's whole frame.
 /// </summary>
-public sealed class SceneViewport(IWorkspace workspace, ISelection selection) : ObservableObject
+public sealed class SceneViewport(ISceneDocuments sceneDocuments, ISelection selection) : ObservableObject
 {
     public const double MinZoom = 4;
     public const double MaxZoom = 2048;
@@ -48,7 +48,7 @@ public sealed class SceneViewport(IWorkspace workspace, ISelection selection) : 
     /// <summary>Centers the view on the selection (the middle of several), or the origin.</summary>
     public void FrameSelection()
     {
-        var selected = selection.Entities.Where(e => e.Scene == workspace.Scene?.Scene).ToList();
+        var selected = selection.Entities.Where(e => e.Scene == sceneDocuments.Scene?.Scene).ToList();
         Pan = selected.Count == 0 ? Vector2.Zero : selected.Aggregate(Vector2.Zero, (sum, e) => sum + Flat(e.Transform.WorldPosition)) / selected.Count;
     }
 

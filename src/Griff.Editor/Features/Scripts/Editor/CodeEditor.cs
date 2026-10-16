@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.Input;
+using Griff.Editor.Core.Settings;
 using Griff.Scripting;
 using ICSharpCode.AvalonEdit;
 using ICSharpCode.AvalonEdit.Document;
@@ -25,8 +26,10 @@ public sealed partial class CodeEditor : TextEditor, IDisposable
 {
     private const int IndentSize = 4;
 
-    // Shared by every script tab, so zooming one zooms them all.
-    private static double s_fontSize = CodeTheme.FontSize;
+    // Kept in the settings and shared by every script tab, so zooming one zooms them all.
+    private readonly ISettingsStore _settings;
+
+    private double FontSizeSetting => Math.Clamp(_settings.Settings.CodeFontSize, 9, 32);
 
     private readonly ScriptDocument _script;
     private readonly ScriptLanguage _language;
@@ -38,14 +41,15 @@ public sealed partial class CodeEditor : TextEditor, IDisposable
     private CancellationTokenSource? _occurrences;
     private bool _chord;
 
-    public CodeEditor(ScriptDocument script, ScriptLanguage language)
+    public CodeEditor(ScriptDocument script, ScriptLanguage language, ISettingsStore settings)
     {
+        _settings = settings;
         _script = script;
         _language = language;
         Document = script.Text;
 
         FontFamily = CodeTheme.Font;
-        FontSize = s_fontSize;
+        FontSize = FontSizeSetting;
         Background = CodeTheme.Background;
         Foreground = CodeTheme.Text;
         Padding = new Thickness(0, 6, 0, 0);
@@ -383,16 +387,17 @@ public sealed partial class CodeEditor : TextEditor, IDisposable
     {
         if (Keyboard.Modifiers != ModifierKeys.Control)
             return;
-        s_fontSize = Math.Clamp(s_fontSize + (e.Delta > 0 ? 1 : -1), 9, 32);
-        FontSize = s_fontSize;
+        _settings.Settings.CodeFontSize = Math.Clamp(FontSizeSetting + (e.Delta > 0 ? 1 : -1), 9, 32);
+        _settings.Save();
+        FontSize = FontSizeSetting;
         e.Handled = true;
     }
 
     protected override void OnGotKeyboardFocus(KeyboardFocusChangedEventArgs e)
     {
         base.OnGotKeyboardFocus(e);
-        if (FontSize != s_fontSize)
-            FontSize = s_fontSize;
+        if (FontSize != FontSizeSetting)
+            FontSize = FontSizeSetting;
     }
 
     // ----- Keys -----

@@ -37,10 +37,10 @@ public sealed class PrefabOverrideTests : IDisposable
 
     // An empty project with a Coin prefab (a sprite and a Pickup worth 1), open in the editor, and a second scene, Level 2,
     // holding a copy of the coin.
-    private (IWorkspace Workspace, Project Project) Open(IServiceProvider services)
+    private (Workspace Workspace, Project Project) Open(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         var project = workspace.Project!;
 
@@ -51,14 +51,14 @@ public sealed class PrefabOverrideTests : IDisposable
         File.WriteAllText(project.DefaultPrefabPath("Coin"), workspace.Serializer.SavePrefabToString(coin));
 
         var level2 = new Scene();
-        level2.Add(PrefabFiles.Instantiate(workspace, "Prefabs/Coin.prefab")!);
+        level2.Add(services.GetRequiredService<PrefabFiles>().Instantiate("Prefabs/Coin.prefab")!);
         File.WriteAllText(project.CreateScene("Level 2"), workspace.Serializer.SaveToString(level2));
         return (workspace, project);
     }
 
-    private static Entity Place(IWorkspace workspace, string name, Vector3 position)
+    private static Entity Place(Workspace workspace, string name, Vector3 position)
     {
-        var copy = PrefabFiles.Instantiate(workspace, "Prefabs/Coin.prefab")!;
+        var copy = new PrefabFiles(workspace, workspace, workspace).Instantiate("Prefabs/Coin.prefab")!;
         copy.Name = name;
         copy.Transform.Position = position;
         workspace.Scene!.Execute(new Griff.Editing.AddEntityEdit(workspace.Scene.Scene, copy));
@@ -68,7 +68,7 @@ public sealed class PrefabOverrideTests : IDisposable
     private static PropertyField Field(InspectorPanel inspector, string component, string label) =>
         inspector.Components.Single(c => c.Title == component).Properties.Single(p => p.Label == label);
 
-    private static Entity LevelTwoCoin(IWorkspace workspace, Project project) =>
+    private static Entity LevelTwoCoin(Workspace workspace, Project project) =>
         workspace.Serializer.LoadFromString(File.ReadAllText(project.FindScene("Level 2")!)).Roots.Single(e => e.Prefab is not null);
 
     private static Task Run(IServiceProvider services, string id, string answers) => RunCommand(services, id, answers);
@@ -207,7 +207,7 @@ public sealed class PrefabOverrideTests : IDisposable
         coin.AddComponent<Sprite>().Image = "Sprites/gem.png";
         coin.AddComponent<Pickup>().Amount = 6;
         File.WriteAllText(path, workspace.Serializer.SavePrefabToString(coin));
-        Wait(new EditorAgentProject(workspace).AssetChangedAsync("Prefabs/Coin.prefab", before));
+        Wait(new EditorAgentProject(workspace, workspace, workspace, services.GetRequiredService<PrefabFiles>()).AssetChangedAsync("Prefabs/Coin.prefab", before));
 
         Assert.Equal("Sprites/gem.png", own.GetComponent<Sprite>()!.Image);
         Assert.Equal(4, own.GetComponent<Pickup>()!.Amount);

@@ -124,7 +124,7 @@ static class Reference
             .OrderBy(t => t.Namespace, StringComparer.Ordinal).ThenBy(t => t.Name, StringComparer.Ordinal).ToList();
         var slugs = Slugs(apiTypes);
 
-        var registry = services.GetRequiredService<Griff.Editor.Core.Workspace.IWorkspace>().Components;
+        var registry = services.GetRequiredService<Griff.Editor.Core.Workspace.IProjectSession>().Components;
         componentTypes = ComponentCatalog.Build(registry).Select(e => e.Descriptor.Type).ToHashSet();
         foreach (var page in Components(registry, slugs))
             yield return page;

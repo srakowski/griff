@@ -13,17 +13,17 @@ namespace Griff.Editor.Features.Entities;
 /// sprite if it has no collider. Set its Strength and Min Hit in the Inspector, or give it a Table Values on a Materials
 /// table. One undo step.
 /// </summary>
-public sealed class AddBreakableCommand(IWorkspace workspace, ISelection selection) : EditorCommand
+public sealed class AddBreakableCommand(IProjectSession projectSession, ISceneDocuments sceneDocuments, ISelection selection) : EditorCommand
 {
     public override string Id => "Entity.AddBreakable";
     public override string Text => "Add _Breakable";
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 13);
 
-    protected override bool CanExecuteCore() => workspace.Scene is not null && selection.Entity is not null;
+    protected override bool CanExecuteCore() => sceneDocuments.Scene is not null && selection.Entity is not null;
 
     protected override Task ExecuteCoreAsync()
     {
-        if (workspace.Scene is not { } document || selection.Entities.Count == 0)
+        if (sceneDocuments.Scene is not { } document || selection.Entities.Count == 0)
             throw new InvalidOperationException("Select what should break on hard knocks.");
 
         using (document.History.BeginGroup("Add Breakable"))
@@ -50,5 +50,5 @@ public sealed class AddBreakableCommand(IWorkspace workspace, ISelection selecti
     }
 
     private PropertyDescriptor Property(Type component, string name) =>
-        workspace.Components.Get(component).Properties.Single(p => p.Name == name);
+        projectSession.Components.Get(component).Properties.Single(p => p.Name == name);
 }

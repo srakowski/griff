@@ -23,20 +23,20 @@ public sealed class PrefabsModule : IEditorModule
 /// Opens one of the project's prefabs to edit on its own, in a tab of its own: the Hierarchy, Inspector and Scene view
 /// edit it until the scene's tab is picked again. Saving it (Save, Ctrl+S) updates every copy of it in every scene.
 /// </summary>
-public sealed class OpenPrefabCommand(IWorkspace workspace, IDialogService dialogs) : EditorCommand
+public sealed class OpenPrefabCommand(IProjectSession projectSession, ISceneDocuments sceneDocuments, IPlaySession playSession, IDialogService dialogs) : EditorCommand
 {
     public override string Id => "Prefab.Open";
     public override string Text => "Open P_refab...";
     public override string? Icon => Icons.Package;
     public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 2, Order: 0);
 
-    protected override bool CanExecuteCore() => workspace.Project is not null && !workspace.IsPlaying;
+    protected override bool CanExecuteCore() => projectSession.Project is not null && !playSession.IsPlaying;
 
     protected override async Task ExecuteCoreAsync()
     {
         // A prefab's name or its path in Assets will do, as well as a full path.
-        if (workspace.Project is not null && dialogs.ShowOpenFileDialog("Griff prefabs (*.prefab)|*.prefab") is { } chosen)
-            await workspace.OpenPrefabAsync(chosen);
+        if (projectSession.Project is not null && dialogs.ShowOpenFileDialog("Griff prefabs (*.prefab)|*.prefab") is { } chosen)
+            await sceneDocuments.OpenPrefabAsync(chosen);
     }
 }
 
@@ -44,16 +44,16 @@ public sealed class OpenPrefabCommand(IWorkspace workspace, IDialogService dialo
 /// Opens the prefab the selected copy was placed from in a tab of its own, to edit the prefab itself rather than this
 /// copy of it. Saving it updates every copy, keeping what each changed.
 /// </summary>
-public sealed class EditPrefabCommand(IWorkspace workspace, ISelection selection) : EditorCommand
+public sealed class EditPrefabCommand(ISceneDocuments sceneDocuments, IPlaySession playSession, ISelection selection) : EditorCommand
 {
     public override string Id => "Entity.EditPrefab";
     public override string Text => "_Edit Prefab";
     public override string? Icon => Icons.Package;
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 4);
 
-    protected override bool CanExecuteCore() => !workspace.IsPlaying && Link() is not null;
+    protected override bool CanExecuteCore() => !playSession.IsPlaying && Link() is not null;
 
-    protected override Task ExecuteCoreAsync() => Link() is { } link ? workspace.OpenPrefabAsync(link) : Task.CompletedTask;
+    protected override Task ExecuteCoreAsync() => Link() is { } link ? sceneDocuments.OpenPrefabAsync(link) : Task.CompletedTask;
 
     // The prefab of the copy the selection is (or is inside).
     private string? Link() => selection.Entity is { } entity ? PrefabOverrides.CopyFor(entity)?.Prefab : null;
@@ -62,14 +62,14 @@ public sealed class EditPrefabCommand(IWorkspace workspace, ISelection selection
 /// <summary>
 /// Closes the prefab whose tab is showing, asking to save its changes first, and shows the scene again.
 /// </summary>
-public sealed class ClosePrefabCommand(IWorkspace workspace) : EditorCommand
+public sealed class ClosePrefabCommand(ISceneDocuments sceneDocuments) : EditorCommand
 {
     public override string Id => "Prefab.Close";
     public override string Text => "_Close Prefab";
     public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 2, Order: 1);
 
-    protected override bool CanExecuteCore() => workspace.Scene is { IsPrefab: true };
+    protected override bool CanExecuteCore() => sceneDocuments.Scene is { IsPrefab: true };
 
     protected override Task ExecuteCoreAsync() =>
-        workspace.Scene is { IsPrefab: true } prefab ? workspace.ClosePrefabAsync(prefab) : Task.CompletedTask;
+        sceneDocuments.Scene is { IsPrefab: true } prefab ? sceneDocuments.ClosePrefabAsync(prefab) : Task.CompletedTask;
 }

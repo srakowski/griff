@@ -19,7 +19,7 @@ public sealed class FieldCoverageTests
     [Fact]
     public void EveryFieldTakingTextOrAList_HasAnEditor_OrSaysWhyPlainTextIsRight() => EditorHost.Run(services =>
     {
-        var registry = services.GetRequiredService<Griff.Editor.Core.Workspace.IWorkspace>().Components;
+        var registry = services.GetRequiredService<Griff.Editor.Core.Workspace.Workspace>().Components;
         var host = services.GetRequiredService<InspectorPanel>();
         var gaps = registry.All.SelectMany(d => FieldCoverage.Gaps(d, host)).ToList();
 

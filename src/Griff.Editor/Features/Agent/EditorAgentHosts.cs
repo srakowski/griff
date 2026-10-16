@@ -9,19 +9,19 @@ using Griff.Scenes.Serialization;
 namespace Griff.Editor.Features.Agent;
 
 /// <summary>The scene tools' view of the editor: the open scene and its undo history, and the selection.</summary>
-public sealed class EditorAgentScene(IWorkspace workspace, ISelection selection) : IAgentScene
+public sealed class EditorAgentScene(IProjectSession projectSession, ISceneDocuments sceneDocuments, IPlaySession playSession, ISelection selection) : IAgentScene
 {
-    public Scene? Scene => workspace.Scene?.Scene;
+    public Scene? Scene => sceneDocuments.Scene?.Scene;
 
-    public string? ScenePath => workspace.Project is { } project && workspace.Scene is { } scene
+    public string? ScenePath => projectSession.Project is { } project && sceneDocuments.Scene is { } scene
         ? Path.GetRelativePath(project.AssetsPath, scene.FilePath).Replace('\\', '/')
         : null;
 
-    public bool IsPlaying => workspace.IsPlaying;
+    public bool IsPlaying => playSession.IsPlaying;
 
-    public Entity? TopParent => workspace.Scene?.ParentFor(null);
+    public Entity? TopParent => sceneDocuments.Scene?.ParentFor(null);
 
-    public ComponentRegistry Components => workspace.Components;
+    public ComponentRegistry Components => projectSession.Components;
 
     public void Execute(IEdit edit) => Document.Execute(edit);
 
@@ -35,30 +35,30 @@ public sealed class EditorAgentScene(IWorkspace workspace, ISelection selection)
 
     public Entity? InstantiatePrefab(string name)
     {
-        if (workspace.Project is not { } project || project.FindPrefab(name) is not { } path)
+        if (projectSession.Project is not { } project || project.FindPrefab(name) is not { } path)
             return null;
-        var entity = new SceneSerializer(workspace.Components).LoadPrefabFromString(File.ReadAllText(path));
+        var entity = new SceneSerializer(projectSession.Components).LoadPrefabFromString(File.ReadAllText(path));
         entity.Prefab = PrefabFiles.AssetPathOf(project, path);
         return entity;
     }
 
     public IReadOnlyCollection<string> PrefabNames =>
-        workspace.Project?.FindPrefabs().Select(Path.GetFileNameWithoutExtension).OfType<string>().ToHashSet() ?? [];
+        projectSession.Project?.FindPrefabs().Select(Path.GetFileNameWithoutExtension).OfType<string>().ToHashSet() ?? [];
 
-    public KnownNames? Names => workspace.Names;
+    public KnownNames? Names => projectSession.Names;
 
-    private SceneDocument Document => workspace.Scene ?? throw new AgentException("No scene is open.");
+    private SceneDocument Document => sceneDocuments.Scene ?? throw new AgentException("No scene is open.");
 }
 
 /// <summary>The asset tools' view of the editor: the project's files, and compiling scripts as they're written.</summary>
-public sealed class EditorAgentProject(IWorkspace workspace) : IAgentProject
+public sealed class EditorAgentProject(IProjectSession projectSession, ISceneDocuments sceneDocuments, IScriptSession scriptSession, PrefabFiles prefabFiles) : IAgentProject
 {
-    public string? AssetsPath => workspace.Project?.AssetsPath;
+    public string? AssetsPath => projectSession.Project?.AssetsPath;
 
     // A prefab moved keeps its copies, everywhere they are.
     public Task<AssetFeedback?> AssetMovedAsync(string fromPath, string toPath)
     {
-        var update = PrefabFiles.Relink(workspace, fromPath, toPath);
+        var update = prefabFiles.Relink(fromPath, toPath);
         var problems = update.Problems.Count > 0 ? "\nNot relinked: " + string.Join("; ", update.Problems) : "";
         return Task.FromResult<AssetFeedback?>(update.Copies > 0 || problems.Length > 0
             ? new AssetFeedback((update.Describe("Relinked") + problems).Trim(), IsError: update.Problems.Count > 0)
@@ -68,12 +68,12 @@ public sealed class EditorAgentProject(IWorkspace workspace) : IAgentProject
     public Task<AssetFeedback?> AssetChangedAsync(string assetPath, string? previousText = null)
     {
         // Whatever keeps the file loaded takes it in first (a table reaches the Tables panel and the running game).
-        if (workspace.AssetChanged(assetPath) is { Count: > 0 } said)
+        if (projectSession.AssetChanged(assetPath) is { Count: > 0 } said)
             return Task.FromResult<AssetFeedback?>(new AssetFeedback(string.Join("\n", said.Select(f => f.Message)), said.Any(f => f.IsError)));
 
         if (assetPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
         {
-            var result = workspace.ReloadScripts();
+            var result = scriptSession.ReloadScripts();
             if (result is null)
                 return Task.FromResult<AssetFeedback?>(null);
             if (!result.Success)
@@ -92,17 +92,17 @@ public sealed class EditorAgentProject(IWorkspace workspace) : IAgentProject
 
         // A prefab written is a prefab saved: its copies, in every scene, are brought up to date, keeping what each
         // changed from the prefab as it was.
-        if (assetPath.EndsWith(Griff.Projects.Project.PrefabExtension, StringComparison.OrdinalIgnoreCase) && workspace.Project is { } owner
+        if (assetPath.EndsWith(Griff.Projects.Project.PrefabExtension, StringComparison.OrdinalIgnoreCase) && projectSession.Project is { } owner
             && Path.Combine(owner.AssetsPath, assetPath) is var prefabPath && File.Exists(prefabPath))
         {
-            var update = PrefabFiles.UpdateCopies(workspace, assetPath, File.ReadAllText(prefabPath), previousText, source: null);
+            var update = prefabFiles.UpdateCopies(assetPath, File.ReadAllText(prefabPath), previousText, source: null);
             var problems = update.Problems.Count > 0 ? "\nNot updated: " + string.Join("; ", update.Problems) : "";
             return Task.FromResult<AssetFeedback?>(update.Copies > 0 || problems.Length > 0
                 ? new AssetFeedback((update.Summary + problems).Trim(), IsError: update.Problems.Count > 0)
                 : null);
         }
 
-        if (assetPath.EndsWith(".scene", StringComparison.OrdinalIgnoreCase) && workspace.EditScene is { } open && workspace.Project is { } project
+        if (assetPath.EndsWith(".scene", StringComparison.OrdinalIgnoreCase) && sceneDocuments.EditScene is { } open && projectSession.Project is { } project
             && Path.GetFullPath(open.FilePath).Equals(Path.GetFullPath(Path.Combine(project.AssetsPath, assetPath)), StringComparison.OrdinalIgnoreCase))
         {
             return Task.FromResult<AssetFeedback?>(new AssetFeedback("That's the open scene; the editor still shows it as it was. Open it again (Scene_Open) to load the file."));

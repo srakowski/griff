@@ -104,10 +104,10 @@ public sealed class ExceptionPauseTests : IDisposable
     private static int LineOf(string script, string text) => script[..script.IndexOf(text, StringComparison.Ordinal)].Count(c => c == '\n') + 1;
 
     // A project with the scripts, and `count` entities with the named script on (set up by `setup`).
-    private (IWorkspace Workspace, List<Entity> Entities) Open(IServiceProvider services, string script, int count = 1, Action<Component, int>? setup = null)
+    private (Workspace Workspace, List<Entity> Entities) Open(IServiceProvider services, string script, int count = 1, Action<Component, int>? setup = null)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         // Copying the scene out is timed against a budget; a slow machine mustn't decide whether a rewind is exact.
         services.GetRequiredService<PlayMode>().RememberBudget = TimeSpan.FromMinutes(1);
         Wait(workspace.CreateProjectAsync(_root, "Game"));
@@ -176,7 +176,7 @@ public sealed class ExceptionPauseTests : IDisposable
         }
     }
 
-    private static object? Get(IWorkspace workspace, Entity entity, string property)
+    private static object? Get(Workspace workspace, Entity entity, string property)
     {
         var component = workspace.Scene!.Scene.Find(entity.Id)!.Components.Single(c => c.GetType().Assembly != typeof(Entity).Assembly);
         return component.GetType().GetProperty(property)!.GetValue(component);

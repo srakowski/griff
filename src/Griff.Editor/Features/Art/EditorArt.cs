@@ -17,16 +17,20 @@ public sealed class EditorArt
 {
     public static readonly string[] Extensions = [".png", ".jpg", ".jpeg", ".bmp", ".gif"];
 
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
+    private readonly ISceneDocuments _sceneDocuments;
     private readonly Dictionary<string, (DateTime Stamp, BitmapSource? Image)> _thumbnails = new(StringComparer.OrdinalIgnoreCase);
     private SpritePainterWindow? _painter;
 
-    public EditorArt(IWorkspace workspace)
+    private readonly Core.EditorWindow _editorWindow;
+    public EditorArt(IProjectSession projectSession, ISceneDocuments sceneDocuments, Core.EditorWindow editorWindow)
     {
-        _workspace = workspace;
+        _projectSession = projectSession;
+        _sceneDocuments = sceneDocuments;
+        _editorWindow = editorWindow;
     }
 
-    public string? AssetsPath => _workspace.Project?.AssetsPath;
+    public string? AssetsPath => _projectSession.Project?.AssetsPath;
 
     /// <summary>
     /// The palette last picked in the Sprite Painter (or in a color field's picker, which offers the same ones): each
@@ -183,7 +187,7 @@ public sealed class EditorArt
         if (_painter is null)
         {
             var model = new SpritePainterViewModel(this, layout ?? SheetLayout.Sprite());
-            _painter = new SpritePainterWindow(model) { Owner = Application.Current?.MainWindow };
+            _painter = new SpritePainterWindow(model) { Owner = _editorWindow.Main };
             _painter.Closed += (_, _) => _painter = null;
             _painter.Show();
         }
@@ -220,7 +224,7 @@ public sealed class EditorArt
             current = null;
         OpenPainter(current, LayoutFor(component), (image, used) =>
         {
-            if (_workspace.Scene is { } scene && ArtEdits.UseSheet(_workspace.Components, component, property, image, used) is { } edit)
+            if (_sceneDocuments.Scene is { } scene && ArtEdits.UseSheet(_projectSession.Components, component, property, image, used) is { } edit)
             {
                 scene.Execute(edit);
                 scene.History.Seal();

@@ -26,10 +26,10 @@ public sealed class MoveListEditorTests : IDisposable
     }
 
     // A new project with a training pair, its fighter selected.
-    private (IWorkspace Workspace, MoveListEditor Editor, Entity Fighter) Training(IServiceProvider services)
+    private (Workspace Workspace, MoveListEditor Editor, Entity Fighter) Training(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         EditorHost.Pump(workspace.CreateProjectAsync(_root, "Game"));
         EditorHost.Pump(services.GetRequiredService<CommandRegistry>().Get("Entity.CreateTrainingPair").ExecuteAsync());
         var fighter = workspace.Scene!.Scene.Entities.Single(e => e.Name == "Fighter");

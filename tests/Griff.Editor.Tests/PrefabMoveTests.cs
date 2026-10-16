@@ -34,10 +34,10 @@ public sealed class PrefabMoveTests : IDisposable
 
     // A project with a Coin prefab, a Chest prefab holding a copy of the coin, a copy placed (and saved) in the open
     // scene, and another in a second scene, Level 2.
-    private (IWorkspace Workspace, Project Project, Entity Copy) Open(IServiceProvider services)
+    private (Workspace Workspace, Project Project, Entity Copy) Open(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         var project = workspace.Project!;
 
@@ -49,14 +49,14 @@ public sealed class PrefabMoveTests : IDisposable
         var chest = new Scene();
         var root = new Entity("Chest");
         chest.Add(root);
-        chest.Add(PrefabFiles.Instantiate(workspace, "Prefabs/Coin.prefab")!, root);
+        chest.Add(services.GetRequiredService<PrefabFiles>().Instantiate("Prefabs/Coin.prefab")!, root);
         File.WriteAllText(project.DefaultPrefabPath("Chest"), workspace.Serializer.SavePrefabToString(root));
 
         var level2 = new Scene();
-        level2.Add(PrefabFiles.Instantiate(workspace, "Prefabs/Coin.prefab")!);
+        level2.Add(services.GetRequiredService<PrefabFiles>().Instantiate("Prefabs/Coin.prefab")!);
         File.WriteAllText(project.CreateScene("Level 2"), workspace.Serializer.SaveToString(level2));
 
-        var copy = PrefabFiles.Instantiate(workspace, "Prefabs/Coin.prefab")!;
+        var copy = services.GetRequiredService<PrefabFiles>().Instantiate("Prefabs/Coin.prefab")!;
         copy.Transform.Position = new Vector3(3, 1, 0);
         workspace.Scene!.Execute(new AddEntityEdit(workspace.Scene.Scene, copy));
         Wait(workspace.SaveSceneAsync());
@@ -128,7 +128,7 @@ public sealed class PrefabMoveTests : IDisposable
     public void AnAgentsMove_RelinksCopiesToo() => EditorHost.Run(services =>
     {
         var (workspace, _, copy) = Open(services);
-        var tools = new AssetTools(new EditorAgentProject(workspace)).GetTools().ToDictionary(t => t.Name);
+        var tools = new AssetTools(new EditorAgentProject(workspace, workspace, workspace, services.GetRequiredService<PrefabFiles>())).GetTools().ToDictionary(t => t.Name);
 
         var result = tools["asset_move"].Invoke(ToolArgs.Parse("""{"from": "Prefabs/Coin.prefab", "to": "Pickups/Coin.prefab"}""")).GetAwaiter().GetResult();
 

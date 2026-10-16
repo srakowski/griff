@@ -32,7 +32,7 @@ public class SceneHideTests
         scene.Add(title, menu);
 
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         return (document, services.GetRequiredService<ISelection>(), services.GetRequiredService<SceneViewModel>());
     }
 
@@ -132,7 +132,7 @@ public class SceneHideTests
         (map.Image, map.Columns, map.Rows) = ("Tiles/ground.png", 4, 2);
         scene.Add(level);
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         var selection = services.GetRequiredService<ISelection>();
         var model = services.GetRequiredService<SceneViewModel>();
         selection.Select(level);

@@ -28,18 +28,18 @@ public sealed partial class ControlsViewModel : ObservableObject
 {
     private static readonly Regex ValidName = new(@"^[A-Za-z][A-Za-z0-9 _]*$");
 
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
     private readonly PlayMode _play;
     private ActionRow? _selected;
     private ListenFor _listening;
     private string? _status;
     private string? _nameError;
 
-    public ControlsViewModel(IWorkspace workspace, PlayMode play)
+    public ControlsViewModel(IProjectSession projectSession, PlayMode play)
     {
-        _workspace = workspace;
+        _projectSession = projectSession;
         _play = play;
-        var project = workspace.Project ?? throw new InvalidOperationException("No project is open.");
+        var project = projectSession.Project ?? throw new InvalidOperationException("No project is open.");
         var controls = project.Controls;
 
         foreach (var (name, builtIn) in InputState.BuiltInActions)
@@ -118,7 +118,7 @@ public sealed partial class ControlsViewModel : ObservableObject
     {
         get
         {
-            if (Selected is null || _workspace.Project is not { } project)
+            if (Selected is null || _projectSession.Project is not { } project)
                 return null;
             try
             {
@@ -244,7 +244,7 @@ public sealed partial class ControlsViewModel : ObservableObject
         RefreshConflicts();
         ResetCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(PlayerChoice));
-        if (_workspace.Project is not { } project)
+        if (_projectSession.Project is not { } project)
             return;
 
         var controls = Actions.ToDictionary(a => a.Name, a => (IReadOnlyList<InputBinding>)a.Bindings, StringComparer.OrdinalIgnoreCase);

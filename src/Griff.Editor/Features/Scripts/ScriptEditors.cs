@@ -17,7 +17,9 @@ namespace Griff.Editor.Features.Scripts;
 /// </summary>
 public sealed class ScriptEditors : ObservableObject, IDisposable
 {
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
+    private readonly IPlaySession _playSession;
+    private readonly IScriptSession _scriptSession;
     private readonly IDialogService _dialogs;
     private readonly IStatusService _status;
     private readonly ILogger<ScriptEditors> _logger;
@@ -25,9 +27,11 @@ public sealed class ScriptEditors : ObservableObject, IDisposable
     private FileSystemWatcher? _watcher;
     private ScriptDocument? _active;
 
-    public ScriptEditors(IWorkspace workspace, IDialogService dialogs, IStatusService status, PlayMode play, ILogger<ScriptEditors> logger)
+    public ScriptEditors(IProjectSession projectSession, IPlaySession playSession, IScriptSession scriptSession, IDialogService dialogs, IStatusService status, PlayMode play, ILogger<ScriptEditors> logger)
     {
-        _workspace = workspace;
+        _projectSession = projectSession;
+        _playSession = playSession;
+        _scriptSession = scriptSession;
         _dialogs = dialogs;
         _status = status;
         _logger = logger;
@@ -37,12 +41,12 @@ public sealed class ScriptEditors : ObservableObject, IDisposable
             SyncWithDisk();
         }, Dispatcher.CurrentDispatcher);
 
-        workspace.PropertyChanged += (_, e) =>
+        projectSession.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.Project))
+            if (e.PropertyName == nameof(IProjectSession.Project))
                 ProjectChanged();
         };
-        workspace.AddCloseGuard(ConfirmCloseAllAsync);
+        projectSession.AddCloseGuard(ConfirmCloseAllAsync);
         // Like an IDE's build: playing saves the scripts first, so the game runs what you see.
         play.Started += (_, _) => SaveAll();
         _ = Language.WarmUpAsync();
@@ -144,7 +148,7 @@ public sealed class ScriptEditors : ObservableObject, IDisposable
         }
 
         // Compile now, rather than when the file watcher notices, so the result can be shown straight away.
-        var result = _workspace.ReloadScripts();
+        var result = _scriptSession.ReloadScripts();
         if (result is null)
             return true;
         if (result.Success)
@@ -152,7 +156,7 @@ public sealed class ScriptEditors : ObservableObject, IDisposable
             document.BuildState = ScriptBuildState.Compiled;
             document.Status = result.Unchanged
                 ? $"Saved {DateTime.Now:t}"
-                : _workspace.IsPlaying
+                : _playSession.IsPlaying
                     ? $"Saved and swapped into the running game {DateTime.Now:t}"
                     : $"Saved and compiled {DateTime.Now:t}";
             _status.Show($"Saved {document.FileName}");
@@ -242,7 +246,7 @@ public sealed class ScriptEditors : ObservableObject, IDisposable
         Active = null;
         _watcher?.Dispose();
         _watcher = null;
-        if (_workspace.Project is not { } project)
+        if (_projectSession.Project is not { } project)
         {
             Language.Load([]);
             return;
@@ -270,7 +274,7 @@ public sealed class ScriptEditors : ObservableObject, IDisposable
     // Scripts changed outside the editor: closed ones are re-read, open ones without edits take the new text.
     private void SyncWithDisk()
     {
-        if (_workspace.Project is not { } project)
+        if (_projectSession.Project is not { } project)
             return;
         var open = Documents.ToDictionary(d => d.FilePath, d => d.Text.Text, StringComparer.OrdinalIgnoreCase);
         foreach (var document in Documents)

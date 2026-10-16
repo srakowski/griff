@@ -6,13 +6,13 @@ using Microsoft.Win32;
 
 namespace Griff.Editor.Core.Dialogs;
 
-public sealed class DialogService : IDialogService, IAnswerableDialogs
+public sealed class DialogService(EditorWindow editor) : IDialogService, IAnswerableDialogs
 {
     private const string AppName = "Griff";
 
     // The active window, so dialogs opened from another dialog stack on top of it.
-    private static Window? Owner =>
-        Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? Application.Current.MainWindow;
+    private Window? Owner =>
+        Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? editor.Main;
 
     public SaveChangesChoice AskSaveChanges(string documentName)
     {

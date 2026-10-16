@@ -12,7 +12,7 @@ namespace Griff.Editor.Features.Entities;
 /// the world 3 above its top; one that doesn't (a ceiling, a branch), hanging loose 3 down from its bottom, to climb and
 /// swing on. Drag its ends' knobs and the one at its middle (its length) in the Scene view. One undo step.
 /// </summary>
-public sealed class AddRopeCommand(IWorkspace workspace, ISelection selection) : EditorCommand
+public sealed class AddRopeCommand(ISceneDocuments sceneDocuments, ISelection selection) : EditorCommand
 {
     // How far a rope hangs, or a body hangs below its hook, as added.
     private const float Drop = 3;
@@ -21,11 +21,11 @@ public sealed class AddRopeCommand(IWorkspace workspace, ISelection selection) :
     public override string Text => "Add _Rope";
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 12);
 
-    protected override bool CanExecuteCore() => workspace.Scene is not null && selection.Entity is not null;
+    protected override bool CanExecuteCore() => sceneDocuments.Scene is not null && selection.Entity is not null;
 
     protected override Task ExecuteCoreAsync()
     {
-        if (workspace.Scene is not { } document || selection.Entity is not { } entity)
+        if (sceneDocuments.Scene is not { } document || selection.Entity is not { } entity)
             throw new InvalidOperationException("Select the entity to tie a rope to (and, to tie it to another, pick that one first).");
         var other = selection.Entities.Count > 1 ? selection.Entities[^2] : null;
         var rope = new Rope();

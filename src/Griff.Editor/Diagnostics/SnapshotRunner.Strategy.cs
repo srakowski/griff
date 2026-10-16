@@ -14,7 +14,7 @@ namespace Griff.Editor.Diagnostics;
 // API, and captures the game view on the GPU at a few points: the HUD and selection, the economy going, a battle.
 internal static partial class SnapshotRunner
 {
-    private static async Task StrategySnapshots(IServiceProvider services, IWorkspace workspace, string projectDir, string outputDir)
+    private static async Task StrategySnapshots(IServiceProvider services, Workspace workspace, string projectDir, string outputDir)
     {
         var checks = new List<string>();
         await workspace.CreateProjectAsync(projectDir, "Snapshot Strategy", Griff.Projects.ProjectTemplates.Get("Strategy"));

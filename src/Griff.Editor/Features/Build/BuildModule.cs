@@ -28,8 +28,8 @@ public sealed class BuildModule : IEditorModule
 }
 
 /// <summary>Exports the project as one standalone .exe that carries its own .NET: nothing for players to install.</summary>
-public sealed class BuildGameCommand(IWorkspace workspace, IStatusService status, IDialogService dialogs, IExternalPrograms programs, ILogger<BuildGameCommand> logger)
-    : BuildCommandBase(workspace, status, dialogs, programs, logger)
+public sealed class BuildGameCommand(IProjectSession projectSession, ISceneDocuments sceneDocuments, IPlaySession playSession, IStatusService status, IDialogService dialogs, IExternalPrograms programs, ILogger<BuildGameCommand> logger)
+    : BuildCommandBase(projectSession, sceneDocuments, playSession, status, dialogs, programs, logger)
 {
     public override string Id => "Game.Build";
     public override string Text => "_Build Game";
@@ -41,8 +41,8 @@ public sealed class BuildGameCommand(IWorkspace workspace, IStatusService status
 }
 
 /// <summary>Exports the project as one small .exe for players who have the .NET Desktop Runtime installed.</summary>
-public sealed class BuildSmallGameCommand(IWorkspace workspace, IStatusService status, IDialogService dialogs, IExternalPrograms programs, ILogger<BuildSmallGameCommand> logger)
-    : BuildCommandBase(workspace, status, dialogs, programs, logger)
+public sealed class BuildSmallGameCommand(IProjectSession projectSession, ISceneDocuments sceneDocuments, IPlaySession playSession, IStatusService status, IDialogService dialogs, IExternalPrograms programs, ILogger<BuildSmallGameCommand> logger)
+    : BuildCommandBase(projectSession, sceneDocuments, playSession, status, dialogs, programs, logger)
 {
     public override string Id => "Game.BuildSmall";
     public override string Text => "Build _Small Game (Needs .NET)";
@@ -55,7 +55,7 @@ public sealed class BuildSmallGameCommand(IWorkspace workspace, IStatusService s
 
 /// <summary>Exports the project as a single .exe into &lt;project&gt;/Build and shows it in Explorer.</summary>
 public abstract class BuildCommandBase(
-    IWorkspace workspace,
+    IProjectSession projectSession, ISceneDocuments sceneDocuments, IPlaySession playSession,
     IStatusService status,
     IDialogService dialogs,
     IExternalPrograms programs,
@@ -69,15 +69,15 @@ public abstract class BuildCommandBase(
     /// <summary>Added to the exe's name, so both kinds of build can sit side by side.</summary>
     protected abstract string Suffix { get; }
 
-    protected override bool CanExecuteCore() => workspace.Project is not null && !workspace.IsPlaying;
+    protected override bool CanExecuteCore() => projectSession.Project is not null && !playSession.IsPlaying;
 
     protected override async Task ExecuteCoreAsync()
     {
-        if (workspace.Project is not { } project)
+        if (projectSession.Project is not { } project)
             return;
 
         // Export what's on disk, so save first.
-        if (!await workspace.SaveAllAsync())
+        if (!await sceneDocuments.SaveAllAsync())
             return;
 
         status.Show("Building...");
@@ -119,7 +119,7 @@ public abstract class BuildCommandBase(
 /// on this computer only.
 /// </summary>
 public sealed class BuildWebCommand(
-    IWorkspace workspace,
+    IProjectSession projectSession, ISceneDocuments sceneDocuments, IPlaySession playSession,
     IStatusService status,
     IDialogService dialogs,
     IExternalPrograms programs,
@@ -137,15 +137,15 @@ public sealed class BuildWebCommand(
     /// <summary>The published web player the editor ships, beside it (see Griff.Editor.csproj).</summary>
     public static string WebPlayerFolder => Path.Combine(AppContext.BaseDirectory, "Player", "Web", "wwwroot");
 
-    protected override bool CanExecuteCore() => workspace.Project is not null && !workspace.IsPlaying;
+    protected override bool CanExecuteCore() => projectSession.Project is not null && !playSession.IsPlaying;
 
     protected override async Task ExecuteCoreAsync()
     {
-        if (workspace.Project is not { } project)
+        if (projectSession.Project is not { } project)
             return;
 
         // Export what's on disk, so save first.
-        if (!await workspace.SaveAllAsync())
+        if (!await sceneDocuments.SaveAllAsync())
             return;
         var buildFolder = Path.Combine(project.RootPath, BuildCommandBase.BuildFolderName);
         Directory.CreateDirectory(buildFolder);

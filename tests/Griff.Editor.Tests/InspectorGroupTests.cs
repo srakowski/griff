@@ -1,3 +1,4 @@
+using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Status;
@@ -35,7 +36,7 @@ public class InspectorGroupTests
         scene.Add(button);
 
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         return (document, services.GetRequiredService<ISelection>(), services.GetRequiredService<InspectorPanel>());
     }
 
@@ -82,8 +83,8 @@ public class InspectorGroupTests
         Assert.False(Section(inspector, "Platformer Movement").Group("Dash")!.IsExpanded);
         Assert.True(Section(inspector, "Platformer Movement").IsExpanded);
 
-        var next = new InspectorPanel(services.GetRequiredService<IWorkspace>(), selection, services.GetRequiredService<ScriptEditors>(),
-            services.GetRequiredService<EditorArt>(), services.GetRequiredService<EditorAudio>(), services.GetRequiredService<IDialogService>(), services.GetRequiredService<IStatusService>(), settings);
+        var next = new InspectorPanel(services.GetRequiredService<Workspace>(), services.GetRequiredService<Workspace>(), services.GetRequiredService<Workspace>(), selection, services.GetRequiredService<ScriptEditors>(),
+            services.GetRequiredService<EditorArt>(), services.GetRequiredService<EditorAudio>(), services.GetRequiredService<IDialogService>(), services.GetRequiredService<IStatusService>(), settings, services.GetRequiredService<Lazy<CommandRegistry>>(), services.GetRequiredService<PrefabFiles>());
         Assert.False(Section(next, "Platformer Movement").Group("Dash")!.IsExpanded);
 
         Section(next, "Platformer Movement").Group("Dash")!.ToggleCommand.Execute(null);

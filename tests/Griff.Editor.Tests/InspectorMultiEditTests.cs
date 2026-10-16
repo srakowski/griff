@@ -25,7 +25,7 @@ public class InspectorMultiEditTests
         scene.Add(new Entity("Wall"));
 
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         return (document, services.GetRequiredService<ISelection>(), services.GetRequiredService<InspectorPanel>());
     }
 
@@ -146,7 +146,7 @@ public class InspectorMultiEditTests
         selection.SelectEntities([red, gold, wall]);
         Assert.Equal(["Transform"], inspector.Components.Where(c => !c.IsPartial).Select(c => c.Title));
 
-        var registry = services.GetRequiredService<IWorkspace>().Components;
+        var registry = services.GetRequiredService<Workspace>().Components;
         inspector.AddComponent(registry.Get(typeof(Health)));
         Assert.All([red, gold, wall], e => Assert.NotNull(e.GetComponent<Health>()));
         Assert.Contains("Health", inspector.Components.Select(c => c.Title));

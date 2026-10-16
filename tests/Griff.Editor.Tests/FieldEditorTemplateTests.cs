@@ -23,7 +23,7 @@ public sealed partial class FieldEditorTemplateTests
     public void EveryFieldEditor_DrawsFromItsTemplate_WithTheThemeLoaded() => EditorHost.Run(services =>
     {
         _ = System.IO.Packaging.PackUriHelper.UriSchemePack;
-        var registry = services.GetRequiredService<Griff.Editor.Core.Workspace.IWorkspace>().Components;
+        var registry = services.GetRequiredService<Griff.Editor.Core.Workspace.Workspace>().Components;
         var host = services.GetRequiredService<InspectorPanel>();
         var templates = Templates();
         var root = new Border { Width = 320 };

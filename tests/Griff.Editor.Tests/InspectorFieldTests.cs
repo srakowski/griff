@@ -1,3 +1,4 @@
+using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Status;
@@ -32,7 +33,7 @@ public class InspectorFieldTests
         scene.Add(lift);
 
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         return (document, services.GetRequiredService<ISelection>(), services.GetRequiredService<InspectorPanel>());
     }
 
@@ -111,8 +112,8 @@ public class InspectorFieldTests
         Assert.True(Section(inspector, "Mover").IsExpanded);
 
         // The next time the editor starts, it's still folded.
-        var next = new InspectorPanel(services.GetRequiredService<IWorkspace>(), selection, services.GetRequiredService<ScriptEditors>(),
-            services.GetRequiredService<EditorArt>(), services.GetRequiredService<EditorAudio>(), services.GetRequiredService<IDialogService>(), services.GetRequiredService<IStatusService>(), settings);
+        var next = new InspectorPanel(services.GetRequiredService<Workspace>(), services.GetRequiredService<Workspace>(), services.GetRequiredService<Workspace>(), selection, services.GetRequiredService<ScriptEditors>(),
+            services.GetRequiredService<EditorArt>(), services.GetRequiredService<EditorAudio>(), services.GetRequiredService<IDialogService>(), services.GetRequiredService<IStatusService>(), settings, services.GetRequiredService<Lazy<CommandRegistry>>(), services.GetRequiredService<PrefabFiles>());
         Assert.False(Section(next, "Transform").IsExpanded);
 
         Section(next, "Transform").IsExpanded = true;

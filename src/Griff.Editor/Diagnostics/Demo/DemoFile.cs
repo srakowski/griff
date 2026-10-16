@@ -21,8 +21,8 @@ namespace Griff.Editor.Diagnostics.Demo;
 /// driven through the editor with real input. See demos/README.md for the commands. Each <c>chapter:</c> starts a
 /// chapter the viewer can rewind to; lines before the first chapter set the scene (usually <c>project:</c>).
 /// </summary>
-internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISelection selection, PlayMode play, SceneViewControl sceneView, DemoOptions options,
-    Core.Undo.ActiveDocument documents)
+internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISelection selection, PlayMode play, SceneViewControl sceneView, DemoOptions options,
+    Core.Undo.ActiveDocument documents, PrefabFiles prefabFiles)
 {
     /// <summary>Where demos make their projects: this folder is the demos' own.</summary>
     internal static readonly string ProjectsRoot = Path.Combine(Path.GetTempPath(), "griff-demos");
@@ -622,7 +622,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 {
                     if (workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == overrideCopy) is not { Prefab: not null } copy)
                         return $"{overrideCopy} isn't a prefab copy";
-                    if (Core.Workspace.PrefabFiles.PrefabOf(workspace, copy) is not { } prefab)
+                    if (prefabFiles.PrefabOf(copy) is not { } prefab)
                         return $"{overrideCopy}'s prefab can't be read";
                     var found = Griff.Editing.PrefabOverrides.Find(copy, prefab, workspace.Components).Select(o => o.ToString()).ToList();
                     return found.Count == 0 ? "none" : string.Join(", ", found);

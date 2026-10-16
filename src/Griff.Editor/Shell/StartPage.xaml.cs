@@ -4,26 +4,27 @@ using System.Windows.Controls;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Workspace;
+using Griff.Editor.Features.Projects;
 
 namespace Griff.Editor.Shell;
 
 /// <summary>Shown when no project is open: create, open, or pick a recent project.</summary>
 public partial class StartPage : UserControl
 {
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
     private readonly IDialogService _dialogs;
 
-    public StartPage(IWorkspace workspace, IDialogService dialogs, CommandRegistry commands)
+    public StartPage(IProjectSession projectSession, IDialogService dialogs, CommandRegistry commands)
     {
         InitializeComponent();
-        _workspace = workspace;
+        _projectSession = projectSession;
         _dialogs = dialogs;
-        NewButton.Command = commands.Get("Project.New");
-        OpenButton.Command = commands.Get("Project.Open");
+        NewButton.Command = commands.Get<NewProjectCommand>();
+        OpenButton.Command = commands.Get<OpenProjectCommand>();
 
-        workspace.PropertyChanged += (_, e) =>
+        projectSession.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.RecentProjects))
+            if (e.PropertyName == nameof(IProjectSession.RecentProjects))
                 ShowRecent();
         };
         ShowRecent();
@@ -31,8 +32,8 @@ public partial class StartPage : UserControl
 
     private void ShowRecent()
     {
-        RecentList.ItemsSource = _workspace.RecentProjects.ToList();
-        RecentHeader.Visibility = _workspace.RecentProjects.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        RecentList.ItemsSource = _projectSession.RecentProjects.ToList();
+        RecentHeader.Visibility = _projectSession.RecentProjects.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async void OnRecentClicked(object sender, RoutedEventArgs e)
@@ -42,7 +43,7 @@ public partial class StartPage : UserControl
 
         try
         {
-            await _workspace.OpenProjectAsync(path);
+            await _projectSession.OpenProjectAsync(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
         {

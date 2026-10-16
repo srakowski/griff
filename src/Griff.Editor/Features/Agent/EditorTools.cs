@@ -27,7 +27,7 @@ namespace Griff.Editor.Features.Agent;
 /// What an agent needs to see its work and try it: where the editor is at, pictures of the game and the editor, the
 /// Output log, and keys pressed in the running game to playtest it.
 /// </summary>
-public sealed class EditorTools(IWorkspace workspace, ISelection selection, PlayMode play, SceneViewControl sceneView, OutputLog log, Debugger debugger, Audio.EditorMute mute) : IAgentToolSource
+public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments sceneDocuments, ISelection selection, PlayMode play, SceneViewControl sceneView, OutputLog log, Debugger debugger, Audio.EditorMute mute, Core.EditorWindow editorWindow) : IAgentToolSource
 {
     public IEnumerable<AgentTool> GetTools()
     {
@@ -110,11 +110,11 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
     private ToolResult State()
     {
         var text = new StringBuilder();
-        if (workspace.Project is not { } project)
+        if (projectSession.Project is not { } project)
         {
             text.AppendLine("No project is open. Project_New makes one (from a template); Project_Open opens one.");
-            if (workspace.RecentProjects.Count > 0)
-                text.AppendLine("Recent projects: " + string.Join("; ", workspace.RecentProjects.Take(5)));
+            if (projectSession.RecentProjects.Count > 0)
+                text.AppendLine("Recent projects: " + string.Join("; ", projectSession.RecentProjects.Take(5)));
             OpenWindows(text);
             return ToolResult.Ok(text.ToString());
         }
@@ -123,15 +123,15 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         text.AppendLine(CultureInfo.InvariantCulture, $"Start scene: {(project.StartScenePath is { } start ? Path.GetRelativePath(project.AssetsPath, start) : "none")}");
         text.AppendLine(CultureInfo.InvariantCulture, $"Scenes: {string.Join(", ", project.FindScenes().Select(s => Path.GetRelativePath(project.AssetsPath, s)))}");
         text.AppendLine(CultureInfo.InvariantCulture, $"Step rate: {project.StepRate} steps a second (Game_StepRate sets it)");
-        if (workspace.EditScene is { } scene)
+        if (sceneDocuments.EditScene is { } scene)
         {
             text.AppendLine(CultureInfo.InvariantCulture, $"Open scene: {Path.GetRelativePath(project.AssetsPath, scene.FilePath)}{(scene.IsDirty ? " (unsaved changes)" : "")}, {scene.Scene.Count} entities");
             text.AppendLine(CultureInfo.InvariantCulture, $"Undo: {scene.History.UndoDescription ?? "nothing"}; redo: {scene.History.RedoDescription ?? "nothing"}");
         }
 
-        if (workspace.Prefabs.Count > 0)
-            text.AppendLine(CultureInfo.InvariantCulture, $"Prefabs open in their own tabs: {string.Join(", ", workspace.Prefabs.Select(p => Path.GetRelativePath(project.AssetsPath, p.FilePath) + (p.IsDirty ? " (unsaved changes)" : "")))}");
-        if (workspace.Scene is { IsPrefab: true } prefab)
+        if (sceneDocuments.Prefabs.Count > 0)
+            text.AppendLine(CultureInfo.InvariantCulture, $"Prefabs open in their own tabs: {string.Join(", ", sceneDocuments.Prefabs.Select(p => Path.GetRelativePath(project.AssetsPath, p.FilePath) + (p.IsDirty ? " (unsaved changes)" : "")))}");
+        if (sceneDocuments.Scene is { IsPrefab: true } prefab)
         {
             text.AppendLine(CultureInfo.InvariantCulture, $"Showing: the {prefab.Name} prefab's tab, so the scene tools, Hierarchy and Inspector edit the prefab (Scene_Save saves it and updates every copy; Prefab_Close or Workspace.ShowScene goes back to the scene)");
             text.AppendLine(CultureInfo.InvariantCulture, $"Prefab undo: {prefab.History.UndoDescription ?? "nothing"}; redo: {prefab.History.RedoDescription ?? "nothing"}");
@@ -191,17 +191,17 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
     {
         view = view.Trim();
         maxWidth = Math.Clamp(maxWidth, 64, 4096);
-        var main = (MainWindow)Application.Current.MainWindow;
+        var main = editorWindow.Main ?? throw new AgentException("The editor window isn't open.");
         var timer = System.Diagnostics.Stopwatch.StartNew();
 
         BitmapSource bitmap;
         string caption;
         if (view.Equals("game", StringComparison.OrdinalIgnoreCase))
         {
-            if (workspace.Scene is not { } document || workspace.Project is not { } project)
+            if (sceneDocuments.Scene is not { } document || projectSession.Project is not { } project)
                 throw new AgentException("No scene is open.");
             play.Surface.AssetRoot = project.AssetsPath; // Set by Play; a picture outside play needs it too.
-            bitmap = await WithTabAsync(main, main.GameTab, () =>
+            bitmap = await WithTabAsync(editorWindow, editorWindow.GameTab!, () =>
             {
                 var aspect = play.Surface.Aspect;
                 var frame = play.Game is { } game ? SceneRenderer.Build(game, aspect) : SceneRenderer.Build(document.Scene, aspect);
@@ -213,7 +213,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         }
         else if (view.Equals("scene", StringComparison.OrdinalIgnoreCase))
         {
-            bitmap = await WithTabAsync(main, main.SceneTab, () => Render(sceneView));
+            bitmap = await WithTabAsync(editorWindow, editorWindow.SceneTab!, () => Render(sceneView));
             caption = "The Scene view.";
         }
         else if (view.Equals("editor", StringComparison.OrdinalIgnoreCase))
@@ -243,9 +243,9 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
 
     // Shows a document tab long enough to draw it, then puts back the one that was showing.
     // The windows open over the editor (New Project with no project open too).
-    private static void OpenWindows(StringBuilder text)
+    private void OpenWindows(StringBuilder text)
     {
-        var windows = Application.Current is { } app ? app.Windows.OfType<Window>().Where(w => w.IsVisible && w != app.MainWindow).Select(DescribeWindow).ToList() : [];
+        var windows = editorWindow.OtherWindows.Select(DescribeWindow).ToList();
         if (windows.Count > 0)
             text.AppendLine(CultureInfo.InvariantCulture, $"Open windows: {string.Join(", ", windows)}");
     }
@@ -254,12 +254,12 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
     private static string DescribeWindow(Window window) =>
         string.Create(CultureInfo.InvariantCulture, $"{window.Title} ({window.ActualWidth:0} x {window.ActualHeight:0}{(ChromeWindow.IsOnItsScreen(window) == false ? ", off its screen" : "")})");
 
-    private static async Task<BitmapSource> WithTabAsync(MainWindow main, System.Windows.Controls.TabItem tab, Func<BitmapSource> capture)
+    private static async Task<BitmapSource> WithTabAsync(Core.EditorWindow main, System.Windows.Controls.TabItem tab, Func<BitmapSource> capture)
     {
-        var previous = main.DocumentTabs.SelectedItem;
+        var previous = main.DocumentTabs!.SelectedItem;
         if (previous != tab)
         {
-            main.DocumentTabs.SelectedItem = tab;
+            main.DocumentTabs!.SelectedItem = tab;
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             await Task.Delay(150);
         }
@@ -271,7 +271,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         finally
         {
             if (previous != tab)
-                main.DocumentTabs.SelectedItem = previous;
+                main.DocumentTabs!.SelectedItem = previous;
         }
     }
 
@@ -605,7 +605,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
     // Lets the game run a few frames (each one ticks the running scene).
     private async Task FramesAsync(int frames)
     {
-        if (workspace.Scene is not { IsRuntime: true } runtime)
+        if (sceneDocuments.Scene is not { IsRuntime: true } runtime)
             return;
         var done = new TaskCompletionSource();
         var left = frames;

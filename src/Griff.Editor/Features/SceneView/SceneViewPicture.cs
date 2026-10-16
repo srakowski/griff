@@ -18,7 +18,7 @@ namespace Griff.Editor.Features.SceneView;
 /// entities hidden in the editor are left out, and while one layer of a map is painted its other layers fade back. It's
 /// drawn again only when something it shows has changed (see <see cref="Invalidate"/>).
 /// </summary>
-internal sealed class SceneViewPicture(SceneViewport viewport, SceneViewModel model, IWorkspace workspace, SceneViewStyle style) : IDisposable
+internal sealed class SceneViewPicture(SceneViewport viewport, SceneViewModel model, IProjectSession projectSession, SceneViewStyle style) : IDisposable
 {
     // How opaque the other layers of a map being painted are drawn.
     internal const float OtherLayerOpacity = 0.35f;
@@ -84,7 +84,7 @@ internal sealed class SceneViewPicture(SceneViewport viewport, SceneViewModel mo
     {
         try
         {
-            var root = workspace.Project?.AssetsPath ?? Path.GetTempPath();
+            var root = projectSession.Project?.AssetsPath ?? Path.GetTempPath();
             if (_gl is null || _root != root)
             {
                 _gl?.Dispose();

@@ -21,8 +21,8 @@ public partial class InspectorView : UserControl
         _commands = commands;
         InitializeComponent();
         // The buttons on a component's header run its menu's commands, given the component.
-        Resources["Command.AddToAll"] = commands.Get("Component.AddToAll");
-        Resources["Command.RemoveComponent"] = commands.Get("Component.Remove");
+        Resources["Command.AddToAll"] = commands.Get<AddComponentToAllCommand>();
+        Resources["Command.RemoveComponent"] = commands.Get<RemoveComponentCommand>();
     }
 
     // ----- Menus: a component's (right-clicking its header) and a changed field's (its mark, or right-clicking its name),

@@ -120,10 +120,10 @@ public sealed class SimulationsPanelTests : IDisposable
     }
 
     // A new project with the sample tables and the arena, open, and a simulation made by New Simulation.
-    private (IWorkspace Workspace, SimulationsPanel Panel) Open(IServiceProvider services)
+    private (Workspace Workspace, SimulationsPanel Panel) Open(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         var assets = workspace.Project!.AssetsPath;
         Directory.CreateDirectory(Path.Combine(assets, "Tables"));
@@ -144,7 +144,7 @@ public sealed class SimulationsPanelTests : IDisposable
         return (workspace, panel);
     }
 
-    private static string SimFile(IWorkspace workspace, string name = "Balance") =>
+    private static string SimFile(Workspace workspace, string name = "Balance") =>
         File.ReadAllText(Path.Combine(workspace.Project!.AssetsPath, "Simulations", name + ".sim"));
 
     [Fact]

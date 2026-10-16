@@ -27,13 +27,13 @@ public sealed class EntityMenuTests
         foreach (var entity in entities)
             scene.Add(entity);
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         return document;
     }
 
     // What the Entity menu creates: the create commands (Entity.Create..., Create Entity's kinds) and the modules' presets.
     private static bool Creates(EditorCommand command) =>
-        command.Id.StartsWith("Entity.Create", StringComparison.Ordinal) || command is CreateEntityCommand;
+        command.Id.StartsWith("Entity.Create", StringComparison.Ordinal) || command is PresetCommand;
 
     // The architecture rule: a create command without a category would be lost from the menu and the palette, so a new
     // one says where it goes ([Category("...")], a module's preset its module's name), with an icon and a /// summary.
@@ -105,7 +105,7 @@ public sealed class EntityMenuTests
         var characters = submenus.Single(m => (string)m.Tag == "Characters").Items.OfType<MenuItem>().ToList();
         Assert.Equal(["_Platformer Player", "Top-down Pla_yer", "_Grid Player", "Grid _Enemy", "Add Atta_ck"], characters.Select(m => (string)m.Header));
         var enemy = characters[3];
-        Assert.Equal(DocComments.Summary(typeof(CreateGridEnemyCommand)).FirstSentence, enemy.ToolTip);
+        Assert.Equal(DocComments.Summary(typeof(Griff.Editing.Presets.GridEnemyPreset)).FirstSentence, enemy.ToolTip);
         Assert.NotNull(enemy.Icon);
         Assert.Same(services.GetRequiredService<CommandRegistry>().Get("Entity.CreateGridEnemy"), enemy.Command);
 
@@ -158,7 +158,7 @@ public sealed class EntityMenuTests
         var tools = services.GetRequiredService<AgentServer>().Tools;
 
         var enemy = tools["Entity_CreateGridEnemy"].Description;
-        Assert.StartsWith(DocComments.Summary(typeof(CreateGridEnemyCommand)).FirstSentence.TrimEnd('.'), enemy);
+        Assert.StartsWith(DocComments.Summary(typeof(Griff.Editing.Presets.GridEnemyPreset)).FirstSentence.TrimEnd('.'), enemy);
         Assert.Contains("(Menu: Entity > Characters > Grid Enemy)", enemy);
         Assert.Contains("(Menu: Entity > Genres > Match-3 > Match Board)", tools["Entity_CreateMatchBoard"].Description);
         Assert.Contains("(Menu: Entity > Basics > Empty, Ctrl+Alt+N)", tools["Entity_CreateEmpty"].Description);
@@ -180,7 +180,7 @@ public sealed class EntityMenuTests
 
         palette.Search = "grid enemy";
         Assert.Equal("Grid Enemy", palette.Selected!.Name);
-        Assert.Equal(DocComments.Summary(typeof(CreateGridEnemyCommand)).FirstSentence, palette.PlanText);
+        Assert.Equal(DocComments.Summary(typeof(Griff.Editing.Presets.GridEnemyPreset)).FirstSentence, palette.PlanText);
 
         // By category: everything in it.
         palette.Search = "audio";
@@ -235,7 +235,7 @@ public sealed class EntityMenuTests
         Assert.Single(palette.View.Cast<EntityPaletteItem>(), i => i.Name == "Light");
 
         // Only so many are kept.
-        foreach (var command in commands.Categorized.SelectMany(g => g).Where(c => c is CreateEntityCommand).Take(12))
+        foreach (var command in commands.Categorized.SelectMany(g => g).Where(c => c is PresetCommand).Take(12))
             Pump(command.ExecuteAsync());
         Assert.Equal(CommandRegistry.MaxRecent, commands.Recent.Count);
         Assert.True(services.GetRequiredService<ISettingsStore>().Settings.RecentEntities.Count <= CommandRegistry.MaxRecent * 2);
@@ -264,7 +264,7 @@ public sealed class EntityMenuTests
         hierarchy.AddPicked();
         Assert.Equal("Hitbox", Assert.Single(hero.Children).Name);
         Assert.NotNull(hero.GetComponent<Attack>());
-        Assert.Same(document, services.GetRequiredService<IWorkspace>().Scene);
+        Assert.Same(document, services.GetRequiredService<Workspace>().Scene);
     });
 
     [Theory]

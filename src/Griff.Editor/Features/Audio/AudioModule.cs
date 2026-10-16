@@ -25,14 +25,14 @@ public sealed class AudioModule : IEditorModule
 }
 
 /// <summary>Opens the Sound Maker on a new sound effect.</summary>
-public sealed class NewSoundCommand(EditorAudio audio, IWorkspace workspace) : EditorCommand
+public sealed class NewSoundCommand(EditorAudio audio, IProjectSession projectSession) : EditorCommand
 {
     public override string Id => "Audio.NewSound";
     public override string Text => "New _Sound...";
     public override string? Icon => Icons.Audio;
     public override MenuPlacement? Placement { get; } = new(AudioModule.Menu, Group: 0, Order: 0);
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {
@@ -42,14 +42,14 @@ public sealed class NewSoundCommand(EditorAudio audio, IWorkspace workspace) : E
 }
 
 /// <summary>Opens the Sound Maker on a new piece of music.</summary>
-public sealed class NewMusicCommand(EditorAudio audio, IWorkspace workspace) : EditorCommand
+public sealed class NewMusicCommand(EditorAudio audio, IProjectSession projectSession) : EditorCommand
 {
     public override string Id => "Audio.NewMusic";
     public override string Text => "New _Music...";
     public override string? Icon => Icons.Music;
     public override MenuPlacement? Placement { get; } = new(AudioModule.Menu, Group: 0, Order: 1);
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {

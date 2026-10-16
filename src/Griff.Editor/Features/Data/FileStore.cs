@@ -40,15 +40,16 @@ public abstract class FileStore<T> : ObservableObject, IDisposable
     /// <summary>A file's contents at one step of its history: what it holds (or why it doesn't read) and its text.</summary>
     private sealed record State(T? Value, string Text, string? Problem);
 
-    protected FileStore(IWorkspace workspace, ILogger logger)
+    protected FileStore(IProjectSession session, ILogger logger)
     {
-        Workspace = workspace;
+        Session = session;
         Logger = logger;
         _reload = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => ReloadChanged(), Dispatcher.CurrentDispatcher);
         _reload.Stop();
     }
 
-    protected IWorkspace Workspace { get; }
+    /// <summary>The open project.</summary>
+    protected IProjectSession Session { get; }
 
     protected ILogger Logger { get; }
 
@@ -126,10 +127,10 @@ public abstract class FileStore<T> : ObservableObject, IDisposable
     /// <summary>Reads the project's files and watches them; a store calls it once it's set up.</summary>
     protected void Start()
     {
-        Workspace.AddAssetListener(AssetChanged);
-        Workspace.PropertyChanged += (_, e) =>
+        Session.AddAssetListener(AssetChanged);
+        Session.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.Project))
+            if (e.PropertyName == nameof(IProjectSession.Project))
                 LoadAll();
         };
         LoadAll();
@@ -174,7 +175,7 @@ public abstract class FileStore<T> : ObservableObject, IDisposable
     // Puts a file as it was at one step of its history: written, and read (or not) as that step had it.
     private void Put(string name, State state)
     {
-        if (!_files.TryGetValue(name, out var stored) || Workspace.Project is not { } project)
+        if (!_files.TryGetValue(name, out var stored) || Session.Project is not { } project)
             return;
         WriteFile(Path.Combine(project.AssetsPath, stored.Entry.AssetPath.Replace('/', Path.DirectorySeparatorChar)), state.Text);
         var value = state.Value is null ? null : Named(state.Value, stored.Entry.Name);
@@ -197,7 +198,7 @@ public abstract class FileStore<T> : ObservableObject, IDisposable
     }
 
     private string AssetPathOf(string path) =>
-        Workspace.Project is { } project ? Path.GetRelativePath(project.AssetsPath, path).Replace('\\', '/') : Path.GetFileName(path);
+        Session.Project is { } project ? Path.GetRelativePath(project.AssetsPath, path).Replace('\\', '/') : Path.GetFileName(path);
 
     // A step of a file's history: its text and what it held, before and after.
     private sealed class FileEdit(FileStore<T> store, string name, string description, State before, State after) : IEdit
@@ -218,7 +219,7 @@ public abstract class FileStore<T> : ObservableObject, IDisposable
         _files.Clear();
         _histories.Clear();
         _written.Clear();
-        if (Workspace.Project is { } project && Directory.Exists(project.AssetsPath))
+        if (Session.Project is { } project && Directory.Exists(project.AssetsPath))
         {
             foreach (var file in Directory.EnumerateFiles(project.AssetsPath, "*" + Extension, SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase))
             {
@@ -320,7 +321,7 @@ public abstract class FileStore<T> : ObservableObject, IDisposable
     /// </summary>
     public AssetFeedback? AssetChanged(string assetPath)
     {
-        if (!assetPath.EndsWith(Extension, StringComparison.OrdinalIgnoreCase) || Workspace.Project is not { } project)
+        if (!assetPath.EndsWith(Extension, StringComparison.OrdinalIgnoreCase) || Session.Project is not { } project)
             return null;
         return Feedback(assetPath, Reload(Path.Combine(project.AssetsPath, assetPath.Replace('/', Path.DirectorySeparatorChar))));
     }
@@ -334,11 +335,11 @@ public abstract class FileStore<T> : ObservableObject, IDisposable
         _files.TryGetValue(name, out var old);
         if (!File.Exists(full))
         {
-            if (old is null || !string.Equals(Path.GetFullPath(Path.Combine(Workspace.Project!.AssetsPath, old.Entry.AssetPath)), full, StringComparison.OrdinalIgnoreCase))
+            if (old is null || !string.Equals(Path.GetFullPath(Path.Combine(Session.Project!.AssetsPath, old.Entry.AssetPath)), full, StringComparison.OrdinalIgnoreCase))
                 return old?.Entry;
             _written.Remove(full);
             // Another file of the same name (in another folder) may be the one now.
-            var other = Directory.EnumerateFiles(Workspace.Project.AssetsPath, "*" + Extension, SearchOption.AllDirectories)
+            var other = Directory.EnumerateFiles(Session.Project.AssetsPath, "*" + Extension, SearchOption.AllDirectories)
                 .Order(StringComparer.OrdinalIgnoreCase)
                 .FirstOrDefault(f => !string.Equals(Path.GetFullPath(f), full, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase));

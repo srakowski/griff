@@ -14,8 +14,8 @@ namespace Griff.Editor.Features.Data;
 /// </summary>
 public sealed class SimulationStore : FileStore<Simulation>
 {
-    public SimulationStore(IWorkspace workspace, ILogger<SimulationStore> logger)
-        : base(workspace, logger) => Start();
+    public SimulationStore(IProjectSession session, ILogger<SimulationStore> logger)
+        : base(session, logger) => Start();
 
     protected override string Extension => SimulationFile.Extension;
 
@@ -52,7 +52,7 @@ public sealed class SimulationStore : FileStore<Simulation>
     /// <summary>Makes a simulation called <paramref name="name"/> in Assets/Simulations, starting as <paramref name="simulation"/>, and saves it.</summary>
     public Simulation Create(string name, Simulation simulation)
     {
-        var project = Workspace.Project ?? throw new InvalidOperationException("No project is open.");
+        var project = Session.Project ?? throw new InvalidOperationException("No project is open.");
         if (NameProblem(name) is { } problem)
             throw new ArgumentException(problem, nameof(name));
         var made = simulation with { Name = name.Trim() };

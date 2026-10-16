@@ -16,7 +16,7 @@ namespace Griff.Editor.Diagnostics;
 // the level as the top-down map it's painted as.
 internal static partial class SnapshotRunner
 {
-    private static async Task ShooterSnapshots(IServiceProvider services, Window main, IWorkspace workspace, string projectDir, string outputDir)
+    private static async Task ShooterSnapshots(IServiceProvider services, Window main, Workspace workspace, string projectDir, string outputDir)
     {
         var checks = new List<string>();
         await workspace.CreateProjectAsync(projectDir, "Snapshot Shooter", Griff.Projects.ProjectTemplates.Get("Shooter"));

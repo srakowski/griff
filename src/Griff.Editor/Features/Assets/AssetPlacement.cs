@@ -12,12 +12,12 @@ namespace Griff.Editor.Features.Assets;
 /// Puts an asset into the open scene (or the prefab whose tab is showing): a prefab as a linked copy, an image as a
 /// sprite sized to its shape. The Assets panel's Add to Scene and dropping an asset on the Scene view both come here.
 /// </summary>
-public sealed class AssetPlacement(IWorkspace workspace, ISelection selection)
+public sealed class AssetPlacement(IProjectSession projectSession, ISceneDocuments sceneDocuments, ISelection selection, PrefabFiles prefabFiles)
 {
     /// <summary>The prefabs and images in Assets, by their path there ("Prefabs/Coin.prefab", "Sprites/hero.png").</summary>
     public IReadOnlyList<string> Placeable()
     {
-        if (workspace.Project is not { } project || !Directory.Exists(project.AssetsPath))
+        if (projectSession.Project is not { } project || !Directory.Exists(project.AssetsPath))
             return [];
         return Directory.EnumerateFiles(project.AssetsPath, "*.*", SearchOption.AllDirectories)
             .Where(p => AssetNode.KindOf(p) is AssetKind.Prefab or AssetKind.Image)
@@ -35,7 +35,7 @@ public sealed class AssetPlacement(IWorkspace workspace, ISelection selection)
     /// <returns>The new entity.</returns>
     public Entity AddToScene(string assetPath, Vector2? at = null)
     {
-        if (workspace.Scene is not { } document || workspace.Project is not { } project)
+        if (sceneDocuments.Scene is not { } document || projectSession.Project is not { } project)
             throw new InvalidOperationException("Open a scene to add things to it.");
 
         var path = assetPath.Trim().Replace('\\', '/');
@@ -51,9 +51,9 @@ public sealed class AssetPlacement(IWorkspace workspace, ISelection selection)
         else if (project.FindPrefab(path) is { } file)
         {
             path = PrefabFiles.AssetPathOf(project, file);
-            if (PrefabFiles.IsOwnTab(workspace, document, path))
+            if (prefabFiles.IsOwnTab(document, path))
                 throw new InvalidOperationException($"{Path.GetFileNameWithoutExtension(path)} can't go inside itself.");
-            entity = PrefabFiles.Instantiate(workspace, path)
+            entity = prefabFiles.Instantiate(path)
                 ?? throw new InvalidOperationException($"{path} couldn't be read as a prefab.");
         }
         else

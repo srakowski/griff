@@ -75,8 +75,9 @@ public class GameModuleTests
             "Entity.CreateDeck", "Entity.CreatePlayZone", "Entity.CreateCard",
             "Entity.CreateWalkArea", "Entity.CreateHotspot", "Entity.CreateWalker", "Entity.CreateItem", "Entity.CreateStage", "Entity.CreateCharacter", "Entity.CreateNoteLanes", "Entity.CreateReadingMenus", "Entity.CreateSlingshot", "Entity.CreateTower",
             "Entity.CreatePinballTable", "Entity.CreateSparring", "Entity.CreateFlippers", "Entity.CreateBumper", "Entity.CreateKickers", "Entity.CreatePlunger", "Entity.CreateDropTargets", "Entity.CreateLanes", "Entity.CreateTrainingPair"],
-            EntityPreset.All.Select(p => p.Id));
-        Assert.All(EntityPreset.All, p => Assert.NotNull(GameModule.Of(p.GetType())));
+            EntityPreset.All.Where(p => GameModule.Of(p.GetType()) is not null).Select(p => p.Id));
+        // The rest are Griff's own (Basics, UI, Audio...), each under the category it names.
+        Assert.All(EntityPreset.All.Where(p => GameModule.Of(p.GetType()) is null), p => Assert.Single(p.GetType().GetCustomAttributes(typeof(Griff.Scenes.CategoryAttribute), false)));
         Assert.All(EntityPreset.All, p => Assert.False(DocComments.Summary(p.GetType()).IsEmpty));
     }
 

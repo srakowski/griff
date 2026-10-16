@@ -35,7 +35,7 @@ public sealed partial class DialogueEditor : ObservableObject
     // Pixels a world unit is drawn in the preview, before it's scaled to fit.
     private const double PreviewScale = 40;
 
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
     private readonly ISelection _selection;
     private readonly EditorArt _art;
     private SceneDocument? _document;
@@ -50,9 +50,11 @@ public sealed partial class DialogueEditor : ObservableObject
     private string _newTransition = AsIs;
     private bool _rebuilding;
 
-    public DialogueEditor(IWorkspace workspace, ISelection selection, EditorArt art)
+    private readonly Core.EditorWindow _editorWindow;
+    public DialogueEditor(ISceneDocuments sceneDocuments, IProjectSession projectSession, ISelection selection, EditorArt art, Core.EditorWindow editorWindow)
     {
-        _workspace = workspace;
+        _projectSession = projectSession;
+        _editorWindow = editorWindow;
         _selection = selection;
         _art = art;
         AddLineCommand = new RelayCommand(() => AddLine(), () => Dialogue is not null);
@@ -67,13 +69,13 @@ public sealed partial class DialogueEditor : ObservableObject
             if (e.PropertyName == nameof(ISelection.Entity))
                 Follow();
         };
-        workspace.PropertyChanged += (_, e) =>
+        sceneDocuments.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(IWorkspace.Scene))
-                Track(workspace.Scene);
+            if (e.PropertyName == nameof(ISceneDocuments.Scene))
+                Track(sceneDocuments.Scene);
         };
         art.ImageSaved += (_, _) => RefreshPreview();
-        Track(workspace.Scene);
+        Track(sceneDocuments.Scene);
     }
 
     public string Title => "Dialogue Editor";
@@ -301,7 +303,7 @@ public sealed partial class DialogueEditor : ObservableObject
     {
         if (_window is null)
         {
-            _window = new DialogueEditorWindow(this) { Owner = Application.Current?.MainWindow };
+            _window = new DialogueEditorWindow(this) { Owner = _editorWindow.Main };
             _window.Closed += (_, _) => _window = null;
             _window.Show();
         }
@@ -422,7 +424,7 @@ public sealed partial class DialogueEditor : ObservableObject
         change(lines);
         if (lines.SequenceEqual(dialogue.Lines))
             return;
-        var property = _workspace.Components.Get(typeof(Dialogue)).Properties.Single(p => p.Name == nameof(Griff.Scenes.Dialogue.Lines));
+        var property = _projectSession.Components.Get(typeof(Dialogue)).Properties.Single(p => p.Name == nameof(Griff.Scenes.Dialogue.Lines));
         document.History.Seal();
         document.Execute(new CompositeEdit(description, [new SetPropertyEdit(dialogue, property, (IReadOnlyList<string>)lines)]));
         document.History.Seal();

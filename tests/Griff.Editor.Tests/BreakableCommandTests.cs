@@ -25,7 +25,7 @@ public sealed class BreakableCommandTests
         crate.AddComponent<Body>();
         scene.Add(crate);
         var document = new SceneDocument(scene, "Test.scene");
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         var selection = services.GetRequiredService<ISelection>();
         var command = services.GetServices<EditorCommand>().OfType<AddBreakableCommand>().Single();
 

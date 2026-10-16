@@ -35,7 +35,7 @@ public sealed class PlayModule : IEditorModule
 }
 
 /// <summary>Plays the open scene in the Game tab, on a copy: Stop puts everything back as it was.</summary>
-public sealed class PlayCommand(PlayMode play, IWorkspace workspace) : EditorCommand
+public sealed class PlayCommand(PlayMode play, ISceneDocuments sceneDocuments) : EditorCommand
 {
     public override string Id => "Game.Play";
     public override string Text => "_Play";
@@ -44,7 +44,7 @@ public sealed class PlayCommand(PlayMode play, IWorkspace workspace) : EditorCom
     public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 0, Order: 0);
     public override ToolbarPlacement? Toolbar { get; } = new(Group: 2, Order: 0);
 
-    protected override bool CanExecuteCore() => !play.IsPlaying && workspace.Scene is not null;
+    protected override bool CanExecuteCore() => !play.IsPlaying && sceneDocuments.Scene is not null;
 
     protected override Task ExecuteCoreAsync()
     {
@@ -98,7 +98,7 @@ public sealed class StepCommand(PlayMode play) : EditorCommand
 /// Copies the selected entity's live values into the edit scene, so tuning done while playing survives Stop.
 /// One undo step in the edit scene's history.
 /// </summary>
-public sealed class KeepPlayChangesCommand(IWorkspace workspace, ISelection selection, IStatusService status) : EditorCommand
+public sealed class KeepPlayChangesCommand(IProjectSession projectSession, ISceneDocuments sceneDocuments, IPlaySession playSession, ISelection selection, IStatusService status) : EditorCommand
 {
     public override string Id => "Game.KeepChanges";
     public override string Text => "_Keep Play Changes";
@@ -106,11 +106,11 @@ public sealed class KeepPlayChangesCommand(IWorkspace workspace, ISelection sele
     public override KeyGesture? Gesture { get; } = new(Key.K, ModifierKeys.Control);
     public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 0, Order: 4);
 
-    protected override bool CanExecuteCore() => workspace.IsPlaying && selection.Entity is not null;
+    protected override bool CanExecuteCore() => playSession.IsPlaying && selection.Entity is not null;
 
     protected override Task ExecuteCoreAsync()
     {
-        if (selection.Entity is not { } live || workspace.EditScene is not { } edit)
+        if (selection.Entity is not { } live || sceneDocuments.EditScene is not { } edit)
             return Task.CompletedTask;
 
         if (edit.Scene.Find(live.Id) is not { } target)
@@ -119,7 +119,7 @@ public sealed class KeepPlayChangesCommand(IWorkspace workspace, ISelection sele
             return Task.CompletedTask;
         }
 
-        var changes = CopyValues.Between(live, target, workspace.Components);
+        var changes = CopyValues.Between(live, target, projectSession.Components);
         using (edit.History.BeginGroup($"Keep play changes to {live.Name}"))
         {
             foreach (var change in changes)
@@ -154,14 +154,14 @@ public sealed class StopCommand(PlayMode play) : EditorCommand
 /// Plays a multiplayer game with several players at once: the Game tab hosts, and each other player gets a window of their
 /// own that joins it, as if on another machine. Click a window to play as that player.
 /// </summary>
-public abstract class PlayWithPlayersCommand(PlayMode play, IWorkspace workspace, int players) : EditorCommand
+public abstract class PlayWithPlayersCommand(PlayMode play, ISceneDocuments sceneDocuments, int players) : EditorCommand
 {
     public override string Id => $"Game.PlayWith{players}";
     public override string Text => $"Play with _{players} Players";
     public override string? Icon => Icons.Play;
     public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 1, Order: players);
 
-    protected override bool CanExecuteCore() => !play.IsPlaying && workspace.Scene is not null;
+    protected override bool CanExecuteCore() => !play.IsPlaying && sceneDocuments.Scene is not null;
 
     protected override Task ExecuteCoreAsync()
     {
@@ -171,16 +171,16 @@ public abstract class PlayWithPlayersCommand(PlayMode play, IWorkspace workspace
 }
 
 /// <summary>Plays as two players at once: the Game tab hosts a network game and player 2 gets a window of their own.</summary>
-public sealed class PlayWithTwoCommand(PlayMode play, IWorkspace workspace) : PlayWithPlayersCommand(play, workspace, 2)
+public sealed class PlayWithTwoCommand(PlayMode play, ISceneDocuments sceneDocuments) : PlayWithPlayersCommand(play, sceneDocuments, 2)
 {
     public override KeyGesture? Gesture { get; } = new(Key.F5, ModifierKeys.Control);
 }
 
 /// <summary>Plays as three players at once: the Game tab hosts and players 2 and 3 get windows of their own.</summary>
-public sealed class PlayWithThreeCommand(PlayMode play, IWorkspace workspace) : PlayWithPlayersCommand(play, workspace, 3);
+public sealed class PlayWithThreeCommand(PlayMode play, ISceneDocuments sceneDocuments) : PlayWithPlayersCommand(play, sceneDocuments, 3);
 
 /// <summary>Plays as four players at once: the Game tab hosts and players 2 to 4 get windows of their own.</summary>
-public sealed class PlayWithFourCommand(PlayMode play, IWorkspace workspace) : PlayWithPlayersCommand(play, workspace, 4);
+public sealed class PlayWithFourCommand(PlayMode play, ISceneDocuments sceneDocuments) : PlayWithPlayersCommand(play, sceneDocuments, 4);
 
 /// <summary>Pretends the players of Play with Players are on a slow connection, to feel what lag does. Again turns it off.</summary>
 public sealed class SlowConnectionCommand(PlayMode play, IStatusService status) : EditorCommand
@@ -201,25 +201,25 @@ public sealed class SlowConnectionCommand(PlayMode play, IStatusService status) 
 
 /// <summary>Deletes what the game saved with Game.SaveData while playing in the editor, to test a first run again.</summary>
 [Destructive]
-public sealed class ClearSaveDataCommand(IWorkspace workspace, IStatusService status) : EditorCommand
+public sealed class ClearSaveDataCommand(IProjectSession projectSession, IPlaySession playSession, IStatusService status) : EditorCommand
 {
     public override string Id => "Game.ClearSaveData";
     public override string Text => "_Clear Save Data";
     public override string? Icon => Icons.Clear;
     public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 2, Order: 1);
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {
-        if (workspace.Project is not { } project)
+        if (projectSession.Project is not { } project)
             return Task.CompletedTask;
 
         var path = Griff.Runtime.SaveData.EditorPath(project.RootPath);
         try
         {
             File.Delete(path);
-            status.Show(workspace.IsPlaying ? "Cleared save data; the running game keeps its values until you play again" : "Cleared save data");
+            status.Show(playSession.IsPlaying ? "Cleared save data; the running game keeps its values until you play again" : "Cleared save data");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

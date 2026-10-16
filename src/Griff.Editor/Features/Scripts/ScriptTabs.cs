@@ -3,8 +3,11 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Griff.Editor.Core.Dialogs;
+using Griff.Editor.Core.Settings;
+using Griff.Editor.Core.Workspace;
+using Griff.Editor.Features.Debugging;
 using Griff.Editor.Themes;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Features.Scripts;
 
@@ -12,7 +15,8 @@ namespace Griff.Editor.Features.Scripts;
 /// Puts open scripts in the window's document tabs, after Scene and Game: one tab per script with its name, an
 /// unsaved-changes dot and a close button (middle-click closes too).
 /// </summary>
-public sealed class ScriptTabs(ScriptEditors editors, IServiceProvider services)
+public sealed class ScriptTabs(ScriptEditors editors, IProjectSession projectSession, ISceneDocuments sceneDocuments, IScriptSession scriptSession, IPlaySession playSession, ISelection selection, IDialogService dialogs,
+    Art.EditorArt art, Audio.EditorAudio audio, Debugger debugger, ISettingsStore settings)
 {
     private TabControl? _tabs;
 
@@ -67,7 +71,7 @@ public sealed class ScriptTabs(ScriptEditors editors, IServiceProvider services)
 
         foreach (ScriptDocument document in e.NewItems ?? Array.Empty<ScriptDocument>())
         {
-            var view = ActivatorUtilities.CreateInstance<ScriptEditorView>(services, document);
+            var view = new ScriptEditorView(document, editors, projectSession, sceneDocuments, scriptSession, playSession, selection, dialogs, art, audio, debugger, settings);
             var tab = new TabItem { Tag = document, Content = view, Header = Header(document) };
             tab.MouseUp += (_, args) =>
             {

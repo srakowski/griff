@@ -95,8 +95,8 @@ public sealed class PanelLayout
     private ISettingsStore _settings;
     private int _holding;
 
-    public PanelLayout(IServiceProvider services, IEnumerable<PanelDescriptor> descriptors, ISettingsStore settings)
-        : this(descriptors.Select(d => (ToolPanel)services.GetRequiredService(d.PanelType)), settings)
+    public PanelLayout(IEnumerable<PanelDescriptor> descriptors, ISettingsStore settings)
+        : this(descriptors.Select(d => d.Panel()), settings)
     {
     }
 

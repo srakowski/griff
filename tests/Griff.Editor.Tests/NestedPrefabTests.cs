@@ -33,10 +33,10 @@ public sealed class NestedPrefabTests : IDisposable
 
     // A project with a Coin prefab (worth 1), a Chest prefab holding a coin it made gold, a copy of the coin placed in the
     // open scene and a copy of the chest beside it.
-    private (IWorkspace Workspace, Project Project, Entity Coin, Entity Chest) Open(IServiceProvider services)
+    private (Workspace Workspace, Project Project, Entity Coin, Entity Chest) Open(IServiceProvider services)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var workspace = services.GetRequiredService<IWorkspace>();
+        var workspace = services.GetRequiredService<Workspace>();
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         var project = workspace.Project!;
 
@@ -49,15 +49,15 @@ public sealed class NestedPrefabTests : IDisposable
         var chest = new Scene();
         var root = new Entity("Chest");
         chest.Add(root);
-        var inside = PrefabFiles.Instantiate(workspace, "Prefabs/Coin.prefab")!;
+        var inside = services.GetRequiredService<PrefabFiles>().Instantiate("Prefabs/Coin.prefab")!;
         inside.GetComponent<Sprite>()!.Tint = new Color(1, 0.8f, 0);
         chest.Add(inside, root);
         File.WriteAllText(project.DefaultPrefabPath("Chest"), workspace.Serializer.SavePrefabToString(root));
 
         var scene = workspace.Scene!;
-        var placedCoin = PrefabFiles.Instantiate(workspace, "Prefabs/Coin.prefab")!;
+        var placedCoin = services.GetRequiredService<PrefabFiles>().Instantiate("Prefabs/Coin.prefab")!;
         scene.Execute(new AddEntityEdit(scene.Scene, placedCoin));
-        var placedChest = PrefabFiles.Instantiate(workspace, "Prefabs/Chest.prefab")!;
+        var placedChest = services.GetRequiredService<PrefabFiles>().Instantiate("Prefabs/Chest.prefab")!;
         placedChest.Transform.Position = new Vector3(4, 0, 0);
         scene.Execute(new AddEntityEdit(scene.Scene, placedChest));
         return (workspace, project, placedCoin, placedChest);
@@ -69,7 +69,7 @@ public sealed class NestedPrefabTests : IDisposable
             await services.GetRequiredService<CommandRegistry>().Get(id).ExecuteAsync();
     }
 
-    private static Entity LoadPrefab(IWorkspace workspace, Project project, string name) =>
+    private static Entity LoadPrefab(Workspace workspace, Project project, string name) =>
         workspace.Serializer.LoadPrefabFromString(File.ReadAllText(project.DefaultPrefabPath(name)));
 
     [Fact]
@@ -120,7 +120,7 @@ public sealed class NestedPrefabTests : IDisposable
         // A coin holding a chest, which holds a coin: saving the coin can't go into the chest.
         Wait(workspace.OpenPrefabAsync("Coin"));
         var coinTab = workspace.Scene!;
-        coinTab.Execute(new AddEntityEdit(coinTab.Scene, PrefabFiles.Instantiate(workspace, "Prefabs/Chest.prefab")!, coinTab.Scene.Roots[0]));
+        coinTab.Execute(new AddEntityEdit(coinTab.Scene, services.GetRequiredService<PrefabFiles>().Instantiate("Prefabs/Chest.prefab")!, coinTab.Scene.Roots[0]));
         var before = File.ReadAllText(project.DefaultPrefabPath("Chest"));
 
         using (AgentDialogs.Answering(JsonDocument.Parse("{}").RootElement))

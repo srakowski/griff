@@ -14,7 +14,7 @@ namespace Griff.Editor.Features.Entities;
 /// An entity without a polygon collider gets one in place of its box or circle collider, keeping whether it's a trigger
 /// and its layers. Drag the points in the Scene view to tidy it. One undo step.
 /// </summary>
-public sealed class FitPolygonColliderCommand(IWorkspace workspace, ISelection selection, EditorArt art) : EditorCommand
+public sealed class FitPolygonColliderCommand(IProjectSession projectSession, ISceneDocuments sceneDocuments, ISelection selection, EditorArt art) : EditorCommand
 {
     /// <summary>The most points a fitted outline has.</summary>
     public const int MostPoints = 12;
@@ -25,11 +25,11 @@ public sealed class FitPolygonColliderCommand(IWorkspace workspace, ISelection s
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 10);
 
     protected override bool CanExecuteCore() =>
-        workspace.Scene is not null && selection.Entity?.GetComponent<Sprite>() is { Image.Length: > 0 };
+        sceneDocuments.Scene is not null && selection.Entity?.GetComponent<Sprite>() is { Image.Length: > 0 };
 
     protected override Task ExecuteCoreAsync()
     {
-        if (workspace.Scene is not { } document || selection.Entity is not { } entity || entity.GetComponent<Sprite>() is not { Image.Length: > 0 } sprite)
+        if (sceneDocuments.Scene is not { } document || selection.Entity is not { } entity || entity.GetComponent<Sprite>() is not { Image.Length: > 0 } sprite)
             throw new InvalidOperationException("Select an entity with a sprite (with a picture) to fit a polygon collider to it.");
         if (art.Pixels(sprite.Image) is not var (pixels, width, height))
             throw new InvalidOperationException($"Couldn't read {sprite.Image}: is it in the project's Assets?");
@@ -44,7 +44,7 @@ public sealed class FitPolygonColliderCommand(IWorkspace workspace, ISelection s
         {
             if (entity.GetComponent<PolygonCollider>() is { } polygon)
             {
-                var property = workspace.Components.Get(typeof(PolygonCollider)).Properties.Single(p => p.Name == nameof(PolygonCollider.Points));
+                var property = projectSession.Components.Get(typeof(PolygonCollider)).Properties.Single(p => p.Name == nameof(PolygonCollider.Points));
                 document.Execute(new SetPropertyEdit(polygon, property, points));
             }
             else

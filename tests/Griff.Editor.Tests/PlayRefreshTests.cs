@@ -21,7 +21,7 @@ public class PlayRefreshTests
         scene.Add(new Entity("Sword"), player);
         scene.Add(new Entity("Coin"));
         var document = new SceneDocument(scene, "Test.scene", isRuntime: true);
-        services.GetRequiredService<IWorkspace>().EnterPlayMode(document);
+        services.GetRequiredService<Workspace>().EnterPlayMode(document);
         return document;
     }
 

@@ -19,7 +19,9 @@ namespace Griff.Editor.Features.Scripts;
 public sealed class ComponentPanel : ObservableObject, IPropertyHost
 {
     private readonly ScriptDocument _script;
-    private readonly IWorkspace _workspace;
+    private readonly IProjectSession _projectSession;
+    private readonly ISceneDocuments _sceneDocuments;
+    private readonly IPlaySession _playSession;
     private readonly ISelection _selection;
     private readonly Art.EditorArt _art;
     private readonly Audio.EditorAudio _audio;
@@ -34,10 +36,12 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
     private string _className = "";
     private bool _pinned;
 
-    public ComponentPanel(ScriptDocument script, IWorkspace workspace, ISelection selection, Art.EditorArt art, Audio.EditorAudio audio)
+    public ComponentPanel(ScriptDocument script, ISceneDocuments sceneDocuments, IScriptSession scriptSession, IProjectSession projectSession, IPlaySession playSession, ISelection selection, Art.EditorArt art, Audio.EditorAudio audio)
     {
         _script = script;
-        _workspace = workspace;
+        _projectSession = projectSession;
+        _sceneDocuments = sceneDocuments;
+        _playSession = playSession;
         _selection = selection;
         _art = art;
         _audio = audio;
@@ -59,11 +63,16 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
             _outlineTimer.Stop();
             _outlineTimer.Start();
         };
-        workspace.ScriptsReloaded += (_, _) => Rebuild();
-        workspace.PropertyChanged += (_, e) =>
+        scriptSession.ScriptsReloaded += (_, _) => Rebuild();
+        sceneDocuments.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(IWorkspace.Scene) or nameof(IWorkspace.IsPlaying))
-                Track(workspace.Scene);
+            if (e.PropertyName == nameof(ISceneDocuments.Scene))
+                Track(sceneDocuments.Scene);
+        };
+        playSession.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(IPlaySession.IsPlaying))
+                Track(sceneDocuments.Scene);
         };
         selection.PropertyChanged += (_, e) =>
         {
@@ -78,7 +87,7 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
                 OnPropertyChanged(nameof(HasNotice));
             }
         };
-        Track(workspace.Scene);
+        Track(sceneDocuments.Scene);
         ReadOutline();
     }
 
@@ -148,7 +157,7 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
         }
     }
 
-    public string InstanceLabel => Instance is null ? "" : _workspace.IsPlaying ? "Live values" : "Values";
+    public string InstanceLabel => Instance is null ? "" : _playSession.IsPlaying ? "Live values" : "Values";
 
     public string InstancesText => !IsComponent
         ? ""
@@ -159,7 +168,7 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
             var n => $"Used by {n} entities in {_scene?.Name}.",
         };
 
-    public bool CanAddToSelected => IsComponent && _selection.Entity is { } entity && !_workspace.IsPlaying &&
+    public bool CanAddToSelected => IsComponent && _selection.Entity is { } entity && !_playSession.IsPlaying &&
                                     entity.Components.All(c => c.GetType() != _descriptor!.Type);
 
     public string AddToSelectedText => _selection.Entity is { } entity ? $"Add to {entity.Name}" : "Select an entity to add it to";
@@ -223,7 +232,7 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
         get
         {
             if (_names is not { } known || Environment.TickCount64 - known.At > 1000)
-                _names = known = (Environment.TickCount64, _workspace.Names);
+                _names = known = (Environment.TickCount64, _projectSession.Names);
             return known.Names;
         }
     }
@@ -245,13 +254,13 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
     }
 
     private ComponentDescriptor? Find(string name) =>
-        _workspace.Components.All.FirstOrDefault(d => d.Type.Name == name && d.Type.Assembly != typeof(Component).Assembly);
+        _projectSession.Components.All.FirstOrDefault(d => d.Type.Name == name && d.Type.Assembly != typeof(Component).Assembly);
 
     /// <summary>Starts over from the compiled component: its documentation and properties.</summary>
     public void Rebuild()
     {
         _descriptor = Find(ClassName);
-        _entry = _descriptor is null ? null : ComponentCatalog.Build(_workspace.Components).FirstOrDefault(e => e.Descriptor == _descriptor);
+        _entry = _descriptor is null ? null : ComponentCatalog.Build(_projectSession.Components).FirstOrDefault(e => e.Descriptor == _descriptor);
         Rows.Clear();
         if (_entry is not null)
         {
@@ -379,9 +388,9 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
 
     private void AddToSelected()
     {
-        if (_descriptor is null || _selection.Entity is not { } entity || _workspace.Scene is not { } scene)
+        if (_descriptor is null || _selection.Entity is not { } entity || _sceneDocuments.Scene is not { } scene)
             return;
-        scene.Execute(ComponentCatalog.AddWithRequirements(_workspace.Components, _descriptor, entity));
+        scene.Execute(ComponentCatalog.AddWithRequirements(_projectSession.Components, _descriptor, entity));
         _pinned = false;
         FindInstances();
         FollowSelection();

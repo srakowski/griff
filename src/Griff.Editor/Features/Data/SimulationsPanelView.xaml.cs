@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
 using Griff.Editor.Core.Commands;
+using Griff.Editor.Features.Editing;
 
 namespace Griff.Editor.Features.Data;
 
@@ -17,12 +18,12 @@ public partial class SimulationsPanelView : UserControl
     public SimulationsPanelView(CommandRegistry commands)
     {
         InitializeComponent();
-        NewButton.Command = commands.Get("Data.NewSimulation");
-        RunButton.Command = commands.Get("Data.RunSimulation");
-        StopButton.Command = commands.Get("Data.StopSimulation");
-        UndoButton.Command = commands.Get("Edit.Undo");
-        RedoButton.Command = commands.Get("Edit.Redo");
-        ExportButton.Command = commands.Get("Data.ExportResults");
+        NewButton.Command = commands.Get<NewSimulationCommand>();
+        RunButton.Command = commands.Get<RunSimulationCommand>();
+        StopButton.Command = commands.Get<StopSimulationCommand>();
+        UndoButton.Command = commands.Get<UndoCommand>();
+        RedoButton.Command = commands.Get<RedoCommand>();
+        ExportButton.Command = commands.Get<ExportSimulationResultsCommand>();
         ResultsGrid.AutoGeneratingColumn += OnColumn;
         TabGrid.AutoGeneratingColumn += OnColumn;
     }

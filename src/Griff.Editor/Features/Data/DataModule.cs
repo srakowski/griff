@@ -61,14 +61,14 @@ public sealed class DataModule : IEditorModule
 /// the Tables panel with a column and a row to start from. Scripts read it as Tables.Get("Spells", "Fireball"), and Table
 /// Values components take their values from its rows.
 /// </summary>
-public sealed class NewTableCommand(IWorkspace workspace, TableStore store, TablesPanel panel, PanelLayout layout, IDialogService dialogs) : EditorCommand
+public sealed class NewTableCommand(IProjectSession projectSession, TableStore store, TablesPanel panel, PanelLayout layout, IDialogService dialogs) : EditorCommand
 {
     public override string Id => "Data.NewTable";
     public override string Text => "_New Table...";
     public override string? Icon => Icons.Table;
     public override MenuPlacement? Placement { get; } = new(DataModule.Menu, Group: 0, Order: 0);
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {
@@ -152,14 +152,14 @@ public sealed class ShowTablesCommand(PanelLayout layout) : EditorCommand
 /// table of that name has its rows replaced (its columns keep their types; undo puts them back); otherwise a new one is
 /// made, each column getting the type its values all fit.
 /// </summary>
-public sealed class ImportCsvCommand(IWorkspace workspace, TablesPanel panel, PanelLayout layout, IDialogService dialogs) : EditorCommand
+public sealed class ImportCsvCommand(IProjectSession projectSession, TablesPanel panel, PanelLayout layout, IDialogService dialogs) : EditorCommand
 {
     public override string Id => "Data.ImportCsv";
     public override string Text => "_Import CSV...";
     public override string? Icon => Icons.Import;
     public override MenuPlacement? Placement { get; } = new(DataModule.Menu, Group: 1, Order: 0);
 
-    protected override bool CanExecuteCore() => workspace.Project is not null;
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
 
     protected override Task ExecuteCoreAsync()
     {

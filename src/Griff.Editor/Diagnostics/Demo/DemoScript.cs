@@ -1,7 +1,6 @@
 #if DEBUG
 using System.Diagnostics;
 using System.IO;
-using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -13,8 +12,6 @@ using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.Play;
 using Griff.Editor.Features.Projects;
 using Griff.Editor.Features.SceneView;
-using Griff.Editor.Themes.Controls;
-using Griff.Scenes;
 using Button = System.Windows.Controls.Button;
 using Point = System.Windows.Point;
 using Slider = System.Windows.Controls.Slider;

@@ -60,6 +60,7 @@ public static class ScriptCompiler
         global using Griff.Input;
         global using Griff.Runtime;
         global using Griff.Scenes;
+        global using Griff.Simulations;
 
         """ + string.Concat(GameModule.All.Select(m => $"global using {m.Namespace};{Environment.NewLine}"));
 

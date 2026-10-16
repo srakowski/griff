@@ -1,5 +1,4 @@
 using System.IO;
-using System.Windows;
 using Griff.Audio;
 using Griff.Editor.Core.Workspace;
 using Griff.Platform.Windows;
@@ -66,7 +65,7 @@ public sealed class EditorAudio
     {
         if (AssetsPath is not { } root || Resolve(assetPath) is null)
             return false;
-        if (WindowsAudio.Library(new Griff.Hosting.AssetFolder(root)).Stream(assetPath!) is not { } stream)
+        if (WindowsAudio.Library(new Griff.Projects.AssetFolder(root)).Stream(assetPath!) is not { } stream)
             return false;
         Start(stream, assetPath);
         return true;

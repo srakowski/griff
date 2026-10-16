@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Griff.Graphics;
 using Griff.Hosting;
+using Griff.Projects;
 using Griff.Rendering;
 using Silk.NET.OpenGL;
 

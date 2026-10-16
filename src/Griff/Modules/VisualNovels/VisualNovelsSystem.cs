@@ -1,4 +1,3 @@
-using Griff.Input;
 using Griff.Runtime;
 using Griff.Scenes;
 

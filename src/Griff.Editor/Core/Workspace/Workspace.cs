@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editor.Core.Dialogs;
@@ -9,6 +8,7 @@ using Griff.Projects;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 using Griff.Scripting;
+using Griff.Templates;
 using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
 
@@ -37,7 +37,7 @@ public sealed class Workspace(
     private readonly ObservableCollection<SceneDocument> _prefabs = [];
     private ReadOnlyObservableCollection<SceneDocument>? _readOnlyPrefabs;
     private FileSystemWatcher? _scriptWatcher;
-    private Griff.Hosting.WatchedAssetFolder? _assets;
+    private Griff.Projects.WatchedAssetFolder? _assets;
     private Griff.Runtime.PrefabLibrary? _prefabLibrary;
     private Dispatcher? _dispatcher;
     private DispatcherTimer? _scriptDebounce;
@@ -54,7 +54,7 @@ public sealed class Workspace(
         private set => SetProperty(ref _project, value);
     }
 
-    public Griff.Hosting.IAssetSource? Assets => _assets;
+    public Griff.Projects.IAssetSource? Assets => _assets;
 
     public Griff.Runtime.PrefabLibrary? PrefabLibrary => _prefabLibrary;
 
@@ -523,7 +523,7 @@ public sealed class Workspace(
         _prefabs.Clear();
         _prefabLibrary?.Dispose();
         _assets?.Dispose();
-        _assets = new Griff.Hosting.WatchedAssetFolder(project.AssetsPath);
+        _assets = new Griff.Projects.WatchedAssetFolder(project.AssetsPath);
         // One library of the project's prefabs for every game played while it's open: what one read the next spawns at once,
         // and a prefab changed (here or outside) is read again, its copies brought up to date.
         _dispatcher = Dispatcher.CurrentDispatcher;

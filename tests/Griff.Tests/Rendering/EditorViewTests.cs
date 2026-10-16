@@ -3,6 +3,7 @@ using Griff.Projects;
 using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
+using Griff.Templates;
 
 namespace Griff.Tests.Rendering;
 

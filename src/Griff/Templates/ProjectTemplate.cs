@@ -1,14 +1,16 @@
 using Griff.Audio;
+using Griff.Data;
+using Griff.Projects;
 using Griff.Scenes;
 
-namespace Griff.Projects;
+namespace Griff.Templates;
 
 /// <summary>
 /// A starting point New Project offers: a playable start scene and whatever else it comes with (more scenes, scripts,
 /// prefabs, pictures, sounds and music). Templates are found rather than listed (see <see cref="ProjectTemplates.All"/>),
 /// so adding one is adding a class.
 /// </summary>
-public abstract class ProjectTemplate
+public abstract class ProjectTemplate : IProjectStart
 {
     /// <summary>What code and demo scripts call it, e.g. "Match3". Defaults to the class name without "Template".</summary>
     public virtual string Name => GetType().Name is var name && name.EndsWith("Template", StringComparison.Ordinal) && name.Length > "Template".Length
@@ -52,11 +54,11 @@ public abstract class ProjectTemplate
     /// <summary>Image files, keyed by path relative to Assets, as PNG bytes.</summary>
     public virtual IReadOnlyDictionary<string, byte[]> Images() => new Dictionary<string, byte[]>();
 
-    /// <summary>Its tables of game data, keyed by path relative to Assets ("Tables/Enemies.table"); see <see cref="Data.Table"/>.</summary>
-    public virtual IReadOnlyDictionary<string, Data.Table> Tables() => new Dictionary<string, Data.Table>();
+    /// <summary>Its tables of game data, keyed by path relative to Assets ("Tables/Enemies.table"); see <see cref="Table"/>.</summary>
+    public virtual IReadOnlyDictionary<string, Table> Tables() => new Dictionary<string, Table>();
 
-    /// <summary>Its balance simulations, keyed by path relative to Assets ("Simulations/Balance.sim"); see <see cref="Data.Simulation"/>.</summary>
-    public virtual IReadOnlyDictionary<string, Data.Simulation> Simulations() => new Dictionary<string, Data.Simulation>();
+    /// <summary>Its balance simulations, keyed by path relative to Assets ("Simulations/Balance.sim"); see <see cref="Simulation"/>.</summary>
+    public virtual IReadOnlyDictionary<string, Simulation> Simulations() => new Dictionary<string, Simulation>();
 
     /// <summary>The start scene. Script components are added as missing components until compiled.</summary>
     public Scene StartScene() => WithSounds(BuildStartScene());

@@ -1,8 +1,5 @@
 using System.Globalization;
 using System.Numerics;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -554,12 +551,12 @@ public sealed class PropertyField : ObservableObject
                     inside ? "Nothing inside this entity yet" : "No entities in the scene", NamesMany, true, none);
                 break;
             case FieldKind.Action:
-                choices = [.. ActionNames.Choices(_components[0], _property).Select(c => new PickerChoice(c.Name, detail: c.Detail))];
+                choices = [.. NameChoices.Actions(_components[0], _property).Select(c => new PickerChoice(c.Name, detail: c.Detail))];
                 setup = new("Type to find something it can do", "What it's done on can't do anything yet: give it a component that can",
                     false, true, none);
                 break;
             case FieldKind.Output:
-                choices = [.. OutputNames.Choices(_components[0], _property).Select(c => new PickerChoice(c.Name, detail: c.Detail))];
+                choices = [.. NameChoices.Outputs(_components[0], _property).Select(c => new PickerChoice(c.Name, detail: c.Detail))];
                 setup = new("Type to find something it reads", "What it reads knows nothing yet: give it a component that does",
                     false, true, none);
                 break;

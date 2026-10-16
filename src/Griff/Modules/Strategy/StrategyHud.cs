@@ -1,6 +1,4 @@
 using System.Numerics;
-using Griff.Runtime;
-using Griff.Scenes;
 
 namespace Griff.Modules.Strategy;
 

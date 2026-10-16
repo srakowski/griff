@@ -1,5 +1,3 @@
-using Griff.Editing;
-
 namespace Griff.Editor.Features.Inspector;
 
 /// <summary>One value of an enum field: as it reads in the list ("Ping Pong"), and what it means (its documentation).</summary>

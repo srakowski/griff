@@ -6,6 +6,7 @@ using System.Runtime.InteropServices.JavaScript;
 using Griff.Audio;
 using Griff.Graphics;
 using Griff.Input;
+using Griff.Projects;
 using Griff.Rendering;
 using Griff.Hosting;
 using Griff.Runtime;

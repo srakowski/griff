@@ -260,7 +260,7 @@ public sealed class GameRunner : IDisposable
         _mousePixel = null;
     }
 
-    private void OnMouseButton(Runtime.MouseButton button, bool down)
+    private void OnMouseButton(Input.MouseButton button, bool down)
     {
         // A first-person game takes the mouse when it's clicked; that click only takes it, it doesn't fire.
         if (down && _lockCenter is null && _input.WantsMouseLock && !IsPaused)

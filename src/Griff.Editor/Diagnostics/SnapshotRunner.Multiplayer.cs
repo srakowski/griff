@@ -5,7 +5,6 @@ using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Play;
 using Griff.Input;
 using Griff.Rendering;
-using Griff.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Diagnostics;
@@ -17,7 +16,7 @@ internal static partial class SnapshotRunner
     private static async Task MultiplayerSnapshots(IServiceProvider services, Workspace workspace, string projectDir, string outputDir)
     {
         var checks = new List<string>();
-        await workspace.CreateProjectAsync(projectDir, "Snapshot Arena", Griff.Projects.ProjectTemplates.Get("Multiplayer"));
+        await workspace.CreateProjectAsync(projectDir, "Snapshot Arena", Griff.Templates.ProjectTemplates.Get("Multiplayer"));
         Render(System.Windows.Application.Current.MainWindow!, Path.Combine(outputDir, "multiplayer-menu-editor.png"));
         await workspace.OpenSceneAsync(Path.Combine(workspace.Project!.AssetsPath, "Scenes", "Arena.scene"));
         var play = services.GetRequiredService<PlayMode>();

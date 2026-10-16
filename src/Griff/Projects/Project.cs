@@ -1,5 +1,6 @@
 using System.Text.Json;
-using Griff.Runtime;
+using Griff.Data;
+using Griff.Input;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
@@ -18,6 +19,15 @@ public sealed class Project
     public const string PrefabExtension = ".prefab";
     public const string PrefabsFolderName = "Prefabs";
     public const string DefaultSceneName = "Main";
+
+    /// <summary>How many steps a second a game takes unless its project or a script says otherwise.</summary>
+    public const int DefaultStepRate = 60;
+
+    /// <summary>The fewest steps a second a game takes.</summary>
+    public const int MinStepRate = 10;
+
+    /// <summary>The most steps a second a game takes.</summary>
+    public const int MaxStepRate = 240;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -43,7 +53,7 @@ public sealed class Project
     }
 
     /// <summary>
-    /// The game's input actions that differ from the built-in ones (<see cref="InputState.BuiltInActions"/>), as set in
+    /// The game's input actions that differ from the built-in ones (<see cref="InputActions.BuiltIn"/>), as set in
     /// the Controls window. Names that don't read as a key or button are skipped rather than losing the rest.
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<InputBinding>> Controls =>
@@ -59,26 +69,26 @@ public sealed class Project
     public async Task SetControlsAsync(IReadOnlyDictionary<string, IReadOnlyList<InputBinding>> controls, CancellationToken cancellationToken = default)
     {
         var changed = controls
-            .Where(p => !(InputState.BuiltInActions.TryGetValue(p.Key, out var builtIn) && builtIn.SequenceEqual(p.Value)))
+            .Where(p => !(InputActions.BuiltIn.TryGetValue(p.Key, out var builtIn) && builtIn.SequenceEqual(p.Value)))
             .ToDictionary(p => p.Key.Trim(), p => p.Value.Select(b => b.ToString()).ToArray());
         Manifest = Manifest with { Controls = changed.Count > 0 ? changed : null };
         await SaveManifestAsync(cancellationToken);
     }
 
     /// <summary>
-    /// How many steps a second the game takes (see <see cref="Time.StepRate"/>): set in the editor with Game &gt; Step Rate,
-    /// <see cref="Time.DefaultStepRate"/> unless it's changed. Exported games and games played in the editor start with it.
+    /// How many steps a second the game takes (the game's <c>Time.StepRate</c>): set in the editor with Game &gt; Step Rate,
+    /// <see cref="DefaultStepRate"/> unless it's changed. Exported games and games played in the editor start with it.
     /// </summary>
-    public int StepRate => Math.Clamp(Manifest.StepRate ?? Time.DefaultStepRate, Time.MinStepRate, Time.MaxStepRate);
+    public int StepRate => Math.Clamp(Manifest.StepRate ?? DefaultStepRate, MinStepRate, MaxStepRate);
 
     /// <summary>
-    /// Sets <see cref="StepRate"/> (kept between <see cref="Time.MinStepRate"/> and <see cref="Time.MaxStepRate"/>) and
+    /// Sets <see cref="StepRate"/> (kept between <see cref="MinStepRate"/> and <see cref="MaxStepRate"/>) and
     /// saves the manifest straight away, so it can be undone as part of an edit. The usual rate isn't written.
     /// </summary>
     public void SetStepRate(int rate)
     {
-        rate = Math.Clamp(rate, Time.MinStepRate, Time.MaxStepRate);
-        Manifest = Manifest with { StepRate = rate == Time.DefaultStepRate ? null : rate };
+        rate = Math.Clamp(rate, MinStepRate, MaxStepRate);
+        Manifest = Manifest with { StepRate = rate == DefaultStepRate ? null : rate };
         using var stream = File.Create(ManifestPath);
         JsonSerializer.Serialize(stream, Manifest, JsonOptions);
     }
@@ -98,8 +108,18 @@ public sealed class Project
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         using var stream = File.Create(path);
-        new SceneSerializer(ComponentRegistry.CreateDefault()).Save(ProjectTemplates.Empty.StartScene(), stream);
+        new SceneSerializer(ComponentRegistry.CreateDefault()).Save(NewScene(), stream);
         return path;
+    }
+
+    /// <summary>A scene with a camera: what a new scene, and a new project without a template, starts as.</summary>
+    public static Scene NewScene()
+    {
+        var scene = new Scene();
+        var camera = new Entity("Main Camera");
+        camera.AddComponent<Camera>();
+        scene.Add(camera);
+        return scene;
     }
 
     /// <summary>Finds a scene by name ("Level2") or Assets-relative path ("Scenes/Level2.scene").</summary>
@@ -149,9 +169,10 @@ public sealed class Project
 
     /// <summary>
     /// Creates a project in a new folder named after it inside <paramref name="parentDirectory"/>.
-    /// An existing empty folder is reused; a non-empty one is refused. Without a <paramref name="template"/>, it starts Empty.
+    /// An existing empty folder is reused; a non-empty one is refused. It starts with what <paramref name="start"/> (New
+    /// Project's template) comes with, or else a scene with a camera (<see cref="NewScene"/>).
     /// </summary>
-    public static async Task<Project> CreateAsync(string parentDirectory, string name, ProjectTemplate? template = null, CancellationToken cancellationToken = default)
+    public static async Task<Project> CreateAsync(string parentDirectory, string name, IProjectStart? start = null, CancellationToken cancellationToken = default)
     {
         if (ProjectNames.Validate(name) is { } error)
             throw new ArgumentException(error, nameof(name));
@@ -168,7 +189,7 @@ public sealed class Project
 
             var startScene = $"{AssetsFolderName}/{DefaultSceneName}{SceneExtension}";
             var project = new Project(root, new ProjectManifest(name.Trim(), ProjectManifest.CurrentFormatVersion, DateTimeOffset.UtcNow, startScene));
-            await WriteTemplateAsync(project, template ?? ProjectTemplates.Empty, startScene, cancellationToken);
+            await WriteStartAsync(project, start ?? new CameraOnly(), startScene, cancellationToken);
             await File.WriteAllTextAsync(Path.Combine(root, ".gitignore"), "# Griff exports and editor state\nBuild/\n.griff/\n", cancellationToken);
             await using (var stream = File.Create(project.ManifestPath))
                 await JsonSerializer.SerializeAsync(stream, project.Manifest, JsonOptions, cancellationToken);
@@ -224,8 +245,8 @@ public sealed class Project
         return candidates.FirstOrDefault(p => string.Equals(Path.GetFileName(p), fileName, StringComparison.OrdinalIgnoreCase));
     }
 
-    // A new project opens to something: the template's scene, scripts, tables and prefabs.
-    private static async Task WriteTemplateAsync(Project project, ProjectTemplate template, string startScene, CancellationToken cancellationToken)
+    // A new project opens to something: the template's scene, scripts, tables and prefabs, or a scene with a camera.
+    private static async Task WriteStartAsync(Project project, IProjectStart template, string startScene, CancellationToken cancellationToken)
     {
         foreach (var (relative, source) in template.Scripts())
         {
@@ -245,14 +266,14 @@ public sealed class Project
         {
             var path = Path.Combine(project.AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            await File.WriteAllTextAsync(path, Data.TableFile.Write(table), cancellationToken);
+            await File.WriteAllTextAsync(path, TableFile.Write(table), cancellationToken);
         }
 
         foreach (var (relative, simulation) in template.Simulations())
         {
             var path = Path.Combine(project.AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            await File.WriteAllTextAsync(path, Data.SimulationFile.Write(simulation), cancellationToken);
+            await File.WriteAllTextAsync(path, SimulationFile.Write(simulation), cancellationToken);
         }
 
         var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());
@@ -273,6 +294,26 @@ public sealed class Project
         await using var stream = File.Create(project.ResolvePath(startScene));
         serializer.Save(template.StartScene(), stream);
         await stream.FlushAsync(cancellationToken);
+    }
+
+    // A project started without a template: a scene with a camera and nothing else.
+    private sealed class CameraOnly : IProjectStart
+    {
+        public Scene StartScene() => NewScene();
+
+        public IReadOnlyDictionary<string, Scene> MoreScenes() => new Dictionary<string, Scene>();
+
+        public IReadOnlyDictionary<string, Entity> Prefabs() => new Dictionary<string, Entity>();
+
+        public IReadOnlyDictionary<string, string> Scripts() => new Dictionary<string, string>();
+
+        public IReadOnlyDictionary<string, byte[]> Images() => new Dictionary<string, byte[]>();
+
+        public IReadOnlyDictionary<string, byte[]> Sounds() => new Dictionary<string, byte[]>();
+
+        public IReadOnlyDictionary<string, Table> Tables() => new Dictionary<string, Table>();
+
+        public IReadOnlyDictionary<string, Simulation> Simulations() => new Dictionary<string, Simulation>();
     }
 
     private static void TryDeleteDirectory(string path)

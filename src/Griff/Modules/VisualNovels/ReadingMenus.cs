@@ -1,6 +1,5 @@
 using System.Numerics;
 using Griff.Editing;
-using Griff.Input;
 using Griff.Scenes;
 
 namespace Griff.Modules.VisualNovels;

@@ -2,7 +2,7 @@ using System.Numerics;
 using Griff.Input;
 using Griff.Scenes;
 
-namespace Griff.Projects;
+namespace Griff.Templates;
 
 /// <summary>
 /// A calibration screen ready to use, as Entity &gt; Audio &gt; Create Calibration Screen and the Arcade template's options

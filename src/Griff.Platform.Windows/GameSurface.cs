@@ -46,7 +46,7 @@ public sealed class GameSurface : HwndHost, Griff.Hosting.IGameView
     private WglContext? _context;
     private GL? _gl;
     private OpenGLRenderer? _renderer;
-    private Griff.Hosting.IAssetSource? _assets;
+    private Griff.Projects.IAssetSource? _assets;
     private bool _trackingLeave;
 
     /// <summary>Raised with the cursor position in pixels from the top-left of the surface.</summary>
@@ -56,7 +56,7 @@ public sealed class GameSurface : HwndHost, Griff.Hosting.IGameView
     public event Action? MouseLeft;
 
     /// <summary>Raised when a mouse button goes down (true) or up (false) over the surface.</summary>
-    public event Action<Runtime.MouseButton, bool>? MouseButtonChanged;
+    public event Action<Input.MouseButton, bool>? MouseButtonChanged;
 
     /// <summary>Raised when the mouse wheel turns over the surface, in notches (positive is away from the user).</summary>
     public event Action<float>? MouseWheelTurned;
@@ -88,7 +88,7 @@ public sealed class GameSurface : HwndHost, Griff.Hosting.IGameView
     /// The game's files its images and fonts are drawn from: the project's Assets, watched in the editor, fixed in an
     /// exported game. Nothing is drawn until it's set.
     /// </summary>
-    public Griff.Hosting.IAssetSource? Assets
+    public Griff.Projects.IAssetSource? Assets
     {
         get => _assets;
         set
@@ -243,11 +243,11 @@ public sealed class GameSurface : HwndHost, Griff.Hosting.IGameView
         return base.WndProc(hwnd, msg, wParam, lParam, ref handled);
     }
 
-    private static Runtime.MouseButton ButtonFor(int msg) => msg switch
+    private static Input.MouseButton ButtonFor(int msg) => msg switch
     {
-        WmRButtonDown or WmRButtonUp or WmRButtonDblClk => Runtime.MouseButton.Right,
-        WmMButtonDown or WmMButtonUp or WmMButtonDblClk => Runtime.MouseButton.Middle,
-        _ => Runtime.MouseButton.Left,
+        WmRButtonDown or WmRButtonUp or WmRButtonDblClk => Input.MouseButton.Right,
+        WmMButtonDown or WmMButtonUp or WmMButtonDblClk => Input.MouseButton.Middle,
+        _ => Input.MouseButton.Left,
     };
 
     // The system's pointer for each kind (none for Hidden), loaded once.

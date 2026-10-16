@@ -287,7 +287,7 @@ public sealed class ExceptionGuardTests : IDisposable
     [Fact]
     public void Every_templates_scripts_build_with_guards_kept()
     {
-        foreach (var template in Griff.Projects.ProjectTemplates.All)
+        foreach (var template in Griff.Templates.ProjectTemplates.All)
         {
             var sources = template.Scripts().Select(s => new ScriptSource(@"C:\Game\Assets\" + s.Key, s.Value)).ToList();
             if (sources.Count == 0)

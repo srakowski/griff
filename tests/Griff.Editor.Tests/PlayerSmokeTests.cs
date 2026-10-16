@@ -5,6 +5,7 @@ using System.Windows.Media.Imaging;
 using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scripting;
+using Griff.Templates;
 
 namespace Griff.Editor.Tests;
 

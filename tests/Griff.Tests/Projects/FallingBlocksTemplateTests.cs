@@ -4,6 +4,7 @@ using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
+using Griff.Templates;
 
 namespace Griff.Tests.Projects;
 

@@ -4,7 +4,6 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using Griff.Editor.Core.Commands;
-using Griff.Editor.Themes;
 using Griff.Editor.Features.Entities;
 
 namespace Griff.Editor.Features.Hierarchy;

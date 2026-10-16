@@ -3,7 +3,6 @@ using System.Numerics;
 using System.Windows.Media.Imaging;
 using Griff.Editing;
 using Griff.Editor.Core.Workspace;
-using Griff.Projects;
 using Griff.Scenes;
 
 namespace Griff.Editor.Features.Assets;

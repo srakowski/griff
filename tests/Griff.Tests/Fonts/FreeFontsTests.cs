@@ -105,7 +105,7 @@ public sealed class FreeFontsTests : IDisposable
         // The picker's preview of a free font not in Assets yet draws from Griff's own copy.
         Assert.Equal(FreeFonts.Pixel.FilePath, FontChoices.PreviewFont(FreeFonts.Pixel.AssetPath, _assets));
         Assert.Equal(FreeFonts.Sans.AssetPath, FontChoices.PreviewFont(FreeFonts.Sans.AssetPath, _assets));
-        Assert.NotSame(BuiltInFonts.Default.Face, new FontCatalog(new Griff.Hosting.AssetFolder(_assets)).FaceFor(FontChoices.PreviewFont(FreeFonts.Pixel.AssetPath, _assets)));
+        Assert.NotSame(BuiltInFonts.Default.Face, new FontCatalog(new Griff.Projects.AssetFolder(_assets)).FaceFor(FontChoices.PreviewFont(FreeFonts.Pixel.AssetPath, _assets)));
     }
 
     [Fact]

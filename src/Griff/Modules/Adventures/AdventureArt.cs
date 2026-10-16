@@ -1,5 +1,5 @@
-using Griff.Projects;
-using static Griff.Projects.TemplateArt;
+using Griff.Templates;
+using static Griff.Templates.TemplateArt;
 
 namespace Griff.Modules.Adventures;
 

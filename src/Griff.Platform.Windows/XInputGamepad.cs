@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
+using Griff.Input;
 using Griff.Runtime;
 
 namespace Griff.Platform.Windows;

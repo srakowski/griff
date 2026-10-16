@@ -1,6 +1,6 @@
 using System.Numerics;
 using static Griff.Modules.PhysicsGames.PinballArt;
-using static Griff.Projects.TemplateArt;
+using static Griff.Templates.TemplateArt;
 
 namespace Griff.Modules.PhysicsGames;
 

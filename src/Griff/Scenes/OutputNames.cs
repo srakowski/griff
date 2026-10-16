@@ -1,13 +1,12 @@
 using System.Reflection;
-using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
-namespace Griff.Editing;
+namespace Griff.Scenes;
 
 /// <summary>
 /// Fields that name an output (properties marked <see cref="OutputNameAttribute"/>, a counter's, bar's or text's Output, a
-/// wire's): the outputs of the entity they read, which the Inspector lists to pick from, and a name it hasn't got, which it
-/// flags.
+/// wire's): the outputs of the entity they read, and a name it hasn't got, which the Inspector flags and the game reports
+/// as it starts (what the Inspector lists to pick from is Griff.Editing's NameChoices).
 /// </summary>
 public static class OutputNames
 {
@@ -26,27 +25,6 @@ public static class OutputNames
         if (entityName.Any && value.Trim() == "*")
             return [.. owner.Scene?.Entities ?? []];
         return [.. EntityReferences.Names(value, entityName).SelectMany(n => EntityReferences.Named(owner, entityName, n)).Distinct()];
-    }
-
-    /// <summary>
-    /// What the field can pick: each output its targets have, once, as it's written ("Score", "Moves Left", "Amount:Gold"),
-    /// with what has it and what it gives, e.g. "Match Board, a whole number, out of Target Score". Those that give a name
-    /// only for a field that takes them (a text's).
-    /// </summary>
-    public static IReadOnlyList<NameChoice> Choices(Component component, PropertyDescriptor property) =>
-        [.. ComponentOutputs.On(Targets(component, property))
-            .Where(o => o.IsNumber || property.OutputName!.TakesNames)
-            .GroupBy(o => o.IsKeyed ? o.Reference : o.DisplayName, StringComparer.OrdinalIgnoreCase)
-            .Select(g => new NameChoice(g.Key, Detail(g.ToList())))];
-
-    // "Match Board, a whole number, out of Target Score": who has it, what it gives and what it's out of.
-    private static string Detail(List<ComponentOutput> outputs)
-    {
-        var who = string.Join(", ", outputs.Select(o => ComponentAction.Spaced(o.ComponentType.Name)).Distinct());
-        var first = outputs[0];
-        var of = first.OutOfName is { } outOf ? $", out of {ComponentAction.Spaced(outOf)}" : "";
-        var by = first.KeyName is { } key ? $" for a {ComponentAction.Spaced(key).ToLowerInvariant()} after the colon" : "";
-        return $"{who}, {first.ValueKind}{by}{of}";
     }
 
     /// <summary>

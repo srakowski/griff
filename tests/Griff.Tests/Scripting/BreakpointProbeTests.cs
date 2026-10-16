@@ -3,6 +3,7 @@ using System.Runtime.Loader;
 using Griff.Debugging;
 using Griff.Projects;
 using Griff.Scripting;
+using Griff.Templates;
 
 namespace Griff.Tests.Scripting;
 

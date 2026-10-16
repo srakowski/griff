@@ -1,4 +1,4 @@
-namespace Griff.Projects;
+namespace Griff.Templates;
 
 /// <summary>
 /// The pictures Griff's core templates come with (Top-down, Multiplayer, BunnyMark) and those several templates share (a

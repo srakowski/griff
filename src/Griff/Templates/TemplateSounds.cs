@@ -1,7 +1,7 @@
 using Griff.Audio;
 using Griff.Scenes;
 
-namespace Griff.Projects;
+namespace Griff.Templates;
 
 /// <summary>
 /// The sounds and music the templates come with (all but Empty and BunnyMark), made by the Sound Maker's synths

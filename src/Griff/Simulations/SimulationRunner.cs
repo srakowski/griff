@@ -1,10 +1,11 @@
 using System.Diagnostics;
 using System.Reflection;
+using Griff.Data;
 using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
-namespace Griff.Data;
+namespace Griff.Simulations;
 
 /// <summary>
 /// What a balance simulation plays with: the game's tables, its component types (scripts' too), how it loads scenes and

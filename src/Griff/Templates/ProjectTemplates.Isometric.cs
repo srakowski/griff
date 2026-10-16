@@ -2,7 +2,7 @@ using System.Numerics;
 using Griff.Audio;
 using Griff.Scenes;
 
-namespace Griff.Projects;
+namespace Griff.Templates;
 
 public static partial class ProjectTemplates
 {

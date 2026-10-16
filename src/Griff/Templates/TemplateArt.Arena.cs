@@ -1,4 +1,4 @@
-namespace Griff.Projects;
+namespace Griff.Templates;
 
 // The Multiplayer template's pictures: a fighter in pale grey (the game paints each player's their own color), a slime,
 // a heart, and the arena's floor and walls.

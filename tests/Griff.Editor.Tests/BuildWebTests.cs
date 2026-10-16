@@ -9,6 +9,7 @@ using Griff.Editor.Features.Agent;
 using Griff.Editor.Features.Build;
 using Griff.Projects;
 using Griff.Runtime;
+using Griff.Templates;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Tests;

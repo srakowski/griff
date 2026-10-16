@@ -170,7 +170,7 @@ public static class GameLoader
     /// <summary>
     /// Sets <paramref name="game"/> up as <paramref name="project"/> says, before it starts: its controls (the game's own
     /// input actions), its step rate, its tables (every <c>.table</c> file in Assets, see <see cref="Game.Tables"/>) and its
-    /// balance simulations (every <c>.sim</c> file, see <see cref="Game.Simulate"/>).
+    /// balance simulations (every <c>.sim</c> file, see <c>Game.Simulate</c>).
     /// Every host does this, so a game plays the same in the editor, exported and in a browser.
     /// </summary>
     public static void UseProjectSettings(this Game game, Project project) => game.UseProjectSettings(project, null);
@@ -203,7 +203,7 @@ public static class GameLoader
         await using var stream = File.OpenRead(scenePath);
         var scene = new SceneSerializer(components).Load(stream, warnings);
         // A trigger, counter or wire naming an action or output nothing has: said now, not left to do nothing.
-        foreach (var line in Griff.Editing.NameChecks.Lines(scene, components))
+        foreach (var line in Griff.Scenes.NameChecks.Lines(scene, components))
             warnings.Report(line);
         return new LoadedGame(project, components, scene, warnings) { SceneName = Path.GetFileNameWithoutExtension(scenePath) };
     }

@@ -1,5 +1,5 @@
 using Griff.Art;
-using static Griff.Projects.TemplateArt;
+using static Griff.Templates.TemplateArt;
 
 namespace Griff.Modules.Fighting;
 

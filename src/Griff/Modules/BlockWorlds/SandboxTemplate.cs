@@ -1,9 +1,8 @@
 using System.Numerics;
 using Griff.Audio;
-using Griff.Projects;
-using Griff.Runtime;
 using Griff.Scenes;
-using static Griff.Projects.ProjectTemplates;
+using Griff.Templates;
+using static Griff.Templates.ProjectTemplates;
 
 namespace Griff.Modules.BlockWorlds;
 

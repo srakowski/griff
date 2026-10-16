@@ -80,10 +80,6 @@ internal enum ComponentRoles : byte
     Viewport = 32,
 }
 
-/// <summary>Excludes a public read/write property from scene files and the inspector.</summary>
-[AttributeUsage(AttributeTargets.Property)]
-public sealed class DoNotSerializeAttribute : Attribute;
-
 /// <summary>
 /// Sets the name a component type is saved under. Defaults to the type's full name; set this to keep the saved name
 /// when renaming or moving the class (or give it a <see cref="FormerNameAttribute"/> to move scenes to the new name).

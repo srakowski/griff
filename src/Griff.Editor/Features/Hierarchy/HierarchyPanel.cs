@@ -9,7 +9,6 @@ using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Entities;
 using Griff.Editor.Themes;
 using Griff.Scenes;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Features.Hierarchy;
 
@@ -378,7 +377,7 @@ public sealed class HierarchyPanel : ToolPanel
 
         var name = node.EditName.Trim();
         if (_document is not null && name.Length > 0 && name != node.Entity.Name)
-            _document.Execute(EntityReferences.Rename(node.Entity, name, _projectSession.Components));
+            _document.Execute(RenameEntityEdit.WithReferences(node.Entity, name, _projectSession.Components));
     }
 
     public void CancelRename(EntityNode node) => node.IsEditing = false;

@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using System.Numerics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Griff.Editing;
 using Griff.Scenes;
 
 namespace Griff.Editor.Features.Inspector;

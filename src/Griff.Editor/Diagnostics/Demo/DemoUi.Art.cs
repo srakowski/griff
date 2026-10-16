@@ -5,7 +5,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using Griff.Editor.Features.Art;
-using Griff.Editor.Features.Inspector;
 using Point = System.Windows.Point;
 
 namespace Griff.Editor.Diagnostics.Demo;

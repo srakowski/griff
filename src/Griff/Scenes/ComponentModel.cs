@@ -1,7 +1,6 @@
 using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using Griff.Data;
 using Griff.Scenes.Serialization;
 
 namespace Griff.Scenes;
@@ -36,8 +35,6 @@ public sealed class ComponentModel
     private readonly Lazy<IReadOnlyList<PropertyDescriptor>> _settable;
     private readonly Lazy<IReadOnlyDictionary<string, PropertyInfo>> _rolls;
     private readonly Lazy<IReadOnlyList<PropertyInfo>> _live;
-    private readonly Lazy<IReadOnlyList<PropertyInfo>> _filled;
-    private readonly Lazy<Func<TableRow, object>> _maker;
 
     private ComponentModel(Type type)
     {
@@ -66,8 +63,6 @@ public sealed class ComponentModel
         _settable = new(() => [.. Saved.Where(p => Takes(p.Type))], Once);
         _rolls = new(FindRolls, Once);
         _live = new(FindLive, Once);
-        _filled = new(() => [.. Writable(type)], Once);
-        _maker = new(() => TableMapping.Build(type, Filled), Once);
     }
 
     public Type Type { get; }
@@ -199,25 +194,12 @@ public sealed class ComponentModel
     /// </summary>
     public IReadOnlyList<PropertyInfo> Live => _live.Value;
 
-    /// <summary>
-    /// For a class of a script's own filled from a table row (<see cref="TableRow.To{T}"/>), which needn't be a component:
-    /// its public properties that can be read and set, but those marked <see cref="DoNotSerializeAttribute"/>.
-    /// </summary>
-    public IReadOnlyList<PropertyInfo> Filled => _filled.Value;
-
-    // Makes one from a table row (see Filled).
-    internal Func<TableRow, object> Maker => _maker.Value;
-
     /// <summary>True if a table's cell can set a property of <paramref name="type"/> (see <see cref="Settable"/>).</summary>
     public static bool Takes(Type type) =>
         type == typeof(float) || type == typeof(double) || type == typeof(int) || type == typeof(bool) || type == typeof(string) || type.IsEnum || type == typeof(Color);
 
-    // Public, readable and settable, not an indexer, not marked [DoNotSerialize]: the one rule for what's open to set.
-    internal static IEnumerable<PropertyInfo> Writable(Type type) =>
-        type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.GetMethod?.IsPublic == true && p.SetMethod?.IsPublic == true)
-            .Where(p => p.GetIndexParameters().Length == 0)
-            .Where(p => p.GetCustomAttribute<DoNotSerializeAttribute>() is null);
+    // The one rule for what's open to set (see DoNotSerializeAttribute.Writable).
+    internal static IEnumerable<PropertyInfo> Writable(Type type) => DoNotSerializeAttribute.Writable(type);
 
     private List<SentProperty> FindSent()
     {

@@ -1,4 +1,4 @@
-namespace Griff.Projects;
+namespace Griff.Templates;
 
 // The Roguelike template's pictures: a crypt's stone walls and flagstone floor, its hero, the slimes (the Multiplayer
 // template's) and bats that haunt it, potions, gold and the stairs down.

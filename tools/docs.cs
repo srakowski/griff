@@ -113,7 +113,7 @@ static class Reference
     private static bool InApi(Type type) =>
         type.IsPublic && !type.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), false) &&
         type.Namespace is { } ns &&
-        (ns is "Griff" or "Griff.Input" or "Griff.Runtime" or "Griff.Scenes" || ns.StartsWith("Griff.Modules.", StringComparison.Ordinal));
+        (ns is "Griff" or "Griff.Input" or "Griff.Runtime" or "Griff.Scenes" or "Griff.Simulations" || ns.StartsWith("Griff.Modules.", StringComparison.Ordinal));
 
     // The types that have a page of their own in the component reference.
     private static HashSet<Type> componentTypes = [];

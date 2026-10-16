@@ -1,12 +1,12 @@
 using System.Reflection;
-using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
-namespace Griff.Editing;
+namespace Griff.Scenes;
 
 /// <summary>
 /// Fields that name an action (properties marked <see cref="ActionNameAttribute"/>, a trigger's Do): the actions of the
-/// entities they're done on, which the Inspector lists to pick from, and a name none of them has, which it flags.
+/// entities they're done on, and a name none of them has, which the Inspector flags and the game reports as it starts
+/// (what the Inspector lists to pick from is Griff.Editing's NameChoices).
 /// </summary>
 public static class ActionNames
 {
@@ -23,30 +23,6 @@ public static class ActionNames
         if (on?.GetCustomAttribute<EntityNameAttribute>() is not { } entityName || on.GetValue(component) is not string { } value || string.IsNullOrWhiteSpace(value))
             return [owner];
         return [.. EntityReferences.Names(value, entityName).SelectMany(n => EntityReferences.Named(owner, entityName, n)).Distinct()];
-    }
-
-    /// <summary>
-    /// What the field can pick: each action its targets have, once, by name with spaces ("End Turn"), with what has it
-    /// and what it's done with, e.g. "Health, an amount".
-    /// </summary>
-    public static IReadOnlyList<NameChoice> Choices(Component component, PropertyDescriptor property) =>
-        [.. ComponentActions.On(Targets(component, property))
-            .GroupBy(a => a.DisplayName, StringComparer.OrdinalIgnoreCase)
-            .Select(g => new NameChoice(g.Key, Detail(g.ToList())))];
-
-    // "Health, an amount": who has it, and what it takes.
-    private static string Detail(IReadOnlyList<ComponentAction> actions)
-    {
-        var who = string.Join(", ", actions.Select(a => a.ComponentType.Name).Distinct());
-        var value = actions.Select(a => a.ValueName).FirstOrDefault(v => v is not null);
-        return value is null ? who : $"{who}, {Words(value)}";
-    }
-
-    // "amount" as "an amount", "flag" as "a flag".
-    private static string Words(string name)
-    {
-        var spaced = ComponentAction.Spaced(name).ToLowerInvariant();
-        return ("aeiou".Contains(spaced[0], StringComparison.Ordinal) ? "an " : "a ") + spaced;
     }
 
     /// <summary>

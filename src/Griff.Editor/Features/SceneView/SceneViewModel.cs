@@ -2,7 +2,6 @@ using System.Numerics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editing;
 using Griff.Editor.Core.Workspace;
-using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;

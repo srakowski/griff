@@ -5,7 +5,6 @@ using System.Windows.Input;
 using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.Scripts;
 using Griff.Editor.Features.Scripts.Editor;
-using Griff.Editor.Themes.Controls;
 using ICSharpCode.AvalonEdit;
 using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Rendering;

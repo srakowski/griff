@@ -1,4 +1,4 @@
-namespace Griff.Hosting;
+namespace Griff.Projects;
 
 /// <summary>
 /// Where a game's files come from: its images, sounds, fonts and the rest, in its Assets folder. The host says how they

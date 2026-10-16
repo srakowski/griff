@@ -104,14 +104,4 @@ internal sealed class TableSystem : GameSystem
         get => _simulations;
         set => _simulations = value;
     }
-
-    public SimulationResults Simulate(string name, int? threads = null)
-    {
-        Crowds.ThrowIfRunning("run simulations");
-        var simulation = Simulations.TryGetValue(name.Trim(), out var found) ? found
-            : throw new KeyNotFoundException(Simulations.Count == 0
-                ? $"There's no simulation called \"{name}\": the game has none. Make one with Data > New Simulation."
-                : $"There's no simulation called \"{name}\". The simulations: {string.Join(", ", Simulations.Keys.Order(StringComparer.OrdinalIgnoreCase))}.");
-        return SimulationRunner.Run(simulation, SimulationHost.Of(Game), threads: threads);
-    }
 }

@@ -1,5 +1,5 @@
 using System.Reflection;
-using Griff.Scenes;
+using System.Runtime.CompilerServices;
 
 namespace Griff.Data;
 
@@ -11,14 +11,17 @@ namespace Griff.Data;
 /// </summary>
 internal static class TableMapping
 {
-    // Made once per type, by its ComponentModel (held only while the type is, so a script reloaded in the editor doesn't
-    // keep its last version's types alive).
-    public static T Create<T>(TableRow row) where T : new() => (T)ComponentModel.Of(typeof(T)).Maker(row);
+    // Made once per type, and held only while the type is, so a script reloaded in the editor doesn't keep its last
+    // version's types alive.
+    private static readonly ConditionalWeakTable<Type, Func<TableRow, object>> Makers = new();
+
+    public static T Create<T>(TableRow row) where T : new() =>
+        (T)Makers.GetValue(typeof(T), static type => Build(type, [.. DoNotSerializeAttribute.Writable(type)]))(row);
 
     /// <summary>Makes a key that matches a column and a property that are written differently: "Max Health", "max_health", "MaxHealth".</summary>
     public static string Key(string name) => new([.. name.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant)]);
 
-    // Fills each of the type's properties a table may (see ComponentModel.Filled) from its column.
+    // Fills each of the type's properties a table may (those open to set, DoNotSerializeAttribute.Writable) from its column.
     internal static Func<TableRow, object> Build(Type type, IReadOnlyList<PropertyInfo> properties)
     {
         return row =>

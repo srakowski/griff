@@ -1,7 +1,5 @@
-using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Griff.Editing;
 using Griff.Modules.Fighting;
 using Griff.Scenes;
 using Griff.Editor.Features.Art;

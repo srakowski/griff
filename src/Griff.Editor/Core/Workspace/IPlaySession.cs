@@ -1,9 +1,5 @@
-using System.Collections.ObjectModel;
 using System.ComponentModel;
-using Griff.Projects;
 using Griff.Scenes;
-using Griff.Scenes.Serialization;
-using Griff.Scripting;
 
 namespace Griff.Editor.Core.Workspace;
 

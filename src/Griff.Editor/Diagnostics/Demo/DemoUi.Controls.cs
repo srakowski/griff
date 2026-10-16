@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using Griff.Editor.Features.Controls;
+using Griff.Input;
 using Griff.Runtime;
 using WpfKey = System.Windows.Input.Key;
 
@@ -100,9 +101,9 @@ internal sealed partial class DemoUi
         await Settle(250);
         if (binding.Key is { } key)
             await input.Press(DemoKey(key));
-        else if (binding.Mouse is Griff.Runtime.MouseButton.Right)
+        else if (binding.Mouse is Griff.Input.MouseButton.Right)
             await input.Click(Center(button), right: true, glide: false);
-        else if (binding.Mouse is Griff.Runtime.MouseButton.Left)
+        else if (binding.Mouse is Griff.Input.MouseButton.Left)
             await input.Click(Center(button), glide: false);
         await Settle(200);
 

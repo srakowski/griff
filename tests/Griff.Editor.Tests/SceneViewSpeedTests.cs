@@ -10,6 +10,7 @@ using Griff.Editor.Features.SceneView;
 using Griff.Projects;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
+using Griff.Templates;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit.Abstractions;
 

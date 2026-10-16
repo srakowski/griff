@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Griff.Fonts;
 using Griff.Hosting;
+using Griff.Projects;
 using Griff.Rendering;
 using Griff.Runtime;
 

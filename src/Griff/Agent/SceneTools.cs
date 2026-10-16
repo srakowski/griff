@@ -5,7 +5,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Griff.Editing;
-using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
@@ -610,7 +609,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
 
         if (Prop(changes, "name") is { ValueKind: JsonValueKind.String } name && name.GetString() != entity.Name)
         {
-            var rename = EntityReferences.Rename(entity, name.GetString()!, host.Components);
+            var rename = RenameEntityEdit.WithReferences(entity, name.GetString()!, host.Components);
             host.Execute(rename);
             if (rename is CompositeEdit { Edits: var edits })
                 notes.Add($"Renamed it in the fields that named it too: {string.Join(", ", edits.OfType<SetPropertyEdit>().Select(e => $"{e.Component.Entity?.Name}'s {e.Component.GetType().Name}.{e.Property.Name}"))}.");

@@ -3,7 +3,8 @@ using Griff.Audio;
 using Griff.Input;
 using Griff.Projects;
 using Griff.Scenes;
-using static Griff.Projects.ProjectTemplates;
+using Griff.Templates;
+using static Griff.Templates.ProjectTemplates;
 
 namespace Griff.Modules.VisualNovels;
 

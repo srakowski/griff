@@ -1,4 +1,4 @@
-namespace Griff.Projects;
+namespace Griff.Templates;
 
 // The Isometric template's pictures: a tileset of 32 by 32 pixel tiles, each standing on a 32 by 16 diamond at its
 // bottom (flat ground, and blocks as tall again), and the courtyard's people, slime, crate and plate, drawn for the slant.

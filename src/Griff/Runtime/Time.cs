@@ -1,3 +1,5 @@
+using Griff.Projects;
+
 namespace Griff.Runtime;
 
 /// <summary>
@@ -15,13 +17,13 @@ public sealed class Time : IKeepsState
     public const float MaxDelta = 0.1f;
 
     /// <summary>How many steps a second a game takes unless its project or a script says otherwise.</summary>
-    public const int DefaultStepRate = 60;
+    public const int DefaultStepRate = Project.DefaultStepRate;
 
     /// <summary>The fewest steps a second <see cref="StepRate"/> takes.</summary>
-    public const int MinStepRate = 10;
+    public const int MinStepRate = Project.MinStepRate;
 
     /// <summary>The most steps a second <see cref="StepRate"/> takes.</summary>
-    public const int MaxStepRate = 240;
+    public const int MaxStepRate = Project.MaxStepRate;
 
     /// <summary>Game seconds this step covers, after <see cref="Scale"/>: <see cref="FixedDelta"/> at normal speed.</summary>
     public float Delta { get; private set; }

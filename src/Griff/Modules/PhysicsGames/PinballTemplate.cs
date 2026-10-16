@@ -1,10 +1,10 @@
 using System.Numerics;
 using Griff.Audio;
 using Griff.Input;
-using Griff.Projects;
 using Griff.Scenes;
+using Griff.Templates;
 using static Griff.Modules.PhysicsGames.PinballParts;
-using static Griff.Projects.ProjectTemplates;
+using static Griff.Templates.ProjectTemplates;
 
 namespace Griff.Modules.PhysicsGames;
 

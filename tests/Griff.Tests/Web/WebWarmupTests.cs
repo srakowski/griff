@@ -3,6 +3,7 @@ using Griff.Modules.PhysicsGames;
 using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scenes;
+using Griff.Templates;
 using Griff.Web;
 
 namespace Griff.Tests.Web;

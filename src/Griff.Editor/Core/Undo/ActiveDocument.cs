@@ -5,9 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editing;
-using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Workspace;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Core.Undo;
 

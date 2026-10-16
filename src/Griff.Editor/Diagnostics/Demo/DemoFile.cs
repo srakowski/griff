@@ -12,7 +12,7 @@ using Griff.Editor.Features.SceneView;
 using Griff.Modules.Contraptions;
 using Griff.Modules.FirstPerson;
 using Griff.Modules.Strategy;
-using Griff.Projects;
+using Griff.Templates;
 
 namespace Griff.Editor.Diagnostics.Demo;
 
@@ -1274,7 +1274,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
                 break;
             case "expecttemplate":
                 // "expecttemplate: Empty": New Project has that template picked (by name or title).
-                var wantTemplate = Griff.Projects.ProjectTemplates.Get(a).Title;
+                var wantTemplate = Griff.Templates.ProjectTemplates.Get(a).Title;
                 if (!await Until(() => DemoUi.NewProjectSelected == wantTemplate, 3000))
                     throw new InvalidOperationException($"Expected New Project to have {wantTemplate} picked, but it has {DemoUi.NewProjectSelected}.");
                 break;

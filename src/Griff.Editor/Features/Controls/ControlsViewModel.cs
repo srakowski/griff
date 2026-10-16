@@ -42,9 +42,9 @@ public sealed partial class ControlsViewModel : ObservableObject
         var project = projectSession.Project ?? throw new InvalidOperationException("No project is open.");
         var controls = project.Controls;
 
-        foreach (var (name, builtIn) in InputState.BuiltInActions)
+        foreach (var (name, builtIn) in InputActions.BuiltIn)
             Actions.Add(new ActionRow(this, name, isBuiltIn: true, controls.TryGetValue(name, out var mine) ? mine : builtIn));
-        foreach (var (name, bindings) in controls.Where(p => !InputState.BuiltInActions.ContainsKey(p.Key)).OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+        foreach (var (name, bindings) in controls.Where(p => !InputActions.BuiltIn.ContainsKey(p.Key)).OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
             Actions.Add(new ActionRow(this, name, isBuiltIn: false, bindings));
 
         GamepadChoices = Enum.GetValues<GamepadButton>().Select(b => new GamepadChoice(b, () => Add(b))).ToList();
@@ -168,7 +168,7 @@ public sealed partial class ControlsViewModel : ObservableObject
     {
         if (Selected is not { IsBuiltIn: true } row)
             return;
-        row.SetBindings(InputState.BuiltInActions[row.Name]);
+        row.SetBindings(InputActions.BuiltIn[row.Name]);
         Save($"{row.Name} is back to Griff's keys and buttons");
     }
 
@@ -323,7 +323,7 @@ public sealed partial class ActionRow : ObservableObject
     public string Summary => _bindings.Count == 0 ? "Nothing bound" : string.Join(", ", _bindings.Select(BindingChip.Describe));
 
     /// <summary>A built-in action whose keys and buttons differ from Griff's.</summary>
-    public bool IsChanged => IsBuiltIn && !InputState.BuiltInActions[Name].SequenceEqual(_bindings);
+    public bool IsChanged => IsBuiltIn && !InputActions.BuiltIn[Name].SequenceEqual(_bindings);
 
     /// <summary>What uses the action, for Griff's own; for the game's, how scripts read it.</summary>
     public string UsedBy => Name.ToLowerInvariant() switch

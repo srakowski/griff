@@ -27,7 +27,7 @@ public sealed class ProjectControlsTests : IDisposable
     public async Task SetControls_SavesOnlyWhatDiffersFromBuiltIn_AndLoadsBack()
     {
         var project = await Project.CreateAsync(_root, "Game");
-        var controls = InputState.BuiltInActions.ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
+        var controls = InputActions.BuiltIn.ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
         controls["Jump"] = [Key.Space, Key.W, GamepadButton.A];
         controls["Shield"] = [Key.Q, MouseButton.Middle, GamepadButton.LeftShoulder];
 
@@ -46,7 +46,7 @@ public sealed class ProjectControlsTests : IDisposable
         var project = await Project.CreateAsync(_root, "Game");
         await project.SetControlsAsync(new Dictionary<string, IReadOnlyList<InputBinding>> { ["Jump"] = [Key.W] });
 
-        await project.SetControlsAsync(InputState.BuiltInActions);
+        await project.SetControlsAsync(InputActions.BuiltIn);
 
         Assert.Null(project.Manifest.Controls);
         Assert.DoesNotContain("controls", await File.ReadAllTextAsync(project.ManifestPath));
@@ -76,7 +76,7 @@ public sealed class ProjectControlsTests : IDisposable
         // Edited while the game runs: Jump back to normal, Shield deleted.
         input.UseControls(new Dictionary<string, IReadOnlyList<InputBinding>>());
 
-        Assert.Equal(InputState.BuiltInActions["Jump"], input.BindingsOf("Jump"));
+        Assert.Equal(InputActions.BuiltIn["Jump"], input.BindingsOf("Jump"));
         Assert.DoesNotContain("Shield", input.Actions);
         Assert.Equal([Key.F], input.BindingsOf("Shoot"));
     }

@@ -1,8 +1,6 @@
 using System.Collections;
 
-using Griff.Scenes;
-
-namespace Griff;
+namespace Griff.Scenes;
 
 /// <summary>
 /// One mistake in a game's data (a prefab that isn't there, a name that finds nothing, a row that doesn't read), said

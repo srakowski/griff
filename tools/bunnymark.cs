@@ -13,6 +13,7 @@ using System.Text.Json.Nodes;
 using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scripting;
+using Griff.Templates;
 
 const string GameName = "BunnyMark Benchmark";
 var runs = Arg("--runs") ?? 1;

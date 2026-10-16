@@ -4,6 +4,7 @@ using Griff.Scenes;
 namespace Griff.Runtime;
 
 // The game's tables and balance simulations: each member forwards to TableSystem, which owns them and applies them.
+// Playing a simulation runs whole games, so it's Griff.Simulations' (GameSimulations.Simulate), above the runtime.
 public sealed partial class Game
 {
     /// <summary>
@@ -19,7 +20,7 @@ public sealed partial class Game
     }
 
     /// <summary>
-    /// The project's balance simulations by name (every <c>.sim</c> file in Assets), which <see cref="Simulate"/> plays.
+    /// The project's balance simulations by name (every <c>.sim</c> file in Assets), which <c>Game.Simulate</c> plays (Griff.Simulations).
     /// Every host sets it as the game starts (see <see cref="GameLoader.UseProjectSettings"/>).
     /// </summary>
     public IReadOnlyDictionary<string, Simulation> Simulations
@@ -27,15 +28,4 @@ public sealed partial class Game
         get => _tableSystem.Simulations;
         set => _tableSystem.Simulations = value;
     }
-
-    /// <summary>
-    /// Plays the balance simulation called <paramref name="name"/> (see <see cref="Simulation"/>) with this game's tables,
-    /// scenes, prefabs and scripts, headless, and says how it went: each pair's win rate, turns, damage, gold and XP, and
-    /// what stands out. The same results in the editor, exported and in the web player. It takes as long as its runs do
-    /// (thousands take seconds), so call it from a debug menu or a tool rather than every step.
-    /// </summary>
-    /// <exception cref="KeyNotFoundException">There's no simulation called that.</exception>
-    /// <exception cref="SimulationException">Its settings name something that isn't there, saying what.</exception>
-    public SimulationResults Simulate(string name, int? threads = null) =>
-        _tableSystem.Simulate(name, threads);
 }

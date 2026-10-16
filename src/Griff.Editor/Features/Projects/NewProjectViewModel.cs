@@ -5,6 +5,7 @@ using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Core.Settings;
 using Griff.Projects;
+using Griff.Templates;
 
 namespace Griff.Editor.Features.Projects;
 

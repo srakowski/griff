@@ -328,6 +328,31 @@ public sealed class RenameEntityEdit(Entity entity, string name) : IEdit
     public void Apply() => Entity.Name = name;
 
     public void Revert() => Entity.Name = _oldName;
+
+    /// <summary>
+    /// Renames <paramref name="entity"/>, and every field in its scene that names it by its old name, as one undo step.
+    /// A field is left alone when its name means another entity (see <see cref="EntityReferences.Resolve"/>): one inside its own
+    /// entity, or any of several with that name.
+    /// </summary>
+    public static IEdit WithReferences(Entity entity, string name, ComponentRegistry registry)
+    {
+        var oldName = entity.Name;
+        var edits = new List<IEdit> { new RenameEntityEdit(entity, name) };
+        if (entity.Scene is { } scene && name != oldName)
+        {
+            foreach (var reference in scene.Entities.SelectMany(e => EntityReferences.On(e, registry)))
+            {
+                var owner = reference.Component.Entity!;
+                var names = reference.Names;
+                if (!names.Contains(oldName) || EntityReferences.Resolve(owner, reference.Kind, oldName) != entity)
+                    continue;
+                var renamed = names.Select(n => n == oldName ? name : n).Distinct().ToList();
+                edits.Add(new SetPropertyEdit(reference.Component, reference.Property, string.Join(", ", renamed)));
+            }
+        }
+
+        return edits.Count == 1 ? edits[0] : new CompositeEdit(edits[0].Description, edits);
+    }
 }
 
 public sealed class SetEntityEnabledEdit(Entity entity, bool enabled) : IEdit

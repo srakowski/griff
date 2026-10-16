@@ -3,7 +3,7 @@ title: "Scripting"
 description: "Scripts are plain C# classes: the script editor, breakpoints, components you describe for the Inspector, and what a behavior can use."
 ---
 
-Scripts are plain C# classes in your project's `Assets` folder. **Entity → New Script** creates one, attaches it to the selected entity and opens it. Common namespaces (`System`, `System.Collections`, `System.Numerics`, `Griff`, `Griff.Data`, `Griff.Input`, `Griff.Runtime`, `Griff.Scenes`) are imported automatically.
+Scripts are plain C# classes in your project's `Assets` folder. **Entity → New Script** creates one, attaches it to the selected entity and opens it. Common namespaces (`System`, `System.Collections`, `System.Numerics`, `Griff`, `Griff.Data`, `Griff.Input`, `Griff.Runtime`, `Griff.Scenes`, `Griff.Simulations`) are imported automatically.
 
 ## The script editor
 

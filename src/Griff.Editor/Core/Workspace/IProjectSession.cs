@@ -1,9 +1,7 @@
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Griff.Projects;
-using Griff.Scenes;
 using Griff.Scenes.Serialization;
-using Griff.Scripting;
+using Griff.Templates;
 
 namespace Griff.Editor.Core.Workspace;
 
@@ -19,7 +17,7 @@ public interface IProjectSession : INotifyPropertyChanged
     /// The open project's Assets as games played and drawn in the editor read them: watched, so a file saved while a game plays
     /// (a sprite from a paint program, a sound from the Sound Maker) is drawn and heard again. Null with no project open.
     /// </summary>
-    Griff.Hosting.IAssetSource? Assets { get; }
+    Griff.Projects.IAssetSource? Assets { get; }
 
     /// <summary>
     /// The open project's prefabs as games played in the editor spawn them (Play, Play with Players, simulations): each read

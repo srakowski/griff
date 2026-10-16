@@ -1,6 +1,7 @@
 using System.Globalization;
+using Griff.Data;
 
-namespace Griff.Data;
+namespace Griff.Simulations;
 
 /// <summary>
 /// What came of a <see cref="Simulation"/>: for each step of its sweep (one without), each pair of rows' wins, losses and

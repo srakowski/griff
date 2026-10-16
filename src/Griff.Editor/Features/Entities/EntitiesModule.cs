@@ -8,7 +8,6 @@ using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Themes;
 using Griff.Scenes;
-using Griff.Scenes.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Features.Entities;

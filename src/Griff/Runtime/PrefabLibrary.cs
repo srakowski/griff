@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using Griff.Hosting;
 using Griff.Projects;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;

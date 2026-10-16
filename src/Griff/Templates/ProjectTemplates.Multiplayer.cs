@@ -3,7 +3,7 @@ using Griff.Audio;
 using Griff.Input;
 using Griff.Scenes;
 
-namespace Griff.Projects;
+namespace Griff.Templates;
 
 // The Multiplayer template: a menu to host or join, and an arena for up to eight players, made only of components.
 public static partial class ProjectTemplates

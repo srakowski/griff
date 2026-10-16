@@ -1,5 +1,4 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using Griff.Scenes;
 using Transform = Griff.Scenes.Transform;
 
 namespace Griff.Editor.Features.Inspector;

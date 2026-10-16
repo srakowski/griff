@@ -1,4 +1,4 @@
-namespace Griff.Projects;
+namespace Griff.Templates;
 
 // A crate, painted for the Contraption template's props and shared by the Puzzle and Multiplayer templates.
 internal static partial class TemplateArt

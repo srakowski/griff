@@ -1,7 +1,6 @@
 using System.Numerics;
 using Griff.Editing;
 using Griff.Editor.Core.Workspace;
-using Griff.Rendering;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 using Transform = Griff.Scenes.Transform;

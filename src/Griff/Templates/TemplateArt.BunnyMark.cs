@@ -1,4 +1,4 @@
-namespace Griff.Projects;
+namespace Griff.Templates;
 
 // The BunnyMark template's one picture: the bunny it adds by the thousand.
 internal static partial class TemplateArt

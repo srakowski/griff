@@ -4,6 +4,7 @@ using Griff.Input;
 using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scenes;
+using Griff.Templates;
 
 namespace Griff.Tests.Audio;
 

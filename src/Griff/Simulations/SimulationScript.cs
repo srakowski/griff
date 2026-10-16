@@ -1,6 +1,6 @@
-using Griff.Runtime;
+using Griff.Data;
 
-namespace Griff.Data;
+namespace Griff.Simulations;
 
 /// <summary>
 /// A balance simulation written as a script, for what the no-code matchup doesn't cover: a gauntlet of fights with gold

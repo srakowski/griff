@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using Griff.Input;
 using Griff.Projects;
-using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
@@ -506,7 +506,7 @@ public sealed partial class KnownNames : IProjectNames
     public static KnownNames From(Project project, IEnumerable<Found> found, IEnumerable<TableNames>? tables = null, Func<Project, FontNames>? fonts = null)
     {
         var all = found.ToList();
-        var actions = InputState.BuiltInActions.Keys.Concat(project.Manifest.Controls?.Keys ?? Enumerable.Empty<string>());
+        var actions = InputActions.BuiltIn.Keys.Concat(project.Manifest.Controls?.Keys ?? Enumerable.Empty<string>());
         return new(
             project.FindPrefabs().Select(Path.GetFileNameWithoutExtension).OfType<string>(),
             project.FindScenes().Select(Path.GetFileNameWithoutExtension).OfType<string>(),

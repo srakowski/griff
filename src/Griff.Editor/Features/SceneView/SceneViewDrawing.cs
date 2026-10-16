@@ -4,7 +4,6 @@ using System.Numerics;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using Griff.Editing;
 using Griff.Editor.Core.Workspace;
 using Griff.Scenes;
 using Point = System.Windows.Point;

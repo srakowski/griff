@@ -2,7 +2,6 @@ using System.IO;
 using Griff.Agent;
 using Griff.Editing;
 using Griff.Editor.Core.Workspace;
-using Griff.Editor.Features.Entities;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 

@@ -7,6 +7,7 @@ using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 using Griff.Scripting;
+using Griff.Templates;
 using Xunit.Abstractions;
 
 namespace Griff.Tests.Projects;

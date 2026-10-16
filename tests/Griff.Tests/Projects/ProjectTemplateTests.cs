@@ -12,6 +12,7 @@ using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 using Griff.Scripting;
+using Griff.Templates;
 
 namespace Griff.Tests.Projects;
 
@@ -87,7 +88,7 @@ public sealed class ProjectTemplateTests : IDisposable
         foreach (var path in project.FindScenes())
         {
             var scene = serializer.LoadFromString(await File.ReadAllTextAsync(path));
-            var unmatched = Griff.Editing.EntityReferences.UnmatchedIn(scene, registry, prefabs)
+            var unmatched = Griff.Scenes.EntityReferences.UnmatchedIn(scene, registry, prefabs)
                 .Select(u => $"{Path.GetFileName(path)}: {u.Reference.Component.Entity!.Name} {u.Reference.Label} = {string.Join(", ", u.Names)}");
             Assert.Empty(unmatched);
         }

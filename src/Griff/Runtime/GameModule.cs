@@ -7,7 +7,7 @@ namespace Griff.Runtime;
 /// (Griff.Modules.Match3), holding everything of a genre such as Match-3 or Strategy: its components, systems, drawing,
 /// network state, templates and the entities the editor's Entity menu makes. Griff's core names no module. Most of a
 /// module is found by type: its components (and how they draw and what they send), its templates
-/// (<see cref="Projects.ProjectTemplate"/>) and its Entity menu presets (<see cref="Editing.EntityPreset"/>). What can't
+/// (<c>Griff.Templates.ProjectTemplate</c>) and its Entity menu presets (<c>Griff.Editing.EntityPreset</c>). What can't
 /// be found is how it runs, which the module registers once, in <see cref="AddTo"/>: its systems, where their steps go in
 /// the frame, and what players' machines may ask its host to do. Modules are found rather than listed (see
 /// <see cref="All"/>), so adding one is adding a folder with a module class in it.

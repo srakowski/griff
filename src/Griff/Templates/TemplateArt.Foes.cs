@@ -1,4 +1,4 @@
-namespace Griff.Projects;
+namespace Griff.Templates;
 
 // Foes more than one template fights: a broad orc and a small goblin, facing right.
 internal static partial class TemplateArt

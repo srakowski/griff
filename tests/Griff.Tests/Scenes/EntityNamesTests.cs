@@ -100,9 +100,9 @@ public sealed partial class EntityNamesTests
     {
         var (scene, holder, inner, outer) = Sample();
         holder.AddComponent<Follow>().Target = "Hint";
-        EntityReferences.Rename(outer, "Sign", Registry).Apply();
+        RenameEntityEdit.WithReferences(outer, "Sign", Registry).Apply();
         Assert.Equal("Hint", holder.GetComponent<Follow>()!.Target);
-        EntityReferences.Rename(inner, "Note", Registry).Apply();
+        RenameEntityEdit.WithReferences(inner, "Note", Registry).Apply();
         Assert.Equal("Note", holder.GetComponent<Follow>()!.Target);
         _ = scene;
     }

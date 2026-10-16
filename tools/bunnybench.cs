@@ -31,6 +31,7 @@ using Griff.Projects;
 using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scripting;
+using Griff.Templates;
 
 var count = Arg("--count", 50_000);
 var frames = Arg("--frames", 600);

@@ -39,7 +39,7 @@ public class EntityReferencesTests
         var scene = Level();
         var history = new EditHistory();
 
-        history.Execute(EntityReferences.Rename(Named(scene, "Player"), "Hero", _registry));
+        history.Execute(RenameEntityEdit.WithReferences(Named(scene, "Player"), "Hero", _registry));
 
         Assert.Equal("Hero", Named(scene, "Camera").GetComponent<Follow>()!.Target);
         Assert.Equal("Hero", Named(scene, "Fighter").GetComponent<Attack>()!.Target);
@@ -56,7 +56,7 @@ public class EntityReferencesTests
     {
         var scene = Level();
 
-        EntityReferences.Rename(Named(scene, "Lift"), "Elevator", _registry).Apply();
+        RenameEntityEdit.WithReferences(Named(scene, "Lift"), "Elevator", _registry).Apply();
 
         Assert.Equal("Bridge, Elevator", Named(scene, "Lever").GetComponent<Switch>()!.Targets);
         Assert.Equal("Hint", Named(scene, "Lever").GetComponent<Switch>()!.Prompt);
@@ -68,7 +68,7 @@ public class EntityReferencesTests
         var scene = Level();
         scene.Add(new Entity("Player")); // a second one: the fields still name that
 
-        EntityReferences.Rename(Named(scene, "Player"), "Hero", _registry).Apply();
+        RenameEntityEdit.WithReferences(Named(scene, "Player"), "Hero", _registry).Apply();
 
         Assert.Equal("Player", Named(scene, "Camera").GetComponent<Follow>()!.Target);
     }
@@ -87,7 +87,7 @@ public class EntityReferencesTests
         scene.Add(sign);
         scene.Add(new Entity("Hint"), sign);
 
-        EntityReferences.Rename(lever.Children[0], "Lever Hint", _registry).Apply();
+        RenameEntityEdit.WithReferences(lever.Children[0], "Lever Hint", _registry).Apply();
 
         Assert.Equal("Lever Hint", lever.GetComponent<Switch>()!.Prompt);
         Assert.Equal("Hint", sign.GetComponent<Dialogue>()!.Prompt);
@@ -101,7 +101,7 @@ public class EntityReferencesTests
         other.AddComponent(new Attack()); // its Hitbox is "Hitbox" too, but it has none of its own
         scene.Add(other);
 
-        EntityReferences.Rename(Named(scene, "Hitbox"), "Sword", _registry).Apply();
+        RenameEntityEdit.WithReferences(Named(scene, "Hitbox"), "Sword", _registry).Apply();
 
         Assert.Equal("Sword", Named(scene, "Fighter").GetComponent<Attack>()!.Hitbox);
         Assert.Equal("Hitbox", other.GetComponent<Attack>()!.Hitbox);
@@ -112,10 +112,10 @@ public class EntityReferencesTests
     {
         var scene = Level();
 
-        var edit = EntityReferences.Rename(Named(scene, "Bridge"), "Span", _registry);
+        var edit = RenameEntityEdit.WithReferences(Named(scene, "Bridge"), "Span", _registry);
         Assert.IsType<CompositeEdit>(edit); // the lever names it
 
-        Assert.IsType<RenameEntityEdit>(EntityReferences.Rename(Named(scene, "Camera"), "Eye", _registry));
+        Assert.IsType<RenameEntityEdit>(RenameEntityEdit.WithReferences(Named(scene, "Camera"), "Eye", _registry));
     }
 
     [Fact]

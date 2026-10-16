@@ -2,6 +2,7 @@ using Griff.Input;
 using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scripting;
+using Griff.Templates;
 
 namespace Griff.Tests.Scripting;
 

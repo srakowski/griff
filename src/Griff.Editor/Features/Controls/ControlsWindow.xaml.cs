@@ -102,11 +102,11 @@ public partial class ControlsWindow : ChromeWindow
         }
 
         e.Handled = true;
-        Griff.Runtime.MouseButton? button = e.ChangedButton switch
+        Griff.Input.MouseButton? button = e.ChangedButton switch
         {
-            System.Windows.Input.MouseButton.Left => Griff.Runtime.MouseButton.Left,
-            System.Windows.Input.MouseButton.Right => Griff.Runtime.MouseButton.Right,
-            System.Windows.Input.MouseButton.Middle => Griff.Runtime.MouseButton.Middle,
+            System.Windows.Input.MouseButton.Left => Griff.Input.MouseButton.Left,
+            System.Windows.Input.MouseButton.Right => Griff.Input.MouseButton.Right,
+            System.Windows.Input.MouseButton.Middle => Griff.Input.MouseButton.Middle,
             _ => null,
         };
         if (button is { } pressed)

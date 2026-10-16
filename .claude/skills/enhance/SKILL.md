@@ -34,7 +34,7 @@ Other agents may be working in the main checkout at the same time, so never swit
 ## 2. Build it
 
 - Treat the item as the whole prompt, the way the user would have typed it. Read how the neighbouring features are
-  built first (git history, the docs in `site/src/content/docs/docs/`, `src/Griff/Scenes/*Components.cs`, the templates in `src/Griff/Projects/`)
+  built first (git history, the docs in `site/src/content/docs/docs/`, `src/Griff/Scenes/*Components.cs`, the templates in `src/Griff/Templates/`)
   and follow the same shape: no-code components that work from the Inspector, scripting API where it helps, a
   playable (and audible) template when the item names one, multiplayer and rewind support like the existing
   components, and undo for everything in the editor.

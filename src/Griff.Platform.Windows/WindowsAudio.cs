@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using Griff.Audio;
 using Griff.Hosting;
+using Griff.Projects;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 

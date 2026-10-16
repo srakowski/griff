@@ -134,8 +134,8 @@ public sealed class GeneralExtensionPointTests
         var output = registry.Get(typeof(Counter)).Properties.Single(p => p.Name == nameof(Counter.Output));
         var track = registry.Get(typeof(Counter)).Properties.Single(p => p.Name == nameof(Counter.Track));
 
-        Assert.Contains(Griff.Editing.OutputNames.Choices(counter, output), c => c.Name == "Score");
-        Assert.Empty(Griff.Editing.OutputNames.Unmatched(counter, output));
-        Assert.Empty(Griff.Editing.EntityReferences.Names("*", track.EntityName!));
+        Assert.Contains(Griff.Editing.NameChoices.Outputs(counter, output), c => c.Name == "Score");
+        Assert.Empty(Griff.Scenes.OutputNames.Unmatched(counter, output));
+        Assert.Empty(Griff.Scenes.EntityReferences.Names("*", track.EntityName!));
     }
 }

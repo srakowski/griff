@@ -1,5 +1,6 @@
 using Griff.Audio;
 using Griff.Hosting;
+using Griff.Projects;
 
 namespace Griff.Tests.Hosting;
 

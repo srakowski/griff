@@ -213,6 +213,10 @@ public sealed class LayerTests
 
         public IReadOnlyList<SyntaxTree> Trees { get; }
 
+        /// <summary>Every type declared and the source types it uses directly.</summary>
+        public IEnumerable<(INamedTypeSymbol User, IReadOnlyCollection<INamedTypeSymbol> Used)> Uses =>
+            _uses.Select(pair => (pair.Key, (IReadOnlyCollection<INamedTypeSymbol>)pair.Value));
+
         /// <summary>The types declared (outermost) in <paramref name="tree"/>.</summary>
         public IReadOnlyList<INamedTypeSymbol> DeclaredIn(SyntaxTree tree) => _declared.TryGetValue(tree, out var types) ? types : [];
 

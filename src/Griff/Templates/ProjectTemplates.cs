@@ -1,10 +1,10 @@
 using System.Numerics;
 using Griff.Audio;
 using Griff.Input;
+using Griff.Projects;
 using Griff.Scenes;
-using Griff.Scenes.Serialization;
 
-namespace Griff.Projects;
+namespace Griff.Templates;
 
 /// <summary>
 /// The templates New Project offers (each a <see cref="ProjectTemplate"/> found in Griff, so none are listed here), and
@@ -50,7 +50,7 @@ public static partial class ProjectTemplates
 
         protected override bool HasSounds => false;
 
-        protected override Scene BuildStartScene() => ProjectTemplates.EmptyScene();
+        protected override Scene BuildStartScene() => Project.NewScene();
     }
 
     private sealed class PlatformerTemplate : ProjectTemplate
@@ -130,15 +130,6 @@ public static partial class ProjectTemplates
         sparks.Order = 10;
         sparks.DestroyWhenFinished = true;
         return entity;
-    }
-
-    private static Scene EmptyScene()
-    {
-        var scene = new Scene();
-        var camera = new Entity("Main Camera");
-        camera.AddComponent<Camera>();
-        scene.Add(camera);
-        return scene;
     }
 
     private static Scene Platformer()

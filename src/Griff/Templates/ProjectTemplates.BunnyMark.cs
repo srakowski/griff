@@ -1,7 +1,7 @@
 using System.Numerics;
 using Griff.Scenes;
 
-namespace Griff.Projects;
+namespace Griff.Templates;
 
 // The BunnyMark template: a benchmark rather than a game. Bunnies pour in from the top left and bounce about, more and
 // more of them while the game keeps up 60 frames a second, until it finds how many this computer holds there. Each bunny

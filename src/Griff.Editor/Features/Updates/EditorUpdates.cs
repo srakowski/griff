@@ -3,7 +3,6 @@ using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
-using Griff.Editor.Shell;
 using Microsoft.Extensions.Logging;
 
 namespace Griff.Editor.Features.Updates;

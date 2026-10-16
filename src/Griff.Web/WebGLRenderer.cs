@@ -11,7 +11,7 @@ namespace Griff.Web;
 /// bytes, ints or doubles). Images are read from the game's files here and decoded by the browser; text is drawn only in
 /// the game's own fonts and the built-in one, since the browser has nothing else.
 /// </summary>
-public sealed class WebGLRenderer(Griff.Hosting.IAssetSource? assets) : QuadRenderer(assets, installedFonts: false)
+public sealed class WebGLRenderer(Griff.Projects.IAssetSource? assets) : QuadRenderer(assets, installedFonts: false)
 {
     public override byte[] Capture(int width, int height)
     {

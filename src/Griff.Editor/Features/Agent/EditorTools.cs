@@ -13,7 +13,6 @@ using Griff.Editor.Features.Debugging;
 using Griff.Editor.Features.Output;
 using Griff.Editor.Features.Play;
 using Griff.Editor.Features.SceneView;
-using Griff.Editor.Shell;
 using Griff.Editor.Themes.Controls;
 using Griff.Input;
 using Griff.Rendering;

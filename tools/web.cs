@@ -40,6 +40,7 @@ using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 using Griff.Scripting;
+using Griff.Templates;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 using StbImageSharp;

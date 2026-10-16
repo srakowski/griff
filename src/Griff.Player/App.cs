@@ -47,7 +47,7 @@ public sealed class App(PlayerOptions options) : Application, IDisposable
 
         var project = loaded.Project!;
         // An exported game's files don't change while it plays: they're read once, never watched.
-        var assets = new Griff.Hosting.AssetFolder(project.AssetsPath);
+        var assets = new Griff.Projects.AssetFolder(project.AssetsPath);
         var surface = new GameSurface { Assets = assets };
         var window = new Window
         {

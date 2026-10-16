@@ -9,6 +9,7 @@ using Griff.Graphics;
 using Griff.Platform.Windows;
 using Griff.Projects;
 using Griff.Rendering;
+using Griff.Templates;
 using Color = Griff.Color;
 using Microsoft.Extensions.DependencyInjection;
 

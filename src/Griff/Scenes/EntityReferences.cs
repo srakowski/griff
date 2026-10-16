@@ -1,7 +1,6 @@
-using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
-namespace Griff.Editing;
+namespace Griff.Scenes;
 
 /// <summary>
 /// Fields that name entities (properties marked <see cref="EntityNameAttribute"/>, a Switch's Targets or a camera's
@@ -164,29 +163,4 @@ public static class EntityReferences
     /// <summary>"Several entities in the scene are called "Door": the game takes one, the nearest of them or this player's own."</summary>
     public static string AmbiguousProblem(Reference reference, IReadOnlyList<string> names) =>
         $"Several entities {(reference.Kind.Inside ? $"inside {reference.Component.Entity?.Name}" : "in the scene")} are called {string.Join(" and ", names.Select(n => $"\"{n}\""))}, so which one it means depends on the game; give them different names.";
-
-    /// <summary>
-    /// Renames <paramref name="entity"/>, and every field in its scene that names it by its old name, as one undo step.
-    /// A field is left alone when its name means another entity (see <see cref="Resolve"/>): one inside its own
-    /// entity, or any of several with that name.
-    /// </summary>
-    public static IEdit Rename(Entity entity, string name, ComponentRegistry registry)
-    {
-        var oldName = entity.Name;
-        var edits = new List<IEdit> { new RenameEntityEdit(entity, name) };
-        if (entity.Scene is { } scene && name != oldName)
-        {
-            foreach (var reference in scene.Entities.SelectMany(e => On(e, registry)))
-            {
-                var owner = reference.Component.Entity!;
-                var names = reference.Names;
-                if (!names.Contains(oldName) || Resolve(owner, reference.Kind, oldName) != entity)
-                    continue;
-                var renamed = names.Select(n => n == oldName ? name : n).Distinct().ToList();
-                edits.Add(new SetPropertyEdit(reference.Component, reference.Property, string.Join(", ", renamed)));
-            }
-        }
-
-        return edits.Count == 1 ? edits[0] : new CompositeEdit(edits[0].Description, edits);
-    }
 }

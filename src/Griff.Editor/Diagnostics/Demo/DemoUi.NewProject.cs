@@ -58,7 +58,7 @@ internal sealed partial class DemoUi
     public static NewProjectViewModel.TemplateOption NewProjectTemplate(string name)
     {
         var model = (NewProjectViewModel)OpenNewProject.DataContext;
-        var template = Griff.Projects.ProjectTemplates.Get(name);
+        var template = Griff.Templates.ProjectTemplates.Get(name);
         return model.Templates.First(t => t.Template == template);
     }
 

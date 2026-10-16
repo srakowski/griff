@@ -262,7 +262,7 @@ public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
             var written = File.GetLastWriteTimeUtc(path);
             if (_songData is { } data && data.Path == path && data.Written == written)
                 return data;
-            using var library = WindowsAudio.Library(new Griff.Hosting.AssetFolder(root));
+            using var library = WindowsAudio.Library(new Griff.Projects.AssetFolder(root));
             var clip = library.Load(_song);
             var peaks = clip is null ? [] : clip.Peaks((int)Math.Clamp(clip.Seconds * PeaksPerSecond, 1, 200_000));
             var tempo = library.MusicRecipeOf(_song)?.Clamped().Tempo ?? 0;

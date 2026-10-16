@@ -5,76 +5,11 @@ using Griff.Input;
 
 namespace Griff.Runtime;
 
-/// <summary>Buttons of an Xbox-style controller.</summary>
-public enum GamepadButton
-{
-    A, B, X, Y,
-    LeftShoulder, RightShoulder,
-    Start, Back,
-    DPadUp, DPadDown, DPadLeft, DPadRight,
-    LeftStick, RightStick,
-
-    /// <summary>The left trigger pulled more than halfway. <see cref="IInput.LeftTrigger"/> says exactly how far.</summary>
-    LeftTrigger,
-
-    /// <summary>The right trigger pulled more than halfway. <see cref="IInput.RightTrigger"/> says exactly how far.</summary>
-    RightTrigger,
-}
-
-public enum MouseButton
-{
-    Left,
-    Right,
-    Middle,
-}
-
 /// <summary>
 /// A finger on a touch screen (see <see cref="IInput.Touches"/>): which one it is (the same from when it goes down until it's
 /// lifted), where it is in world units, and whether it went down or was lifted this frame.
 /// </summary>
 public readonly record struct TouchPoint(int Id, Vector2 World, bool Pressed, bool Released);
-
-/// <summary>
-/// A key, mouse button or gamepad button that triggers an action (see <see cref="IInput.Bind"/>). Any of the three
-/// converts to one, so a list of bindings reads <c>Key.Space, GamepadButton.A</c>.
-/// </summary>
-public readonly record struct InputBinding
-{
-    public Key? Key { get; private init; }
-
-    public MouseButton? Mouse { get; private init; }
-
-    public GamepadButton? Gamepad { get; private init; }
-
-    public static implicit operator InputBinding(Key key) => new() { Key = key };
-
-    public static implicit operator InputBinding(MouseButton button) => new() { Mouse = button };
-
-    public static implicit operator InputBinding(GamepadButton button) => new() { Gamepad = button };
-
-    /// <summary>"Space", "Mouse Left" or "Gamepad A": what a controls screen can show.</summary>
-    public override string ToString() =>
-        Key is { } key ? key.ToString() : Mouse is { } mouse ? $"Mouse {mouse}" : $"Gamepad {Gamepad}";
-
-    /// <summary>Reads what <see cref="ToString"/> writes, e.g. "Gamepad A". False for anything else.</summary>
-    public static bool TryParse(string? text, out InputBinding binding)
-    {
-        binding = default;
-        var parts = (text ?? "").Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length == 2 && parts[0].Equals("Mouse", StringComparison.OrdinalIgnoreCase) &&
-            Enum.TryParse<MouseButton>(parts[1], ignoreCase: true, out var mouse) && Enum.IsDefined(mouse))
-            binding = mouse;
-        else if (parts.Length == 2 && parts[0].Equals("Gamepad", StringComparison.OrdinalIgnoreCase) &&
-                 Enum.TryParse<GamepadButton>(parts[1], ignoreCase: true, out var pad) && Enum.IsDefined(pad))
-            binding = pad;
-        else if (parts.Length == 1 && Enum.TryParse<Griff.Input.Key>(parts[0], ignoreCase: true, out var key) &&
-                 Enum.IsDefined(key) && key != Griff.Input.Key.None && !int.TryParse(parts[0], out _))
-            binding = key;
-        else
-            return false;
-        return true;
-    }
-}
 
 /// <summary>What gameplay code reads. "Pressed" and "released" are true for exactly one frame.</summary>
 [NotState("the host's controls")]
@@ -349,41 +284,8 @@ public sealed class InputState : IHostInput
     private readonly HashSet<GamepadButton> _padDown = [];
     private readonly HashSet<GamepadButton> _padPressed = [];
     private readonly HashSet<GamepadButton> _padReleased = [];
-    /// <summary>
-    /// The actions every game starts with, and their keys and buttons. Griff's own components use them (Platformer
-    /// Movement jumps with Jump, doors and levers wait for Interact), so a game can change their bindings but not
-    /// remove them.
-    /// </summary>
-    public static IReadOnlyDictionary<string, IReadOnlyList<InputBinding>> BuiltInActions { get; } =
-        new Dictionary<string, IReadOnlyList<InputBinding>>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Jump"] = [Key.Space, GamepadButton.A],
-            ["Fire"] = [MouseButton.Left, Key.J, GamepadButton.X, GamepadButton.RightShoulder, GamepadButton.RightTrigger],
-            ["Dash"] = [Key.LeftShift, Key.K, GamepadButton.B],
-            ["Attack"] = [Key.X, Key.L, MouseButton.Right, GamepadButton.X],
-            ["Interact"] = [Key.E, Key.Enter, GamepadButton.Y],
-            ["Pause"] = [Key.Escape, Key.P, GamepadButton.Start],
-            ["EndTurn"] = [Key.Tab, GamepadButton.Back],
-            ["Undo"] = [Key.Z, Key.U, GamepadButton.LeftShoulder],
-            ["Restart"] = [Key.R, GamepadButton.LeftTrigger],
-            ["Skip"] = [Key.LeftControl, Key.RightControl, GamepadButton.RightTrigger],
-            ["Auto"] = [Key.A, GamepadButton.X],
-            ["Log"] = [Key.H, GamepadButton.LeftShoulder],
-            ["LeftFlipper"] = [Key.LeftShift, Key.Z, GamepadButton.LeftShoulder, GamepadButton.LeftTrigger],
-            ["RightFlipper"] = [Key.RightShift, Key.Slash, GamepadButton.RightShoulder, GamepadButton.RightTrigger],
-            ["Plunger"] = [Key.Space, Key.Down, GamepadButton.A],
-            ["Nudge"] = [Key.N, Key.Up, GamepadButton.B],
-            ["Punch"] = [Key.U, Key.J, GamepadButton.X],
-            ["Kick"] = [Key.I, Key.K, GamepadButton.A],
-            // A rhythm game's four lanes: D F J K under the fingers, the arrows, and the D-pad or the face buttons.
-            ["Lane1"] = [Key.D, Key.Left, GamepadButton.DPadLeft, GamepadButton.X],
-            ["Lane2"] = [Key.F, Key.Down, GamepadButton.DPadDown, GamepadButton.A],
-            ["Lane3"] = [Key.J, Key.Up, GamepadButton.DPadUp, GamepadButton.Y],
-            ["Lane4"] = [Key.K, Key.Right, GamepadButton.DPadRight, GamepadButton.B],
-        };
-
     private readonly Dictionary<string, InputBinding[]> _actions =
-        BuiltInActions.ToDictionary(p => p.Key, p => p.Value.ToArray(), StringComparer.OrdinalIgnoreCase);
+        InputActions.BuiltIn.ToDictionary(p => p.Key, p => p.Value.ToArray(), StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, InputBinding[]> _rebound = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _projectActions = new(StringComparer.OrdinalIgnoreCase);
 
@@ -642,7 +544,7 @@ public sealed class InputState : IHostInput
     {
         foreach (var gone in _projectActions.Where(a => !controls.ContainsKey(a)).ToList())
         {
-            if (BuiltInActions.TryGetValue(gone, out var builtIn))
+            if (InputActions.BuiltIn.TryGetValue(gone, out var builtIn))
                 _actions[gone] = [.. builtIn];
             else
                 _actions.Remove(gone);

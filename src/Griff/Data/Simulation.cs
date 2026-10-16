@@ -12,7 +12,7 @@ namespace Griff.Data;
 /// </summary>
 /// <remarks>
 /// Each run gets a seed of its own from <see cref="Seed"/> and its place, so the same simulation gives the same results on
-/// every machine and in the web player, however many cores share the runs (see <see cref="SimulationRunner"/>).
+/// every machine and in the web player, however many cores share the runs (see Griff.Simulations' <c>SimulationRunner</c>).
 /// </remarks>
 public sealed record Simulation
 {
@@ -59,7 +59,7 @@ public sealed record Simulation
     public SimulationSweep? Sweep { get; init; }
 
     /// <summary>
-    /// The name of a script (a class deriving from <see cref="SimulationScript"/>) that plays each run instead of the
+    /// The name of a script (a class deriving from <c>SimulationScript</c>, Griff.Simulations) that plays each run instead of the
     /// arena; null or empty plays the arena.
     /// </summary>
     public string? Script { get; init; }

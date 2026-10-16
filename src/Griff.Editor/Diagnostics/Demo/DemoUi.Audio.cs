@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using Griff.Editor.Features.Audio;
-using Griff.Editor.Features.Inspector;
 
 namespace Griff.Editor.Diagnostics.Demo;
 

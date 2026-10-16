@@ -1,10 +1,6 @@
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Griff.Editing;
-using Griff.Editor.Themes;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 using Transform = Griff.Scenes.Transform;

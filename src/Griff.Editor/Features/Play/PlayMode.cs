@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
@@ -500,7 +499,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
     // and a file saved meanwhile (the project's Assets are watched) is decoded again.
     private Griff.Audio.AssetSoundLibrary Sounds()
     {
-        var assets = _projectSession.Assets ?? Griff.Hosting.AssetFolder.None;
+        var assets = _projectSession.Assets ?? Griff.Projects.AssetFolder.None;
         if (_sounds?.Assets != assets)
         {
             _sounds?.Library.Dispose();
@@ -510,7 +509,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         return _sounds.Value.Library;
     }
 
-    private (Griff.Hosting.IAssetSource Assets, Griff.Audio.AssetSoundLibrary Library)? _sounds;
+    private (Griff.Projects.IAssetSource Assets, Griff.Audio.AssetSoundLibrary Library)? _sounds;
 
     /// <summary>
     /// Holds the game at a breakpoint a script of <paramref name="runner"/>'s game reached (on this thread, in the middle of

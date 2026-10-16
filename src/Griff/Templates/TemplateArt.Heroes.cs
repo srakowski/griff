@@ -1,4 +1,4 @@
-namespace Griff.Projects;
+namespace Griff.Templates;
 
 // Characters more than one template uses: a mage, a rogue, a cleric, a skeleton and a wyvern, facing right (the RPG
 // Stats template's classes and foes, and the Cards template's heroes and creatures).

@@ -100,7 +100,7 @@ public sealed class ModuleApiTests
         if (symbol.ContainingNamespace is not { } ns || !symbol.Locations.Any(l => l.IsInSource))
             return false;
         var name = ns.ToDisplayString();
-        if (name.StartsWith("Griff.Modules", StringComparison.Ordinal) || name.StartsWith("Griff.Projects", StringComparison.Ordinal) || name.StartsWith("Griff.Editing", StringComparison.Ordinal) || name.StartsWith("Griff.Scenes", StringComparison.Ordinal))
+        if (name.StartsWith("Griff.Modules", StringComparison.Ordinal) || name.StartsWith("Griff.Templates", StringComparison.Ordinal) || name.StartsWith("Griff.Editing", StringComparison.Ordinal) || name.StartsWith("Griff.Scenes", StringComparison.Ordinal))
             return false;
         for (var at = symbol; at is not null and not INamespaceSymbol; at = at.ContainingSymbol)
         {

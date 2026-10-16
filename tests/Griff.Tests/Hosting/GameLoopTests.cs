@@ -2,6 +2,7 @@ using System.Numerics;
 using Griff.Audio;
 using Griff.Data;
 using Griff.Hosting;
+using Griff.Projects;
 using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;

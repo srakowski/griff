@@ -1,7 +1,6 @@
-using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
-namespace Griff.Editing;
+namespace Griff.Scenes;
 
 /// <summary>
 /// The names a scene gives without code that resolve to nothing: an action a trigger, button or card does that what it's

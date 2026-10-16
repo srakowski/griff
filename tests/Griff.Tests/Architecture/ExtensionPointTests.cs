@@ -26,11 +26,11 @@ public sealed class ExtensionPointTests
     [InlineData("Runtime/Net/NetSchema.cs", new[] { "Transform", "MissingComponent", "Networked" })]
     [InlineData("Runtime/TriggerSystem.cs", new[] { "Trigger", "MessageScope" })]
     [InlineData("Scenes/ComponentActions.cs", new string[0])]
-    [InlineData("Editing/ActionNames.cs", new string[0])]
+    [InlineData("Scenes/ActionNames.cs", new string[0])]
     [InlineData("Scenes/ComponentOutputs.cs", new string[0])]
     [InlineData("Scenes/OutputReader.cs", new string[0])]
     [InlineData("Scenes/Readout.cs", new string[0])]
-    [InlineData("Editing/OutputNames.cs", new string[0])]
+    [InlineData("Scenes/OutputNames.cs", new string[0])]
 
     [InlineData("Scenes/Teams.cs", new[] { "Team" })]
     [InlineData("Scenes/Items.cs", new string[0])]

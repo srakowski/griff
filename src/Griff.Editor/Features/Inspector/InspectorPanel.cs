@@ -293,7 +293,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     }
 
     /// <summary>Renames an entity, and the fields in the scene that name it, as one undo step.</summary>
-    internal void Rename(Entity entity, string name) => Execute(EntityReferences.Rename(entity, name, _projectSession.Components));
+    internal void Rename(Entity entity, string name) => Execute(RenameEntityEdit.WithReferences(entity, name, _projectSession.Components));
 
     private KnownNames? _names;
     private bool _namesRead;

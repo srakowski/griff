@@ -21,6 +21,13 @@ public interface IProjectSession : INotifyPropertyChanged
     /// </summary>
     Griff.Hosting.IAssetSource? Assets { get; }
 
+    /// <summary>
+    /// The open project's prefabs as games played in the editor spawn them (Play, Play with Players, simulations): each read
+    /// once and copied, read again when its file changes. Its <see cref="Griff.Runtime.PrefabLibrary.Changed"/> is how a
+    /// prefab changed outside the editor is noticed. Null with no project open.
+    /// </summary>
+    Griff.Runtime.PrefabLibrary? PrefabLibrary { get; }
+
     ComponentRegistry Components { get; }
 
     SceneSerializer Serializer { get; }

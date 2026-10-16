@@ -387,6 +387,9 @@ public sealed partial class Game
         _tickSeconds = seconds;
         if (!ReferenceEquals(_namesChecked, Scene))
             CheckNames();
+        // A save that couldn't be written (on the writer's thread) is said here, on the game's.
+        if (_saveData.TakeFailure() is { } failure)
+            Problems.Report(failure);
         // What moves in it remembers where it was as it began, to be drawn between the two.
         Scene.Step = Time.Frame + 1;
         Scene.Steps++;

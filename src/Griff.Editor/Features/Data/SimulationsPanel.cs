@@ -522,7 +522,8 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
         var project = _projectSession.Project ?? throw new InvalidOperationException("No project is open.");
         var components = _projectSession.Components;
         var tables = new TableSet(_tables.Tables.Select(t => t.Value).OfType<Table>());
-        var prefabs = new PrefabLibrary(project, components);
+        // The project's own library: read once for every game, and safe to spawn from on all of a simulation's threads at once.
+        var prefabs = _projectSession.PrefabLibrary ?? new PrefabLibrary(project, components);
         var open = _sceneDocuments.EditScene is { IsPrefab: false } document ? (document.Name, Text: _projectSession.Serializer.SaveToString(document.Scene)) : default;
         return new SimulationHost
         {
@@ -533,11 +534,7 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
             LoadScene = name => open.Text is not null && string.Equals(open.Name, name, StringComparison.OrdinalIgnoreCase)
                 ? new SceneSerializer(components).LoadFromString(open.Text)
                 : GameLoader.LoadScene(project, components, name),
-            LoadPrefab = name =>
-            {
-                lock (prefabs)
-                    return prefabs.Instantiate(name);
-            },
+            LoadPrefab = prefabs.Instantiate,
         };
     }
 

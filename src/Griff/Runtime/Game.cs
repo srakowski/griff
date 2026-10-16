@@ -262,7 +262,10 @@ public sealed partial class Game
     /// <summary>Every component of type <typeparamref name="T"/> in the scene, e.g. <c>Game.FindAll&lt;Enemy&gt;()</c>.</summary>
     public IReadOnlyList<T> FindAll<T>() where T : Component => Scene.All<T>();
 
-    /// <summary>Calls OnDestroy on every started behavior. The game can't be ticked afterwards.</summary>
+    /// <summary>
+    /// Calls OnDestroy on every started behavior and waits for its saves to be written (<see cref="SaveData.Flush"/>). The
+    /// game can't be ticked afterwards.
+    /// </summary>
     public void Stop()
     {
         if (_stopped)
@@ -276,6 +279,11 @@ public sealed partial class Game
         SystemsSceneEnding();
         _atmosphere.StopSoundSources();
         Audio.StopAll();
+
+        // What it saved is on disk before whoever played it goes on (or plays it again).
+        _saveData.Flush();
+        if (_saveData.TakeFailure() is { } failure)
+            Problems.Report(failure);
     }
 
     /// <summary>

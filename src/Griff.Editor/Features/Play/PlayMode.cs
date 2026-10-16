@@ -493,6 +493,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         {
             SceneName = _sceneName,
             Scenes = name => LoadScene(project, name),
+            Library = _projectSession.PrefabLibrary,
         };
 
     // The project's sounds, one library for every game played while it's open: what one decoded the next plays at once,

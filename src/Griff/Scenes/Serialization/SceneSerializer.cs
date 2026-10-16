@@ -31,9 +31,11 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         writer.WriteStartObject();
         writer.WriteNumber("formatVersion", FormatVersion);
         writer.WriteStartArray("entities");
+        var versions = new Versions();
         foreach (var root in scene.Roots)
-            WriteEntity(writer, root);
+            WriteEntity(writer, root, versions: versions);
         writer.WriteEndArray();
+        versions.Write(writer);
         writer.WriteEndObject();
     }
 
@@ -70,6 +72,7 @@ public sealed class SceneSerializer(ComponentRegistry registry)
 
             var scene = new Scene();
             var context = new LoadContext(warnings);
+            context.ReadVersions(root);
             foreach (var element in entities.EnumerateArray())
                 scene.Add(ReadEntity(element, context));
             return scene;
@@ -85,12 +88,21 @@ public sealed class SceneSerializer(ComponentRegistry registry)
     /// </summary>
     public Entity Clone(Entity source) => DeserializeEntity(SerializeEntity(source));
 
-    /// <summary>An entity and its descendants as indented JSON (the clipboard format).</summary>
-    public string SerializeEntity(Entity entity)
+    /// <summary>
+    /// An entity and its descendants as indented JSON (the clipboard format), with the versions of the prefabs its placed
+    /// copies were made from.
+    /// </summary>
+    public string SerializeEntity(Entity entity) => SerializeEntity(entity, links: true);
+
+    /// <summary>
+    /// As <see cref="SerializeEntity(Entity)"/>; without <paramref name="links"/>, leaving out which prefabs copies are of
+    /// (a game's own use, as a network game sends one: it ignores them).
+    /// </summary>
+    internal string SerializeEntity(Entity entity, bool links)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, WriterOptions))
-            WriteEntity(writer, entity);
+            WriteEntity(writer, entity, link: links, versions: links ? new Versions(here: true) : null);
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
@@ -108,7 +120,7 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         {
             writer.WriteStartArray();
             foreach (var entity in entities)
-                WriteEntity(writer, entity);
+                WriteEntity(writer, entity, versions: new Versions(here: true));
             writer.WriteEndArray();
         }
 
@@ -182,7 +194,9 @@ public sealed class SceneSerializer(ComponentRegistry registry)
             writer.WriteStartObject();
             writer.WriteNumber("formatVersion", FormatVersion);
             writer.WritePropertyName("prefab");
-            WriteEntity(writer, entity, writeIds: false, link: false);
+            var versions = new Versions();
+            WriteEntity(writer, entity, writeIds: false, link: false, versions: versions);
+            versions.Write(writer);
             writer.WriteEndObject();
         }
 
@@ -201,7 +215,9 @@ public sealed class SceneSerializer(ComponentRegistry registry)
                 throw new InvalidDataException("The file isn't a Griff prefab.");
             if (root.TryGetProperty("formatVersion", out var v) && v.GetInt32() > FormatVersion)
                 throw new InvalidDataException("The prefab was saved by a newer version of Griff.");
-            return ReadEntity(prefab, new LoadContext(warnings, newIds: true));
+            var context = new LoadContext(warnings, newIds: true);
+            context.ReadVersions(root);
+            return ReadEntity(prefab, context);
         }
         catch (JsonException ex)
         {
@@ -236,8 +252,9 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         return component;
     }
 
-    // A prefab's own root isn't a copy of anything (link: false), though copies of other prefabs inside it are.
-    private void WriteEntity(Utf8JsonWriter writer, Entity entity, bool writeIds = true, bool children = true, bool link = true)
+    // A prefab's own root isn't a copy of anything (link: false), though copies of other prefabs inside it are. The
+    // versions copies were made from are gathered in `versions`, written where the file keeps them (or on this entity).
+    private void WriteEntity(Utf8JsonWriter writer, Entity entity, bool writeIds = true, bool children = true, bool link = true, Versions? versions = null)
     {
         writer.WriteStartObject();
         if (writeIds)
@@ -250,7 +267,14 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         if (entity.IsHidden)
             writer.WriteBoolean("hidden", true);
         if (link && entity.Prefab is { } prefab)
+        {
             writer.WriteString("prefab", prefab);
+            if (versions is not null && entity.PrefabVersion is { } version)
+            {
+                writer.WriteString("prefabVersion", version.Id);
+                versions.Add(version);
+            }
+        }
 
         writer.WriteStartArray("components");
         foreach (var component in entity.Components)
@@ -261,10 +285,12 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         {
             writer.WriteStartArray("children");
             foreach (var child in entity.Children)
-                WriteEntity(writer, child, writeIds);
+                WriteEntity(writer, child, writeIds, versions: versions?.Within());
             writer.WriteEndArray();
         }
 
+        if (versions is { Here: true })
+            versions.Write(writer);
         writer.WriteEndObject();
     }
 
@@ -325,6 +351,11 @@ public sealed class SceneSerializer(ComponentRegistry registry)
             IsHidden = element.TryGetProperty("hidden", out var hidden) && hidden.GetBoolean(),
             Prefab = element.TryGetProperty("prefab", out var prefab) && prefab.ValueKind == JsonValueKind.String ? prefab.GetString() : null,
         };
+
+        // An entity on its own (the clipboard's) carries the versions its copies were made from.
+        context.ReadVersions(element);
+        if (entity.Prefab is not null && element.TryGetProperty("prefabVersion", out var version) && version.ValueKind == JsonValueKind.String)
+            entity.PrefabVersion = context.Version(version.GetString()!);
 
         if (element.TryGetProperty("components", out var components))
         {
@@ -442,9 +473,58 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         return false;
     }
 
+    // The versions of prefabs that copies were made from, as a file keeps them: by id, each written once where the file
+    // keeps them (the end of a scene or prefab file, or an entity's own on the clipboard), in order of id so saving is stable.
+    private sealed class Versions(bool here = false)
+    {
+        private readonly SortedDictionary<string, PrefabVersion> _all = new(StringComparer.Ordinal);
+        private Versions? _outer;
+
+        // Whether they're written on the entity being written (rather than by whoever writes the file).
+        public bool Here { get; } = here;
+
+        public void Add(PrefabVersion version) => (_outer ?? this)._all.TryAdd(version.Id, version);
+
+        // For a child: the same versions, written where its parent's are.
+        public Versions Within() => Here ? new Versions { _outer = this } : this;
+
+        public void Write(Utf8JsonWriter writer)
+        {
+            if (_all.Count == 0)
+                return;
+            writer.WriteStartObject("prefabVersions");
+            foreach (var (id, version) in _all)
+            {
+                writer.WritePropertyName(id);
+                using var document = JsonDocument.Parse(version.Json);
+                document.RootElement.WriteTo(writer);
+            }
+
+            writer.WriteEndObject();
+        }
+    }
+
     private sealed class LoadContext(ICollection<string>? warnings, bool newIds = false)
     {
+        private Dictionary<string, PrefabVersion>? _versions;
+
         public bool NewIds { get; } = newIds;
+
+        // The versions a file (or an entity on its own) keeps, for the copies in it.
+        public void ReadVersions(JsonElement element)
+        {
+            if (!element.TryGetProperty("prefabVersions", out var versions) || versions.ValueKind != JsonValueKind.Object)
+                return;
+            _versions ??= new(StringComparer.Ordinal);
+            foreach (var version in versions.EnumerateObject())
+            {
+                if (version.Value.ValueKind == JsonValueKind.Object)
+                    _versions.TryAdd(version.Name, PrefabVersion.Of(version.Value, version.Name));
+            }
+        }
+
+        // A version the file keeps, or null if it doesn't (then the copy is as one made before copies remembered it).
+        public PrefabVersion? Version(string id) => _versions?.GetValueOrDefault(id);
 
         public HashSet<Guid> SeenIds { get; } = [];
 

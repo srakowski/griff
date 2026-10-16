@@ -38,6 +38,8 @@ public sealed class Workspace(
     private ReadOnlyObservableCollection<SceneDocument>? _readOnlyPrefabs;
     private FileSystemWatcher? _scriptWatcher;
     private Griff.Hosting.WatchedAssetFolder? _assets;
+    private Griff.Runtime.PrefabLibrary? _prefabLibrary;
+    private Dispatcher? _dispatcher;
     private DispatcherTimer? _scriptDebounce;
     private DispatcherTimer? _recoveryTimer;
     private readonly List<Func<Task<bool>>> _closeGuards = [];
@@ -53,6 +55,8 @@ public sealed class Workspace(
     }
 
     public Griff.Hosting.IAssetSource? Assets => _assets;
+
+    public Griff.Runtime.PrefabLibrary? PrefabLibrary => _prefabLibrary;
 
     public SceneDocument? Scene => _prefab ?? _scene;
 
@@ -160,6 +164,8 @@ public sealed class Workspace(
     {
         _scriptWatcher?.Dispose();
         _scriptWatcher = null;
+        _prefabLibrary?.Dispose();
+        _prefabLibrary = null;
         _assets?.Dispose();
         _assets = null;
         _scriptDebounce?.Stop();
@@ -488,6 +494,20 @@ public sealed class Workspace(
         OnPropertyChanged(nameof(Project));
     }
 
+    // A prefab file changed other than by the editor's own saving (a pull, an agent, a text editor): its copies follow,
+    // each keeping what it changed.
+    private void OnPrefabChanged(Griff.Runtime.PrefabChange change)
+    {
+        if (Project is not { } project || change.Now is null)
+            return;
+        var update = PrefabFilesFor().Changed(change);
+        if (update.Copies == 0 && update.Problems.Count == 0)
+            return;
+        var problems = update.Problems.Count > 0 ? " Not updated: " + string.Join("; ", update.Problems) : "";
+        logger.LogInformation("Prefab {Path} changed outside the editor: {Summary}{Problems}", PrefabFiles.AssetPathOf(project, change.Path), update.Summary, problems);
+        status.Show($"{Path.GetFileNameWithoutExtension(change.Path)} changed. {update.Summary}{problems}".Trim());
+    }
+
     private async Task OpenAsync(Project project)
     {
         var scenePath = project.StartScenePath is { } start && File.Exists(start)
@@ -501,8 +521,14 @@ public sealed class Workspace(
 
         SetScene(null);
         _prefabs.Clear();
+        _prefabLibrary?.Dispose();
         _assets?.Dispose();
         _assets = new Griff.Hosting.WatchedAssetFolder(project.AssetsPath);
+        // One library of the project's prefabs for every game played while it's open: what one read the next spawns at once,
+        // and a prefab changed (here or outside) is read again, its copies brought up to date.
+        _dispatcher = Dispatcher.CurrentDispatcher;
+        _prefabLibrary = new Griff.Runtime.PrefabLibrary(project, Components, _assets);
+        _prefabLibrary.Changed += change => _dispatcher.InvokeAsync(() => OnPrefabChanged(change));
         Project = project;
         RememberRecent(project.RootPath);
 
@@ -511,11 +537,16 @@ public sealed class Workspace(
         WatchScripts(project);
         StartRecoveryTimer();
 
+        // Copies of prefabs changed while the project was closed (a pull, a text editor) catch up before anything opens.
+        var caughtUp = PrefabFilesFor().CatchUp();
+
         var (scene, problem) = await OpenFirstSceneAsync(project, scenePath, recovery);
         SetScene(scene);
         SceneShown?.Invoke(this, EventArgs.Empty);
-        status.Show($"Opened {project.Name}");
+        status.Show(caughtUp.Copies > 0 ? $"Opened {project.Name}. {caughtUp.Summary}" : $"Opened {project.Name}");
         logger.LogInformation("Opened project {Name}", project.Name);
+        if (caughtUp.Problems.Count > 0)
+            logger.LogWarning("Copies of prefabs changed while the project was closed weren't all brought up to date: {Problems}", string.Join("; ", caughtUp.Problems));
         if (problem is not null)
             dialogs.ShowError("Couldn't open the start scene", problem);
     }

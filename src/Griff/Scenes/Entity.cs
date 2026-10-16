@@ -129,6 +129,13 @@ public sealed class Entity
     /// </summary>
     public string? Prefab { get; set; }
 
+    /// <summary>
+    /// For a placed copy (<see cref="Prefab"/>), the version of the prefab it was made from or last brought up to date
+    /// with: what the copy changed is what differs from it, so the editor keeps those changes when the prefab changes,
+    /// however it changed. Null for a copy made before copies remembered it. The game ignores it.
+    /// </summary>
+    public PrefabVersion? PrefabVersion { get; set; }
+
     public Scene? Scene { get; internal set; }
 
     public Entity? Parent { get; internal set; }

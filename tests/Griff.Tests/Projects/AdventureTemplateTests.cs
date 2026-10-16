@@ -287,6 +287,7 @@ public sealed class AdventureTemplateTests : IDisposable
         Assert.True(RunUntil(game, () => Items(game).Contains("Cup")));
         GoThrough(game, At(game.Find("Back Door")!), "Garden");
         game.SaveData.Set(Game.MusicVolumeSaveKey, 0.4f);
+        game.SaveData.Flush();
 
         // The next run: Play carries on in the garden, with the mug in the bar; it's gone from the kitchen's counter, and
         // the menu can start over.

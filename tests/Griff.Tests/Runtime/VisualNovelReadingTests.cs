@@ -216,6 +216,7 @@ public sealed class VisualNovelReadingTests : IDisposable
         var scene = new Scene();
         Build(scene, 0, "Ava: Hello!", "Ava: Again.");
         var input = new InputState();
+        _game.SaveData.Flush();
         var next = new Game(scene, input) { SaveData = new SaveData(SavePath), SceneName = "Story" };
         Assert.Equal(["2", "10", Game.QuickSlot], next.SavedGames.Select(g => g.Slot));
         var saved = next.SavedGameIn("2")!;
@@ -232,6 +233,7 @@ public sealed class VisualNovelReadingTests : IDisposable
         Assert.False(next.HasSave("2"));
         Assert.Null(next.SavedGameIn("2"));
         Assert.False(next.LoadGame("2"));
+        next.SaveData.Flush();
         Assert.Equal(["10", Game.QuickSlot], new Game(new Scene(), new InputState()) { SaveData = new SaveData(SavePath) }.SavedGames.Select(g => g.Slot));
     }
 
@@ -463,6 +465,7 @@ public sealed class VisualNovelReadingTests : IDisposable
         var scene = serializer.LoadFromString(serializer.SaveToString(_scene));
         var again = The<Dialogue>(scene);
         again.Lines = ["One.", "Two changed.", "Three."];
+        _game.SaveData.Flush();
         var next = new Game(scene, new InputState()) { SaveData = new SaveData(SavePath) };
         Assert.True(next.HasRead(again, 0));
         Assert.False(next.HasRead(again, 1));
@@ -604,6 +607,7 @@ public sealed class VisualNovelReadingTests : IDisposable
         Assert.Equal(0.8f, speed.Value, 3);
         Assert.True(toggle.GetComponent<Toggle>()!.IsOn);
 
+        _game.SaveData.Flush();
         var next = new Game(new Scene(), new InputState()) { SaveData = new SaveData(SavePath) };
         Assert.Equal(0.8f, next.AutoSpeed, 3);
         Assert.True(next.SkipUnread);

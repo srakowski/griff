@@ -1130,6 +1130,7 @@ public class LevelComponentTests
             SayAll(dialogue, text);
 
             Assert.Equal([("Met", true), ("Rude", false)], changes);
+            _game.SaveData.Flush();
             var next = new Game(new Scene(), new InputState()) { SaveData = new SaveData(path) };
             Assert.True(next.HasFlag("Met"));
             Assert.False(next.HasFlag("Rude"));

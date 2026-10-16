@@ -53,6 +53,16 @@ public sealed record LoadedGame(Project? Project, ComponentRegistry Components, 
     /// <summary>How an entity is made from a prefab by name, if not from the project's prefabs.</summary>
     public Func<string, Entity>? Prefabs { get; init; }
 
+    /// <summary>
+    /// The project's prefabs, read once each and copied for every spawn: the host's own, kept across games (the editor's,
+    /// which reads a prefab again when it's saved), or else one made for this game, whose prefabs never change.
+    /// </summary>
+    public PrefabLibrary? Library
+    {
+        get => _prefabs;
+        init => _prefabs = value;
+    }
+
     /// <summary>Steps a second of game time: the project's, unless set.</summary>
     public int StepRate
     {
@@ -69,8 +79,15 @@ public sealed record LoadedGame(Project? Project, ComponentRegistry Components, 
     /// <summary>Creates an entity from one of this game's prefabs, for <see cref="Game.PrefabLoader"/>.</summary>
     public Entity LoadPrefab(string nameOrPath) =>
         Prefabs is { } prefabs ? prefabs(nameOrPath)
-        : Project is { } project ? (_prefabs ??= new PrefabLibrary(project, Components)).Instantiate(nameOrPath)
+        : Project is { } project ? (_prefabs ?? MadeLibrary(project)).Instantiate(nameOrPath)
         : throw new FileNotFoundException($"No prefab named \"{nameOrPath}\".");
+
+    // Made once, though games spawn on many threads at once (a simulation's, each on a core of its own).
+    private PrefabLibrary MadeLibrary(Project project)
+    {
+        Interlocked.CompareExchange(ref _prefabs, new PrefabLibrary(project, Components), null);
+        return _prefabs!;
+    }
 
     /// <summary>
     /// The game at its start scene, set up for the host that plays it (<paramref name="host"/>: its input, sound, saves,

@@ -22,6 +22,7 @@ public sealed class SaveDataTests : IDisposable
         save.Set("volume", 0.5f);
         save.Set("muted", true);
         save.Set("name", "Ada");
+        save.Flush();
 
         var reloaded = new SaveData(SavePath);
 
@@ -50,6 +51,7 @@ public sealed class SaveDataTests : IDisposable
         save.Set("level", 3);
 
         Assert.Equal(3f, save.GetFloat("level"));
+        save.Flush();
         Assert.Equal(3f, new SaveData(SavePath).GetFloat("level"));
     }
 
@@ -64,9 +66,11 @@ public sealed class SaveDataTests : IDisposable
         Assert.True(save.Delete("a"));
         Assert.False(save.Delete("a"));
         save.Set("c", null);
+        save.Flush();
         Assert.Equal(["b"], new SaveData(SavePath).Keys);
 
         save.Clear();
+        save.Flush();
         Assert.Empty(new SaveData(SavePath).Keys);
     }
 
@@ -80,6 +84,7 @@ public sealed class SaveDataTests : IDisposable
         save.Set(InputState.BindingsSaveKey, "{}");
 
         save.ClearProgress();
+        save.Flush();
 
         Assert.Equal([InputState.BindingsSaveKey, Game.VolumeSaveKey], new SaveData(SavePath).Keys.Order(StringComparer.Ordinal));
     }
@@ -94,6 +99,7 @@ public sealed class SaveDataTests : IDisposable
 
         Assert.Empty(save.Keys);
         save.Set("ok", 1);
+        save.Flush();
         Assert.Equal(1, new SaveData(SavePath).GetInt("ok"));
     }
 
@@ -125,6 +131,47 @@ public sealed class SaveDataTests : IDisposable
         Assert.Empty(new SaveData(stored, _ => { }).Keys);
         // Something else in the storage under its key starts over rather than stopping the game.
         Assert.Empty(new SaveData("{ not json", _ => { }).Keys);
+    }
+
+    [Fact]
+    public void Writes_AreOffTheGamesThread_AndChangesMadeMeanwhileGoTogether()
+    {
+        var save = new SaveData(SavePath);
+        for (var i = 0; i < 2000; i++)
+            save.Set("frame", i);
+        save.Flush();
+
+        Assert.Equal(1999, new SaveData(SavePath).GetInt("frame"));
+        Assert.False(File.Exists(SavePath + ".tmp"));
+    }
+
+    [Fact]
+    public void AWriteThatFails_IsSaidOnceAmongTheGamesProblems_RatherThanThrown()
+    {
+        // A folder where the file should be: the disk won't take it.
+        Directory.CreateDirectory(SavePath);
+        var game = new Game(new Griff.Scenes.Scene(), new InputState()) { SaveData = new SaveData(SavePath) };
+
+        game.SaveData.Set("best", 3);
+        game.SaveData.Flush();
+        game.Tick(1 / 60.0);
+        game.SaveData.Set("best", 4);
+        game.Tick(1 / 60.0);
+        game.Stop();
+
+        Assert.Equal(4, game.SaveData.GetInt("best"));
+        var problem = Assert.Single(game.Problems.Lines, l => l.Contains("couldn't be written", StringComparison.Ordinal));
+        Assert.Contains(SavePath, problem, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StoppingTheGame_WaitsForItsSavesToBeWritten()
+    {
+        var game = new Game(new Griff.Scenes.Scene(), new InputState()) { SaveData = new SaveData(SavePath) };
+        game.SaveData.Set("best", 9);
+        game.Stop();
+
+        Assert.Equal(9, new SaveData(SavePath).GetInt("best"));
     }
 
     [Fact]

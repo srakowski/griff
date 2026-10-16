@@ -6,8 +6,9 @@ namespace Griff.Editing;
 
 /// <summary>
 /// Placed copies of prefabs: entities whose <see cref="Entity.Prefab"/> names a prefab file. Saving a prefab brings
-/// every copy up to date, keeping what each copy changed (<see cref="PrefabOverrides"/>), in the open scene as one undo
-/// step (<see cref="Update"/>) and in scene files on disk (<see cref="UpdateFile"/>).
+/// every copy up to date, keeping what each copy changed (<see cref="PrefabOverrides"/>) from the version it was made
+/// from (<see cref="Entity.PrefabVersion"/>), in the open scene as one undo step (<see cref="Update"/>) and in scene files
+/// on disk (<see cref="UpdateFile"/>).
 /// </summary>
 public static class PrefabCopies
 {
@@ -36,9 +37,10 @@ public static class PrefabCopies
     /// <summary>
     /// One undo step bringing every copy of the prefab in <paramref name="scene"/> up to date with its new version,
     /// <paramref name="prefabJson"/> (see <see cref="UpdatePrefabCopyEdit"/>), skipping <paramref name="except"/> (the
-    /// entity the prefab was just saved from). Each copy keeps what it changed from the old version,
-    /// <paramref name="oldPrefabJson"/> (see <see cref="PrefabOverrides.Merge"/>); without it (or if it can't be read),
-    /// copies take the new version whole. Null if there are no copies to update.
+    /// entity the prefab was just saved from) and copies made from that version already. Each copy keeps what it changed
+    /// from the version it was made from (<see cref="Entity.PrefabVersion"/>, see <see cref="PrefabOverrides.Merge"/>), or
+    /// for a copy made before copies remembered it, from <paramref name="oldPrefabJson"/> (the version before, if known);
+    /// with neither (or if it can't be read), it takes the new version whole. Null if there are no copies to update.
     /// </summary>
     /// <exception cref="InvalidDataException">The new version can't be read.</exception>
     public static IEdit? Update(Scene scene, string prefabPath, string prefabJson, string? oldPrefabJson, SceneSerializer serializer, Entity? except = null)
@@ -46,16 +48,55 @@ public static class PrefabCopies
         var copies = In(scene, prefabPath).Where(copy => copy != except).ToList();
         if (copies.Count == 0)
             return null;
+        var version = PrefabVersion.Of(prefabJson);
+        copies.RemoveAll(copy => version.Equals(copy.PrefabVersion));
+        if (copies.Count == 0)
+            return null;
 
-        var old = Old(oldPrefabJson, serializer);
+        // Each version the copies were made from, read once.
+        var bases = new Dictionary<string, Entity?>(StringComparer.Ordinal);
+        Entity? Base(string? json) => json is null ? null : bases.TryGetValue(json, out var old) ? old : bases[json] = Old(json, serializer);
+
         var edits = copies
             .Select(IEdit (copy) =>
             {
-                var fresh = serializer.LoadPrefabFromString(prefabJson);
-                return new UpdatePrefabCopyEdit(scene, copy, old is null ? fresh : PrefabOverrides.Merge(copy, old, fresh, serializer));
+                var fresh = serializer.LoadPrefabFromString(version.Json);
+                var old = Base(copy.PrefabVersion?.Json ?? oldPrefabJson);
+                return new UpdatePrefabCopyEdit(scene, copy, old is null ? fresh : PrefabOverrides.Merge(copy, old, fresh, serializer), version);
             })
             .ToList();
         return edits.Count == 1 ? edits[0] : new CompositeEdit($"Update {edits.Count} copies of {NameOf(prefabPath)}", edits);
+    }
+
+    /// <summary>
+    /// Brings up to date every copy in <paramref name="scene"/> made from another version of its prefab than the one it is now
+    /// (<paramref name="current"/>, by the copy's link; null for a prefab that isn't there), each keeping what it changed from
+    /// the version it was made from, and applies that at once (for a file being caught up, not an undo step). Copies made
+    /// before copies remembered their version are kept as they are, and remember the version it is now.
+    /// </summary>
+    /// <returns>How many copies were updated.</returns>
+    public static int UpdateStale(Scene scene, Func<string, PrefabVersion?> current, SceneSerializer serializer)
+    {
+        var count = 0;
+        var links = scene.Entities.Where(e => e.Prefab is not null && e.PrefabVersion is not null)
+            .Select(e => Normalize(e.Prefab!)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        foreach (var link in links)
+        {
+            if (current(link) is not { } now)
+                continue;
+            var stale = In(scene, link).Count(copy => copy.PrefabVersion is { } made && !made.Equals(now));
+            if (stale == 0)
+                continue;
+
+            // The prefab as it is now stands for the version that copies made before they remembered theirs came from: they
+            // keep everything.
+            if (Update(scene, link, now.Json, now.Json, serializer) is not { } edit)
+                continue;
+            edit.Apply();
+            count += stale;
+        }
+
+        return count;
     }
 
     /// <summary>
@@ -189,12 +230,15 @@ public static class PrefabCopies
 
 /// <summary>
 /// Brings a placed copy of a prefab up to date with a fresh entity made from it (and merged with the copy's overrides):
-/// the copy takes the fresh entity's components, scale and children, and keeps its own name, place (position and rotation), parent, enabled, locked and hidden state, id and
-/// link, so the selection and the fields that name it still find it.
+/// the copy takes the fresh entity's components, scale and children, and the version it was made from, and keeps its own
+/// name, place (position and rotation), parent, enabled, locked and hidden state, id and link, so the selection and the
+/// fields that name it still find it.
 /// </summary>
 public sealed class UpdatePrefabCopyEdit : IEdit
 {
     private readonly Scene _scene;
+    private readonly PrefabVersion? _oldVersion;
+    private readonly PrefabVersion? _newVersion;
     private readonly List<Component> _oldComponents;
     private readonly List<Component> _newComponents;
     private readonly List<Entity> _oldChildren;
@@ -203,13 +247,16 @@ public sealed class UpdatePrefabCopyEdit : IEdit
     private readonly Vector3 _newScale;
 
     /// <param name="fresh">A detached entity just made from the prefab; its components and children move to the copy.</param>
-    public UpdatePrefabCopyEdit(Scene scene, Entity copy, Entity fresh)
+    /// <param name="version">The version of the prefab <paramref name="fresh"/> was made from, which the copy remembers; null leaves it as it is.</param>
+    public UpdatePrefabCopyEdit(Scene scene, Entity copy, Entity fresh, PrefabVersion? version = null)
     {
         if (fresh.Scene is not null || fresh.Parent is not null)
             throw new ArgumentException("The fresh entity should be detached.", nameof(fresh));
 
         _scene = scene;
         Copy = copy;
+        _oldVersion = copy.PrefabVersion;
+        _newVersion = version ?? copy.PrefabVersion;
         _oldComponents = copy.Components.Skip(1).ToList();
         _oldChildren = copy.Children.ToList();
         _oldScale = copy.Transform.Scale;
@@ -229,9 +276,17 @@ public sealed class UpdatePrefabCopyEdit : IEdit
 
     public string Description => $"Update {Copy.Name} from its prefab";
 
-    public void Apply() => Swap(_oldComponents, _newComponents, _oldChildren, _newChildren, _newScale);
+    public void Apply()
+    {
+        Swap(_oldComponents, _newComponents, _oldChildren, _newChildren, _newScale);
+        Copy.PrefabVersion = _newVersion;
+    }
 
-    public void Revert() => Swap(_newComponents, _oldComponents, _newChildren, _oldChildren, _oldScale);
+    public void Revert()
+    {
+        Swap(_newComponents, _oldComponents, _newChildren, _oldChildren, _oldScale);
+        Copy.PrefabVersion = _oldVersion;
+    }
 
     private void Swap(List<Component> fromComponents, List<Component> toComponents, List<Entity> fromChildren, List<Entity> toChildren, Vector3 scale)
     {

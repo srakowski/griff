@@ -37,6 +37,12 @@ public sealed class ComponentRegistry
 
     public IReadOnlyCollection<ComponentDescriptor> All => _byType.Values;
 
+    /// <summary>
+    /// Changes whenever a type is registered or removed (scripts reloaded): what was made with the types as they were (a
+    /// prefab's template, see <see cref="EntityTemplate"/>) is made again.
+    /// </summary>
+    public int Revision { get; private set; }
+
     public ComponentDescriptor Register<T>() where T : Component, new() => Register(typeof(T));
 
     public ComponentDescriptor Register(Type type)
@@ -68,6 +74,7 @@ public sealed class ComponentRegistry
         _byName.Add(descriptor.Name, descriptor);
         _byType.Add(type, descriptor);
         LinkBack(descriptor);
+        Revision++;
         return descriptor;
     }
 
@@ -103,6 +110,7 @@ public sealed class ComponentRegistry
         _byName.Remove(descriptor.Name);
         foreach (var former in descriptor.FormerNames)
             _byFormerName.Remove(former);
+        Revision++;
         return true;
     }
 

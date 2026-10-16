@@ -11,9 +11,10 @@ namespace Griff.Tests.Architecture;
 /// </summary>
 public sealed partial class HostInterfaceTests
 {
-    // What reads a game's files as it plays: renderers, fonts, sounds and the hosts that hand them their files.
+    // What reads a game's files as it plays: renderers, fonts, sounds, prefabs (the runtime's library and the scenes it
+    // reads them with) and the hosts that hand them their files.
     private static readonly string[] FileReaders =
-        ["src/Griff.Graphics", "src/Griff.Graphics.OpenGL", "src/Griff.Fonts", "src/Griff/Audio", "src/Griff.Web", "src/Griff.Platform.Windows", "src/Griff.Player"];
+        ["src/Griff.Graphics", "src/Griff.Graphics.OpenGL", "src/Griff.Fonts", "src/Griff/Audio", "src/Griff/Runtime", "src/Griff/Scenes", "src/Griff.Web", "src/Griff.Platform.Windows", "src/Griff.Player"];
 
     // What ships in an exported game besides its own scripts.
     private static readonly string[] Shipped =

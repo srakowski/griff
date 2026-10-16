@@ -485,6 +485,7 @@ public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
                 {
                     var saves = new SaveData(SaveData.EditorPath(project.RootPath));
                     saves.Set(Game.AudioOffsetSaveKey, value);
+                    saves.Flush();
                 }
                 catch (IOException)
                 {

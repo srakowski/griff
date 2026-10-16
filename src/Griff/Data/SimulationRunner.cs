@@ -22,7 +22,10 @@ public sealed class SimulationHost
     /// <summary>Loads a scene by name: the arena, and any scene its game loads.</summary>
     public Func<string, Scene>? LoadScene { get; init; }
 
-    /// <summary>Makes an entity from a prefab by name, for what the arena's game spawns.</summary>
+    /// <summary>
+    /// Makes an entity from a prefab by name, for what the arena's game spawns. Called on every thread a simulation runs its
+    /// fights on at once, so it must be safe to (a <see cref="Griff.Runtime.PrefabLibrary"/> is).
+    /// </summary>
     public Func<string, Entity>? LoadPrefab { get; init; }
 
     /// <summary>Steps a second of game time, as the project says.</summary>

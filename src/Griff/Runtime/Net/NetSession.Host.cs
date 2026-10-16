@@ -305,7 +305,7 @@ public sealed partial class NetSession
 
         var name = Settings?.Player?.Trim();
         _template = string.IsNullOrEmpty(name) ? null : EntityNames.Find(_network.Scene, name, new NameLookup(Where: static e => e.Parent is null));
-        _templateJson = _template is null ? null : Serializer.SerializeEntity(_template);
+        _templateJson = _template is null ? null : Serializer.SerializeEntity(_template, links: false);
         if (Role == NetRole.Server && _template is not null)
             _network.Destroy(_template);
 
@@ -468,7 +468,7 @@ public sealed partial class NetSession
         if (Settings is not { RememberPlayers: true } || player.Avatar is not { } avatar || avatar.Scene != _network.Scene)
             return;
         var all = LoadRemembered();
-        all[RememberKey(player)] = Serializer.SerializeEntity(avatar);
+        all[RememberKey(player)] = Serializer.SerializeEntity(avatar, links: false);
         _network.SaveData.Set(RememberedSaveKey, JsonSerializer.Serialize(all));
     }
 

@@ -253,6 +253,7 @@ public sealed class PhysicsTemplateTests : IDisposable
         Assert.Equal(score, game.SaveData.GetInt("Level1.Best"));
 
         // Another run, reading the saves from the file: the second level opens, and the first's card shows its stars and best.
+        game.SaveData.Flush();
         var again = Start(project, Project.DefaultSceneName, new SaveData(path));
         Run(again, 0.2f);
         Assert.True(again.Find("Level 2")!.GetComponent<Button>()!.IsUsable);

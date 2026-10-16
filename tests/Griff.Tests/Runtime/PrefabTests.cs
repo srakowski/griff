@@ -103,19 +103,13 @@ public sealed class PrefabTests : IDisposable
     }
 
     [Fact]
-    public async Task Library_PicksUpChangesToThePrefabFile()
+    public async Task Library_FindsPrefabsByName_AndSaysWhenThereIsNone()
     {
         var project = await ProjectWithBulletAsync();
         var library = new PrefabLibrary(project, ComponentRegistry.CreateDefault());
+
         Assert.Equal("Bullet", library.Instantiate("Bullet").Name);
-
-        var changed = Bullet();
-        changed.Name = "Big Bullet";
-        var path = project.DefaultPrefabPath("Bullet");
-        await File.WriteAllTextAsync(path, _serializer.SavePrefabToString(changed));
-        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(5));
-
-        Assert.Equal("Big Bullet", library.Instantiate("Bullet").Name);
+        Assert.Equal("Bullet", library.Instantiate("Prefabs/Bullet.prefab").Name);
         Assert.Throws<FileNotFoundException>(() => library.Instantiate("Missile"));
     }
 

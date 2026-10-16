@@ -4,8 +4,11 @@ using System.Text.Json.Nodes;
 namespace Griff.Runtime;
 
 /// <summary>
-/// Small values that outlive the game: high scores, unlocked levels, settings. Every change is written to disk
-/// straight away, so nothing is lost if the game is closed or crashes.
+/// Small values that outlive the game: high scores, unlocked levels, settings. Every change is written to disk at once,
+/// off the game's thread so a frame never waits for the disk, and changes made while one is being written go together in
+/// the next, so a value set every frame costs a write only as often as the disk keeps up. Stopping the game waits for the
+/// last write (<see cref="Flush"/>). A write that fails (a full disk, a file another program holds) is said once among
+/// the game's problems (<see cref="Game.Problems"/>) rather than stopping the game, and the next change tries again.
 /// </summary>
 /// <example>
 /// <code>
@@ -21,6 +24,14 @@ public sealed class SaveData
 
     private readonly JsonObject _values;
     private readonly Action<string>? _store;
+
+    // Taken around every use of the values: the writer reads them on its own thread.
+    private readonly Lock _gate = new();
+
+    // The version last written (or tried), the write under way (null when caught up), and why the last one failed.
+    private long _written;
+    private Task? _writing;
+    private string? _failure;
 
     /// <param name="path">The file to keep values in, or null to keep them in memory only (tests, previews).</param>
     public SaveData(string? path = null)
@@ -45,9 +56,20 @@ public sealed class SaveData
     public string? FilePath { get; }
 
     /// <summary>The names of every saved value.</summary>
-    public IEnumerable<string> Keys => _values.Select(p => p.Key);
+    public IEnumerable<string> Keys
+    {
+        get
+        {
+            lock (_gate)
+                return [.. _values.Select(p => p.Key)];
+        }
+    }
 
-    public bool Has(string key) => _values.ContainsKey(key);
+    public bool Has(string key)
+    {
+        lock (_gate)
+            return _values.ContainsKey(key);
+    }
 
     public int GetInt(string key, int fallback = 0) => Get(key, fallback);
 
@@ -61,8 +83,11 @@ public sealed class SaveData
     /// The text kept under <paramref name="key"/> as it's kept, without going through its JSON (as <see cref="GetString"/>
     /// does): for big text read often, such as a saved game or the lines a player has read. Null if there's none.
     /// </summary>
-    public string? GetText(string key) =>
-        _values[key] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+    public string? GetText(string key)
+    {
+        lock (_gate)
+            return _values[key] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+    }
 
     public void Set(string key, int value) => Put(key, JsonValue.Create(value));
 
@@ -73,7 +98,11 @@ public sealed class SaveData
     public void Set(string key, string? value) => Put(key, value is null ? null : JsonValue.Create(value));
 
     // A value as it's kept (a copy), whatever it is, and one put back so: for a saved game keeping some as they were.
-    internal JsonNode? GetRaw(string key) => _values[key]?.DeepClone();
+    internal JsonNode? GetRaw(string key)
+    {
+        lock (_gate)
+            return _values[key]?.DeepClone();
+    }
 
     internal void SetRaw(string key, JsonNode? value) => Put(key, value?.DeepClone());
 
@@ -81,8 +110,12 @@ public sealed class SaveData
     public bool Delete(string key)
     {
         Crowds.ThrowIfRunning("save");
-        if (!_values.Remove(key))
-            return false;
+        lock (_gate)
+        {
+            if (!_values.Remove(key))
+                return false;
+        }
+
         Write();
         return true;
     }
@@ -94,11 +127,15 @@ public sealed class SaveData
     public void ClearProgress()
     {
         Crowds.ThrowIfRunning("save");
-        var progress = _values.Select(p => p.Key).Where(k => !k.StartsWith(SettingsPrefix, StringComparison.Ordinal)).ToList();
-        if (progress.Count == 0)
-            return;
-        foreach (var key in progress)
-            _values.Remove(key);
+        lock (_gate)
+        {
+            var progress = _values.Select(p => p.Key).Where(k => !k.StartsWith(SettingsPrefix, StringComparison.Ordinal)).ToList();
+            if (progress.Count == 0)
+                return;
+            foreach (var key in progress)
+                _values.Remove(key);
+        }
+
         Write();
     }
 
@@ -109,7 +146,8 @@ public sealed class SaveData
     public void Clear()
     {
         Crowds.ThrowIfRunning("save");
-        _values.Clear();
+        lock (_gate)
+            _values.Clear();
         Write();
     }
 
@@ -117,12 +155,18 @@ public sealed class SaveData
     private T Get<T>(string key, T fallback)
     {
         ArgumentNullException.ThrowIfNull(key);
-        if (_values[key] is not JsonValue value)
-            return fallback;
+        string json;
+        lock (_gate)
+        {
+            if (_values[key] is not JsonValue value)
+                return fallback;
+            json = value.ToJsonString();
+        }
+
         try
         {
             // Through the JSON text, so values read the same before and after a reload (an int reads as a float, too).
-            return JsonSerializer.Deserialize<T>(value.ToJsonString()) ?? fallback;
+            return JsonSerializer.Deserialize<T>(json) ?? fallback;
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
         {
@@ -134,10 +178,14 @@ public sealed class SaveData
     {
         Crowds.ThrowIfRunning("save");
         ArgumentNullException.ThrowIfNull(key);
-        if (value is null)
-            _values.Remove(key);
-        else
-            _values[key] = value;
+        lock (_gate)
+        {
+            if (value is null)
+                _values.Remove(key);
+            else
+                _values[key] = value;
+        }
+
         Write();
     }
 
@@ -147,9 +195,12 @@ public sealed class SaveData
 
     internal string Held()
     {
-        if (_heldVersion != Version || _held is null)
-            (_held, _heldVersion) = (_values.ToJsonString(), Version);
-        return _held;
+        lock (_gate)
+        {
+            if (_heldVersion != Version || _held is null)
+                (_held, _heldVersion) = (_values.ToJsonString(), Version);
+            return _held;
+        }
     }
 
     // A rewind puts back what the game had saved then (and writes it, as any change is).
@@ -158,12 +209,15 @@ public sealed class SaveData
         if (held == Held())
             return;
         var values = Load(held);
-        _values.Clear();
-        foreach (var key in values.Select(p => p.Key).ToList())
+        lock (_gate)
         {
-            var value = values[key];
-            values.Remove(key);
-            _values[key] = value;
+            _values.Clear();
+            foreach (var key in values.Select(p => p.Key).ToList())
+            {
+                var value = values[key];
+                values.Remove(key);
+                _values[key] = value;
+            }
         }
 
         Write();
@@ -172,23 +226,90 @@ public sealed class SaveData
     /// <summary>Changes whenever a value is set, deleted or cleared: cheap to poll for changes.</summary>
     public long Version { get; private set; }
 
-    // Written to a temporary file first, so a crash mid-write can't leave a half-written save.
+    /// <summary>
+    /// Waits until every change so far is written (or has failed to be): the game does when it stops, and a host or tool
+    /// that reads the file straight after (or makes another <see cref="SaveData"/> of it) does first.
+    /// </summary>
+    public void Flush()
+    {
+        while (true)
+        {
+            Task? writing;
+            lock (_gate)
+                writing = _writing;
+            if (writing is null)
+                return;
+            writing.Wait();
+        }
+    }
+
+    /// <summary>Why the last write failed, said once (the game says it among its problems), or null if none has since.</summary>
+    internal string? TakeFailure() => Interlocked.Exchange(ref _failure, null);
+
     private void Write()
     {
-        Version++;
-        if (_store is not null)
+        lock (_gate)
         {
-            _store(_values.ToJsonString(WriteOptions));
-            return;
+            Version++;
+            if (_store is null && (FilePath is null || _writing is not null))
+                return;
+            if (_store is null)
+            {
+                _writing = Task.Run(WriteFile);
+                return;
+            }
         }
 
-        if (FilePath is null)
-            return;
+        // A browser's storage has the game's one thread, and keeps what it's handed at once.
+        try
+        {
+            string text;
+            lock (_gate)
+                text = _values.ToJsonString(WriteOptions);
+            _store(text);
+        }
+        catch (Exception ex)
+        {
+            _failure = $"The game's saves couldn't be kept: {ex.Message}";
+        }
+    }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(FilePath))!);
-        var temporary = FilePath + ".tmp";
-        File.WriteAllText(temporary, _values.ToJsonString(WriteOptions));
-        File.Move(temporary, FilePath, overwrite: true);
+    // Writes the latest version until there's no newer one: changes made while one is written go in the next. Each is
+    // written to a temporary file first, so a crash mid-write can't leave a half-written save.
+    private void WriteFile()
+    {
+        var path = FilePath!;
+        while (true)
+        {
+            string text;
+            long version;
+            lock (_gate)
+            {
+                if (_written == Version)
+                {
+                    _writing = null;
+                    return;
+                }
+
+                (text, version) = (_values.ToJsonString(WriteOptions), Version);
+            }
+
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+                var temporary = path + ".tmp";
+                File.WriteAllText(temporary, text);
+                File.Move(temporary, path, overwrite: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Said by the game on its own thread; the next change tries again.
+                _failure = $"The game's saves couldn't be written to {path}: {ex.Message}";
+            }
+
+            lock (_gate)
+                _written = version;
+        }
     }
 
     private static string? ReadFile(string path)

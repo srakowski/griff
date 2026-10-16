@@ -152,7 +152,7 @@ public sealed partial class NetSession
         {
             _templateParts = template.SelfAndDescendants().Skip(1).Where(NetSchema.IsLocalItself)
                 .Where(e => !NetSchema.IsLocal(e.Parent!) || e.Parent == template)
-                .Select(Serializer.SerializeEntity).ToList();
+                .Select(e => Serializer.SerializeEntity(e, links: false)).ToList();
         }
 
         var shared = scene.Entities.Where(e => !NetSchema.IsLocal(e) && (e.Parent is null || NetSchema.IsLocal(e.Parent))).ToList();

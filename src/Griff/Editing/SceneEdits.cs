@@ -388,12 +388,13 @@ public sealed class SetEntitiesHiddenEdit(IReadOnlyList<Entity> entities, bool h
 }
 
 /// <summary>
-/// Links entities to a prefab as copies of it (see <see cref="Entity.Prefab"/>), or unlinks them with null, as one undo
-/// step.
+/// Links entities to a prefab as copies of it (see <see cref="Entity.Prefab"/>), made from <paramref name="version"/> of it
+/// (see <see cref="Entity.PrefabVersion"/>; null keeps the version each was made from, as relinking a moved prefab's copies
+/// does), or unlinks them with null, as one undo step.
 /// </summary>
-public sealed class SetEntitiesPrefabEdit(IReadOnlyList<Entity> entities, string? prefab) : IEdit
+public sealed class SetEntitiesPrefabEdit(IReadOnlyList<Entity> entities, string? prefab, PrefabVersion? version = null) : IEdit
 {
-    private readonly string?[] _oldPrefabs = entities.Select(e => e.Prefab).ToArray();
+    private readonly (string? Prefab, PrefabVersion? Version)[] _old = entities.Select(e => (e.Prefab, e.PrefabVersion)).ToArray();
 
     public IReadOnlyList<Entity> Entities { get; } = entities;
 
@@ -402,13 +403,13 @@ public sealed class SetEntitiesPrefabEdit(IReadOnlyList<Entity> entities, string
     public void Apply()
     {
         foreach (var entity in Entities)
-            entity.Prefab = prefab;
+            (entity.Prefab, entity.PrefabVersion) = (prefab, prefab is null ? null : version ?? entity.PrefabVersion);
     }
 
     public void Revert()
     {
         for (var i = 0; i < Entities.Count; i++)
-            Entities[i].Prefab = _oldPrefabs[i];
+            (Entities[i].Prefab, Entities[i].PrefabVersion) = _old[i];
     }
 }
 

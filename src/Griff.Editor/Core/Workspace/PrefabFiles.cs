@@ -11,9 +11,10 @@ public sealed class PrefabFiles
     private readonly IProjectSession _project;
     private readonly ISceneDocuments _documents;
 
-    // Prefab files read for looking at (what a placed copy changes from its prefab): each with when it was written, read
-    // again when the file changes and all let go when scripts reload (a script component's type changes).
-    private readonly Dictionary<string, (DateTime Written, Entity? Prefab)> _read = new(StringComparer.OrdinalIgnoreCase);
+    // Prefab files read for looking at (what a placed copy changes from its prefab): each with the version it was read
+    // from, read again when the project's prefab library says the file is another version, and all let go when scripts
+    // reload (a script component's type changes).
+    private readonly Dictionary<string, (string? Version, Entity? Prefab)> _read = new(StringComparer.OrdinalIgnoreCase);
 
     public PrefabFiles(IProjectSession project, ISceneDocuments documents, IScriptSession scripts)
     {
@@ -32,21 +33,21 @@ public sealed class PrefabFiles
     /// <summary>The prefab file at <paramref name="path"/> (a full path), read as <see cref="PrefabOf"/> reads one.</summary>
     public Entity? Read(string path)
     {
-        var written = File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
-        if (_read.TryGetValue(path, out var known) && known.Written == written)
+        var version = _project.PrefabLibrary?.VersionOf(path);
+        if (_read.TryGetValue(path, out var known) && known.Version == version?.Id)
             return known.Prefab;
 
         Entity? prefab;
         try
         {
-            prefab = written == DateTime.MinValue ? null : _project.Serializer.LoadPrefabFromString(File.ReadAllText(path));
+            prefab = version is null ? null : _project.Serializer.LoadPrefabFromString(version.Json);
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        catch (InvalidDataException)
         {
             prefab = null;
         }
 
-        _read[path] = (written, prefab);
+        _read[path] = (version?.Id, prefab);
         return prefab;
     }
 
@@ -123,9 +124,12 @@ public sealed class PrefabFiles
             var name = Path.GetFileNameWithoutExtension(file);
             try
             {
-                var count = file.EndsWith(Griff.Projects.Project.PrefabExtension, StringComparison.OrdinalIgnoreCase)
+                var isPrefab = file.EndsWith(Griff.Projects.Project.PrefabExtension, StringComparison.OrdinalIgnoreCase);
+                var count = isPrefab
                     ? PrefabCopies.RelinkPrefabFile(file, oldAssetPath, newAssetPath, serializer)
                     : PrefabCopies.RelinkFile(file, oldAssetPath, newAssetPath, serializer);
+                if (isPrefab && count > 0)
+                    Rewrote(file);
                 if (count > 0 && !openFiles.Contains(Path.GetFullPath(file)))
                 {
                     copies += count;
@@ -144,6 +148,114 @@ public sealed class PrefabFiles
     private static string FullPath(Griff.Projects.Project project, string assetPath) =>
         Path.GetFullPath(Path.Combine(project.AssetsPath, PrefabCopies.Normalize(assetPath).Replace('/', Path.DirectorySeparatorChar)));
 
+    // A prefab file the editor rewrote (the copies inside it brought up to date or relinked): its new version is the one
+    // games spawn, and isn't a change from outside.
+    private void Rewrote(string prefabFile)
+    {
+        try
+        {
+            _project.PrefabLibrary?.Remember(prefabFile, PrefabVersion.Of(File.ReadAllText(prefabFile)));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            // Then the library reads it when its file settles.
+        }
+    }
+
+    /// <summary>
+    /// After a prefab file changed other than by the editor's own saving (a pull, an agent's asset tools, a text editor,
+    /// said by the project's <see cref="Griff.Runtime.PrefabLibrary.Changed"/>): brings its copies up to date as saving it
+    /// does (<see cref="UpdateCopies"/>), each keeping what it changed from the version it was made from. Nothing for a
+    /// prefab deleted.
+    /// </summary>
+    public PrefabUpdate Changed(Griff.Runtime.PrefabChange change)
+    {
+        if (change.Now is not { } now || _project.Project is not { } project)
+            return new PrefabUpdate(0, [], []);
+        return UpdateCopies(AssetPathOf(project, change.Path), now.Json, change.Before?.Json, source: null);
+    }
+
+    /// <summary>
+    /// Brings the copies in the project's scene and prefab files up to date with their prefabs as they are now: those made
+    /// from another version (a prefab changed while the project was closed, by a pull or a text editor), each keeping what
+    /// it changed. Prefabs holding copies of others go first, so copies of them take in what changed inside. Run as a
+    /// project opens, before its scene does; also reads every prefab's version, so a change from now on is noticed.
+    /// </summary>
+    public PrefabUpdate CatchUp()
+    {
+        if (_project.Project is not { } project || _project.PrefabLibrary is not { } library)
+            return new PrefabUpdate(0, [], []);
+
+        var copies = 0;
+        var places = new List<string>();
+        var problems = new List<string>();
+        var serializer = _project.Serializer;
+        var prefabs = project.FindPrefabs().ToList();
+        foreach (var prefab in prefabs)
+            library.VersionOf(prefab);
+
+        var found = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        PrefabVersion? Current(string link) =>
+            (found.TryGetValue(link, out var path) ? path : found[link] = project.FindPrefab(link)) is { } file ? library.VersionOf(file) : null;
+
+        // Prefabs inside prefabs inside prefabs take a pass each.
+        for (var pass = 0; pass < 4; pass++)
+        {
+            var any = false;
+            foreach (var file in prefabs)
+            {
+                if (CatchUpFile(file, isPrefab: true) is > 0 and var count)
+                {
+                    Rewrote(file);
+                    copies += count;
+                    places.Add(Path.GetFileNameWithoutExtension(file));
+                    any = true;
+                }
+            }
+
+            if (!any)
+                break;
+        }
+
+        foreach (var file in project.FindScenes())
+        {
+            if (CatchUpFile(file, isPrefab: false) is > 0 and var count)
+            {
+                copies += count;
+                places.Add(Path.GetFileNameWithoutExtension(file));
+            }
+        }
+
+        return new PrefabUpdate(copies, [.. places.Distinct()], problems);
+
+        // A file's stale copies brought up to date and written (through a temporary file); how many there were.
+        int CatchUpFile(string file, bool isPrefab)
+        {
+            try
+            {
+                var text = File.ReadAllText(file);
+                if (!text.Contains("\"prefabVersion\"", StringComparison.Ordinal))
+                    return 0;
+                var scene = isPrefab ? new Scene() : serializer.LoadFromString(text);
+                var root = isPrefab ? serializer.LoadPrefabFromString(text) : null;
+                if (root is not null)
+                    scene.Add(root);
+                var count = PrefabCopies.UpdateStale(scene, Current, serializer);
+                if (count == 0)
+                    return 0;
+                var temp = file + ".saving";
+                File.WriteAllText(temp, root is not null ? serializer.SavePrefabToString(root) : serializer.SaveToString(scene));
+                File.Move(temp, file, overwrite: true);
+                return count;
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+            {
+                problems.Add($"{Path.GetFileNameWithoutExtension(file)}: {ex.Message}");
+                return 0;
+            }
+        }
+    }
+
     /// <summary>
     /// A new copy of the prefab at <paramref name="assetPath"/> (relative to Assets), linked to it so saving the prefab
     /// updates it, or null if it can't be read.
@@ -156,8 +268,10 @@ public sealed class PrefabFiles
         var path = Path.Combine(project.AssetsPath, assetPath.Replace('/', Path.DirectorySeparatorChar));
         try
         {
-            var entity = _project.Serializer.LoadPrefabFromString(File.ReadAllText(path), warnings);
+            var text = File.ReadAllText(path);
+            var entity = _project.Serializer.LoadPrefabFromString(text, warnings);
             entity.Prefab = PrefabCopies.Normalize(assetPath);
+            entity.PrefabVersion = PrefabVersion.Of(text);
             return entity;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
@@ -186,13 +300,28 @@ public sealed class PrefabFiles
         var problems = new List<string>();
         var serializer = _project.Serializer;
 
+        // The version saved: what the entity it was saved from is now a copy of, and what the next spawn is.
+        PrefabVersion version;
+        try
+        {
+            version = PrefabVersion.Of(json);
+        }
+        catch (InvalidDataException ex)
+        {
+            return new PrefabUpdate(0, [], [$"{PrefabCopies.NameOf(assetPath)}: {ex.Message}"]);
+        }
+
+        _project.PrefabLibrary?.Remember(FullPath(project, assetPath), version);
+
         // The scene being edited (not the running copy while playing), through its undo history.
         if (_documents.EditScene is { } document)
         {
             var edits = new List<IEdit>();
             var here = source?.Scene == document.Scene ? source : null;
             if (here is not null && !PrefabCopies.IsCopyOf(here, assetPath))
-                edits.Add(new SetEntitiesPrefabEdit([here], PrefabCopies.Normalize(assetPath)));
+                edits.Add(new SetEntitiesPrefabEdit([here], PrefabCopies.Normalize(assetPath), version));
+            else if (here is not null)
+                here.PrefabVersion = version; // It's the prefab as saved now, whatever undoing the others' updates does.
 
             try
             {
@@ -254,10 +383,14 @@ public sealed class PrefabFiles
                     continue;
                 }
 
-                if (PrefabCopies.UpdatePrefabFile(prefabFile, assetPath, json, oldJson, serializer) is > 0 and var count && !openTabs.Contains(Path.GetFullPath(prefabFile)))
+                if (PrefabCopies.UpdatePrefabFile(prefabFile, assetPath, json, oldJson, serializer) is > 0 and var count)
                 {
-                    copies += count;
-                    scenes.Add(name);
+                    Rewrote(prefabFile);
+                    if (!openTabs.Contains(Path.GetFullPath(prefabFile)))
+                    {
+                        copies += count;
+                        scenes.Add(name);
+                    }
                 }
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
@@ -293,7 +426,13 @@ public sealed class PrefabFiles
                     if (here is not null && !PrefabCopies.IsCopyOf(here, assetPath))
                     {
                         // A link its file doesn't have yet.
-                        edits.Add(new SetEntitiesPrefabEdit([here], PrefabCopies.Normalize(assetPath)));
+                        edits.Add(new SetEntitiesPrefabEdit([here], PrefabCopies.Normalize(assetPath), version));
+                        saved = false;
+                    }
+                    else if (here is not null && !version.Equals(here.PrefabVersion))
+                    {
+                        // It's the prefab as saved now, whatever undoing the others' updates does.
+                        here.PrefabVersion = version;
                         saved = false;
                     }
                     var count = PrefabCopies.In(tab.Scene, assetPath).Count(c => c != here);
@@ -432,7 +571,7 @@ public sealed class PrefabFiles
             {
                 var prefab = _project.Serializer.LoadPrefabFromString(json);
                 if (PrefabOverrides.Find(copy, prefab, _project.Components).Count > 0)
-                    edits.Add(new UpdatePrefabCopyEdit(scene, copy, prefab));
+                    edits.Add(new UpdatePrefabCopyEdit(scene, copy, prefab, PrefabVersion.Of(json)));
             }
             catch (InvalidDataException)
             {

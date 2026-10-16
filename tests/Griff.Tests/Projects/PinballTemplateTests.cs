@@ -291,6 +291,7 @@ public sealed class PinballTemplateTests : IDisposable
         Tap(game, Key.Escape);
         Run(game, 0.6f);
         Assert.Equal("Main", game.SceneName);
+        game.SaveData.Flush();
         var next = Start(project, Project.DefaultSceneName, new SaveData(path));
         Run(next, 0.2f);
         Assert.Equal("Best: 8,000", Of<Text>(next, "Best").Value);

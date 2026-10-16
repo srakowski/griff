@@ -39,8 +39,10 @@ public sealed class EditorAgentScene(IProjectSession projectSession, ISceneDocum
     {
         if (projectSession.Project is not { } project || project.FindPrefab(name) is not { } path)
             return null;
-        var entity = new SceneSerializer(projectSession.Components).LoadPrefabFromString(File.ReadAllText(path));
+        var text = File.ReadAllText(path);
+        var entity = new SceneSerializer(projectSession.Components).LoadPrefabFromString(text);
         entity.Prefab = PrefabFiles.AssetPathOf(project, path);
+        entity.PrefabVersion = PrefabVersion.Of(text);
         return entity;
     }
 

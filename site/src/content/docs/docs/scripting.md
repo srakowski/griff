@@ -313,6 +313,8 @@ if (Score > Game.SaveData.GetInt("best"))
     Game.SaveData.Set("best", Score);
 ```
 
+`SaveData` writes each change to disk at once, off the game's thread (setting a value every frame costs the frame nothing; what changes while one write is under way goes in the next), and the game waits for the last write as it stops. A write that fails, a full disk or a file another program holds, is said once in Output (`Game.Problems`) and the game goes on; the next change tries again.
+
 `Rand` gives random numbers for gameplay: `Range`, `Chance`, `Pick`, `Sign`, `Direction`, `InsideCircle`, `Color`, and `Seed` to make a run repeatable.
 
 What a behavior can use:

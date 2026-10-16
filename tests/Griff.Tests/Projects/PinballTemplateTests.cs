@@ -569,63 +569,96 @@ public sealed class PinballTemplateTests : IDisposable
         // Shot, flipped at and knocked about for half a minute, drained, saved and served. Once the table has settled in (its
         // first second: the ball coming to rest on the plunger), a step allocates nothing while the ball's in play: only as
         // the score changes (its text, and the best's, written again) and as a ball drains, is saved, served and shot (with
-        // its callout popping up and going), and the step after. The same game is played a few times, a fresh table each, and
-        // the least is what counts: the runtime first runs methods compiled quickly, which can allocate what the fully
-        // compiled ones don't, and while other tests keep the machine busy it takes a while to compile them fully.
-        var least = (Noisy: new List<string> { "not played" }, Scored: 0, Quiet: 0, Scoring: 0L);
-        for (var attempt = 0; attempt < 4 && least.Noisy.Count > 0; attempt++)
+        // its callout popping up and going), and the step after. Steps are counted on this thread (and the workers' for it),
+        // and only those no garbage collection ran during: another thread's (other tests running alongside) can add to this
+        // thread's count what it never allocated. The game plays the same every time, so it's played again, a fresh table
+        // each, until every step has been counted, and the least a step allocated in any play is what counts: the runtime
+        // first runs methods compiled quickly, which can allocate what the fully compiled ones don't, and while other tests
+        // keep the machine busy it takes a while to compile them fully.
+        StepKind[]? kinds = null;
+        var least = new long[Frames];
+        Array.Fill(least, -1);
+        bool Settled() => kinds is not null && Enumerable.Range(0, Frames).All(i => kinds[i] switch
         {
-            if (attempt > 0)
-                Thread.Sleep(100);
-            var played = PlayForGarbage(Start(project, PinballTemplate.TableScene));
-            if (played.Noisy.Count < least.Noisy.Count)
-                least = played;
+            StepKind.Quiet => least[i] == 0,
+            StepKind.Scoring => least[i] >= 0,
+            _ => true,
+        });
+        for (var play = 0; play < 20 && !Settled(); play++)
+        {
+            if (play > 0)
+                Thread.Sleep(50);
+            var (kind, bytes) = PlayForGarbage(Start(project, PinballTemplate.TableScene));
+            kinds ??= kind;
+            Assert.Equal(kinds, kind);
+            for (var i = 0; i < Frames; i++)
+            {
+                if (bytes[i] >= 0)
+                    least[i] = least[i] < 0 ? bytes[i] : Math.Min(least[i], bytes[i]);
+            }
         }
 
-        var (noisy, scored, quiet, scoring) = least;
-        Assert.True(scored > 5 && quiet > 60 * 20, $"Only {scored} scores and {quiet} quiet steps.");
+        var quiet = Enumerable.Range(0, Frames).Where(i => kinds![i] == StepKind.Quiet).ToList();
+        var scoring = Enumerable.Range(0, Frames).Where(i => kinds![i] == StepKind.Scoring).ToList();
+        Assert.True(scoring.Count > 5 && quiet.Count > 60 * 20, $"Only {scoring.Count} scores and {quiet.Count} quiet steps.");
+        var uncounted = quiet.Count(i => least[i] < 0);
+        Assert.True(uncounted <= quiet.Count / 10, $"{uncounted} of the {quiet.Count} quiet steps always had a garbage collection run during them.");
+        var noisy = quiet.Where(i => least[i] > 0).Select(i => $"frame {i}: {least[i]} bytes").ToList();
         Assert.True(noisy.Count == 0, $"Steps with the ball in play allocated: {string.Join("; ", noisy)}");
-        Assert.True(scoring / scored < 600, $"{scored} scores allocated {scoring:N0} bytes.");
+        var scored = scoring.Where(i => least[i] >= 0).ToList();
+        Assert.True(scored.Count > 5, $"Only {scored.Count} of the {scoring.Count} scores were counted (garbage collections ran in the rest).");
+        var allocated = scored.Sum(i => least[i]);
+        Assert.True(allocated / scored.Count < 600, $"{scored.Count} scores allocated {allocated:N0} bytes.");
     }
 
-    private (List<string> Noisy, int Scored, int Quiet, long Scoring) PlayForGarbage(Game game)
+    // Half a minute of the table played, a step at a time.
+    private const int Frames = 60 * 31;
+
+    private enum StepKind
+    {
+        // The first second, a ball draining, saved, served or shot (a callout up), and the step after: not counted.
+        Other,
+        // The ball in play, nothing changing: none may allocate.
+        Quiet,
+        // Only the score changed.
+        Scoring,
+    }
+
+    // Plays the table with the same buttons each time: what each step was, and what it allocated (on this thread and the
+    // workers' for it), or -1 if a garbage collection ran during it.
+    private (StepKind[] Kinds, long[] Bytes) PlayForGarbage(Game game)
     {
         var score = Of<Counter>(game, "Score");
         var drain = DrainOf(game);
         var plunger = PlungerOf(game);
         (int, int, string?, bool, int, int) State() => (score.Value, drain.Ball, drain.Serving, drain.Saving, plunger.Launches, game.Scene.Entities.Count);
-        var (quiet, scored, scoring) = (0, 0, 0L);
-        var noisy = new List<string>();
+        var kinds = new StepKind[Frames];
+        var bytes = new long[Frames];
         var after = false;
-        for (var frame = 0; frame < 60 * 31; frame++)
+        for (var frame = 0; frame < Frames; frame++)
         {
             _input.SetKey(Key.Space, frame % 600 is >= 20 and < 80);
             _input.SetKey(Key.LeftShift, frame % 50 is >= 10 and < 25);
             _input.SetKey(Key.RightShift, frame % 70 is >= 30 and < 40);
             var was = State();
             var callouts = game.Scene.Entities.Any(e => e.GetComponent<Lifetime>() is not null);
-            var before = GC.GetAllocatedBytesForCurrentThread();
+            var (before, collections) = (Workers.AllocatedBytes(), GC.CollectionCount(0));
             Step(game);
-            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-            if (frame < 60)
-                continue;
+            bytes[frame] = GC.CollectionCount(0) == collections ? Workers.AllocatedBytes() - before : -1;
             var now = State();
-            if (now.Item1 != was.Item1 && now.Item2 == was.Item2 && now.Item3 == was.Item3 && now.Item5 == was.Item5 && now.Item6 == was.Item6)
-                (scored, scoring) = (scored + 1, scoring + allocated);
-            else if (!(now != was || after || callouts))
-            {
-                quiet++;
-                if (allocated > 0)
-                    noisy.Add($"frame {frame}: {allocated} bytes");
-            }
-
+            if (frame < 60)
+                kinds[frame] = StepKind.Other;
+            else if (now.Item1 != was.Item1 && now.Item2 == was.Item2 && now.Item3 == was.Item3 && now.Item5 == was.Item5 && now.Item6 == was.Item6)
+                kinds[frame] = StepKind.Scoring;
+            else
+                kinds[frame] = now != was || after || callouts ? StepKind.Other : StepKind.Quiet;
             after = now != was;
         }
 
         foreach (var key in new[] { Key.Space, Key.LeftShift, Key.RightShift })
             _input.SetKey(key, false);
         _input.EndFrame();
-        return (noisy, scored, quiet, scoring);
+        return (kinds, bytes);
     }
 
     // ----- Sounds and exports

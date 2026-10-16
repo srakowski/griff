@@ -73,6 +73,7 @@ public sealed class ChartPanel : ToolPanel, IDisposable
     private int _takes;
     private Thread? _padThread;
     private volatile bool _padPolling;
+    private Mixer? _output;
 
     public ChartPanel(TableStore tables, IWorkspace workspace, ISelection selection, PlayMode play)
     {
@@ -761,6 +762,14 @@ public sealed class ChartPanel : ToolPanel, IDisposable
 
     // ----- Playing
 
+    // What the song plays through, and whose clock says what's been heard: the sound card's (the editor's one mixer) unless
+    // a test gives its own, with a clock it moves itself.
+    internal Mixer Output
+    {
+        get => _output ?? AudioOutput.Mixer;
+        set => _output = value;
+    }
+
     /// <summary>True while the song plays (recording or not).</summary>
     public bool IsPlaying => _voice is not null;
 
@@ -818,7 +827,7 @@ public sealed class ChartPanel : ToolPanel, IDisposable
         };
         SetTicks();
         _playedFrom = beat - leadIn / timing.SecondsPerBeat;
-        _voice = AudioOutput.Mixer.Play(_stream, 1);
+        _voice = Output.Play(_stream, 1);
         _timer.Start();
         OnPropertyChanged(nameof(IsPlaying));
     }

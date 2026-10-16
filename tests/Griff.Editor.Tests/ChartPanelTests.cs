@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows.Threading;
+using Griff.Audio;
 using Griff.Data;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Panels;
@@ -153,33 +154,61 @@ public sealed class ChartPanelTests : IDisposable
     {
         var (_, panel, _) = Lanes(services);
         var commands = services.GetRequiredService<CommandRegistry>();
+        // The song plays through a mixer of the test's own, whose clock moves only when the test moves it: what's heard is
+        // where that clock says (the editor's goes by real time), so a busy machine can't make a tap late.
+        var seconds = 100.0;
+        panel.Output = new Mixer { Clock = () => seconds };
         panel.Playhead = 16;
+        var notes = panel.NoteCount;
 
         EditorHost.Pump(commands.Get("Rhythm.RecordChart").ExecuteAsync());
         Assert.True(panel.IsRecording);
         Assert.True(panel.IsPlaying);
         Assert.Equal(16, panel.RecordingFrom);
-        // The bar before is to get ready: heard from about beat 12. The audio clock is real time, so a loaded machine can
-        // be late reading it: anywhere in the lead-in (before the playhead) is a bar before it.
-        Assert.InRange(panel.HeardBeat, 11, 15.9);
+        // The bar before is to get ready: heard from beat 12 (two seconds of it at 120).
+        Assert.Equal(12, panel.HeardBeat, 6);
         Assert.False(panel.CanUndo);
         Assert.Throws<InvalidOperationException>(() => panel.PlayFrom(4));
 
-        // A lane pressed and let go in the lead-in is before the playhead: nothing goes in. (Heard on the real clock; the
-        // two seconds of the lead-in are the slack.)
+        // A lane pressed and let go in the lead-in (beats 14 to 14.5) is before the playhead: nothing goes in.
+        seconds += 1;
+        Assert.Equal(14, panel.HeardBeat, 6);
         panel.Press(1);
+        seconds += 0.25;
         panel.Release(1);
         EditorHost.Pump(commands.Get("Rhythm.RecordChart").ExecuteAsync());
         Assert.False(panel.IsRecording);
         Assert.False(panel.IsPlaying);
         Assert.Contains("before the playhead", panel.Message);
         Assert.Equal(16, panel.Playhead);
+        Assert.Equal(notes, panel.NoteCount);
+        Assert.False(panel.CanUndo);
 
-        // Play goes from the playhead, and again stops.
+        // Pressed from the playhead on, it goes in when the take is stopped: lane 2 held from beat 17 to 19 is a hold there.
+        Assert.Null(panel.NoteAt(17, 2));
+        EditorHost.Pump(commands.Get("Rhythm.RecordChart").ExecuteAsync());
+        Assert.Equal(12, panel.HeardBeat, 6);
+        seconds += 2.5;
+        panel.Press(2);
+        Assert.Equal(17, panel.HeardBeat, 6);
+        seconds += 1;
+        panel.Release(2);
+        seconds += 0.5;
+        EditorHost.Pump(commands.Get("Rhythm.RecordChart").ExecuteAsync());
+        Assert.False(panel.IsRecording);
+        Assert.StartsWith("Take 1: 1 note in Normal", panel.Message);
+        Assert.Equal(notes + 1, panel.NoteCount);
+        var take = panel.Rows.Single(r => r.Row == panel.NoteAt(17, 2)).Note;
+        Assert.Equal((17.0, 2, 2.0), (take.Beat, take.Lane, take.Hold));
+        Assert.Equal(16, panel.Playhead);
+        Assert.Equal("Record take 1 (1 note in Normal)", panel.UndoDescription);
+
+        // Play goes from the playhead (no lead-in), and again stops.
         EditorHost.Pump(commands.Get("Rhythm.PlayChart").ExecuteAsync());
         Assert.True(panel.IsPlaying);
-        // Real time again: from the playhead, with seconds (not milliseconds) of slack either way.
-        Assert.InRange(panel.HeardBeat, 15, 19);
+        Assert.Equal(16, panel.HeardBeat, 6);
+        seconds += 0.5;
+        Assert.Equal(17, panel.HeardBeat, 6);
         EditorHost.Pump(commands.Get("Rhythm.PlayChart").ExecuteAsync());
         Assert.False(panel.IsPlaying);
     });

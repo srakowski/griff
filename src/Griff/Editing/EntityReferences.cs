@@ -24,7 +24,7 @@ public static class EntityReferences
         /// False when the field is set aside by its <see cref="EntityNameAttribute.Unless"/> (a door's Target when it goes
         /// to another Scene), so its names aren't links and aren't flagged.
         /// </summary>
-        public bool IsUsed => Kind.Unless is not { } unless || !IsSet(Component.GetType().GetProperty(unless)?.GetValue(Component));
+        public bool IsUsed => Kind.Unless is not { } unless || !IsSet(ComponentModel.Of(Component).Property(unless)?.GetValue(Component));
 
         private static bool IsSet(object? value) => value switch
         {

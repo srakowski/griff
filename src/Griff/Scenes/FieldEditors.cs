@@ -391,10 +391,9 @@ public sealed class OutputFormatAttribute(string output) : FieldEditorAttribute
     /// </summary>
     public string? Preview(Component component, string? template)
     {
-        if (component.Entity is not { } entity || component.GetType().GetProperty(Output)?.GetValue(component) is not string { Length: > 0 } output)
+        if (component.Entity is not { } entity || ComponentModel.Of(component).Property(Output)?.GetValue(component) is not string { Length: > 0 } output)
             return null;
-        var track = component.GetType().GetProperties()
-            .FirstOrDefault(p => p.PropertyType == typeof(string) && p.GetCustomAttribute<EntityNameAttribute>() is not null)?.GetValue(component) as string;
+        var track = ComponentModel.Of(component).Saved.FirstOrDefault(p => p.EntityName is not null)?.GetValue(component) as string;
         var reader = new OutputReader();
         if (!reader.Find(entity, track, output) || reader.Output is not { } found)
             return null;

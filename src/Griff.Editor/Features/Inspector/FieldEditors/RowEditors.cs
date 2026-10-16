@@ -478,8 +478,8 @@ public sealed class TileCountsEditor : FieldEditor<TileCountsAttribute>
     private List<TileChoice> BuildTiles()
     {
         var picked = Pairs.Select(p => p.Tile).ToHashSet();
-        var own = Component.GetType().GetProperties()
-            .Where(p => p.PropertyType == typeof(string) && System.Reflection.CustomAttributeExtensions.GetCustomAttribute<TileNumbersAttribute>(p) is not null)
+        var own = ComponentModel.Of(Component).Saved
+            .Where(p => p.Type == typeof(string) && p.Editor is TileNumbersAttribute)
             .SelectMany(p => TileNumbersAttribute.Read(p.GetValue(Component) as string)).Distinct().ToList();
         if (own.Count == 0 && TilePictures.MapOf(Component) is { } map && map.Tilesets() is [var first, ..])
             own = [.. Enumerable.Range(first.First, Math.Min(first.Count, 64))];
@@ -534,7 +534,7 @@ public sealed class TableSetsEditor : FieldEditor<TableSetsAttribute>
 
     /// <summary>The table's columns (and <see cref="SameName"/> first), or just that while the table isn't known.</summary>
     public IReadOnlyList<string> Columns =>
-        [SameName, .. Host.Names?.ColumnsOf(Component.GetType().GetProperty(Attribute.Table)?.GetValue(Component) as string) ?? []];
+        [SameName, .. Host.Names?.ColumnsOf(ComponentModel.Of(Component).Property(Attribute.Table)?.GetValue(Component) as string) ?? []];
 
     /// <summary>What it does with no lines: every property named like a column takes it.</summary>
     public string Note => Rows.Count == 0 ? "None: every property named like one of the table's columns takes it." : "";

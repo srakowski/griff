@@ -54,7 +54,7 @@ A **Card Effect** on a card says what it does, with no code. Give a card one for
 - **Damage** takes hit points from its target's **Health**, **Heal** gives them back (never past its Max). Either can be dice instead (**Damage Roll** `1d6+1`), rolled with the game's random numbers each time.
 - **Draw** has the player who played it draw that many cards; **Discard** has its target's side discard that many from their hand, picked at random.
 - **Gain Mana** gives the player who played it more mana this turn (a coin).
-- **Buff** adds to a number of its target's for good: **Buff Stat** names it, `Value` (a card's), `Armor`, or `Health.Max` for one component's. Less than 0 weakens. The Inspector lists the numbers of the scene's cards and what has health to pick from.
+- **Buff** adds to a number of its target's for good: **Buff Stat** names it, `Value` (a card's), `Armor`, or `Health.Max` for one component's. It raises only a number the component saves (one its Inspector shows), as a table's row sets, never one it keeps to itself. Less than 0 weakens. The Inspector lists the numbers of the scene's cards and what has health to pick from.
 - **Do** does any action, as a [Trigger](/docs/story/#triggers) does (**With** is its value): on its target, or on the entities **Do On** names. A card can open a door in the level, start a spawner, end a turn or run a script's own action, so a card game can drive the rest of a game (see [Mixing genres](/docs/mashups/)).
 - **Sound** plays and **Effect** (a prefab) is spawned on each target as it happens.
 

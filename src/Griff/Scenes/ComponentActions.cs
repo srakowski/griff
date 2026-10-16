@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
 namespace Griff.Scenes;
 
@@ -235,10 +234,6 @@ public sealed class ComponentAction
 /// </summary>
 public static class ComponentActions
 {
-    private static readonly ConditionalWeakTable<Type, Found> Cache = new();
-
-    private sealed record Found(IReadOnlyList<ComponentAction> Actions, IReadOnlyList<PoweredProperty> Powered);
-
     /// <summary>A property a switch turns on and off, and how to set it.</summary>
     internal sealed record PoweredProperty(PropertyInfo Property, bool Inverted, Action<Component, bool> Set);
 
@@ -246,10 +241,10 @@ public static class ComponentActions
     /// The actions of <paramref name="type"/> (its base types' too), in the order they're declared, base types first.
     /// </summary>
     /// <exception cref="NotSupportedException">One of its actions can't be called (see <see cref="ActionAttribute"/>), or two have the same name.</exception>
-    public static IReadOnlyList<ComponentAction> Of(Type type) => Get(type).Actions;
+    public static IReadOnlyList<ComponentAction> Of(Type type) => ComponentModel.Of(type).Actions;
 
     /// <summary>The properties of <paramref name="type"/> a switch turns on and off (see <see cref="PoweredAttribute"/>).</summary>
-    internal static IReadOnlyList<PoweredProperty> PoweredOf(Type type) => Get(type).Powered;
+    internal static IReadOnlyList<PoweredProperty> PoweredOf(Type type) => ComponentModel.Of(type).Powered;
 
     /// <summary>The action of <paramref name="component"/> called <paramref name="name"/> (see <see cref="ComponentAction.IsCalled"/>), or null.</summary>
     public static ComponentAction? Find(Component component, ReadOnlySpan<char> name)
@@ -271,9 +266,8 @@ public static class ComponentActions
     public static IReadOnlyList<ComponentAction> On(IEnumerable<Entity> entities) =>
         [.. entities.SelectMany(e => e.Components).SelectMany(c => Of(c.GetType())).Distinct()];
 
-    private static Found Get(Type type) => Cache.GetValue(type, Discover);
-
-    private static Found Discover(Type type)
+    // Found once per type, by its ComponentModel.
+    internal static (IReadOnlyList<ComponentAction> Actions, IReadOnlyList<PoweredProperty> Powered) Discover(Type type)
     {
         var actions = new List<ComponentAction>();
         var powered = new List<PoweredProperty>();
@@ -317,7 +311,7 @@ public static class ComponentActions
         if (ComponentFocus.Has(type) && !actions.Any(a => SameName(a.Name, FocusName)))
             actions.Add(new ComponentAction(type, FocusMethod, FocusName, null, null, null, takesGame: true, (c, g, _, _) => ComponentFocus.Focus(c, g), []));
 
-        return new Found(actions, powered);
+        return (actions, powered);
     }
 
     private const string FocusName = "Focus";

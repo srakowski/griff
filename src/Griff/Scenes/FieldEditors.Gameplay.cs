@@ -69,7 +69,7 @@ public sealed partial class FormatAttribute(params string[] holes) : FieldEditor
     {
         if (Preview is null)
             return null;
-        var method = component.GetType().GetMethod(Preview, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, [typeof(string)]);
+        var method = ComponentModel.Of(component).Method(Preview, typeof(string)) is { IsStatic: false } own ? own : null;
         try
         {
             return method?.Invoke(component, [format]) as string;
@@ -119,7 +119,7 @@ public sealed class NumberFormatAttribute : FieldEditorAttribute
     /// <summary>The number to show <paramref name="component"/>'s format with: its <see cref="Sample"/>, or 1234.5678 when that's 0 or there's none.</summary>
     public double SampleOf(Component component)
     {
-        var value = Sample is null ? null : component.GetType().GetProperty(Sample)?.GetValue(component);
+        var value = Sample is null ? null : ComponentModel.Of(component).Property(Sample)?.GetValue(component);
         var number = value is IConvertible convertible ? convertible.ToDouble(CultureInfo.InvariantCulture) : 0;
         return number == 0 ? 1234.5678 : number;
     }
@@ -213,7 +213,7 @@ public sealed class LetterCountsAttribute(string letters) : FieldEditorAttribute
     /// <summary>The cells of <paramref name="letter"/>'s picture on <paramref name="component"/>'s type, or none.</summary>
     public IReadOnlyList<(int X, int Y)> CellsOf(Component component, char letter)
     {
-        var method = Cells is null ? null : component.GetType().GetMethod(Cells, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static, [typeof(char)]);
+        var method = Cells is null ? null : ComponentModel.Of(component).Method(Cells, typeof(char)) is { IsStatic: true } cells ? cells : null;
         return method?.Invoke(null, [letter]) as IReadOnlyList<(int X, int Y)> ?? [];
     }
 }
@@ -359,10 +359,10 @@ public sealed class ActionValueAttribute(string action) : FieldEditorAttribute
     /// </summary>
     public ComponentAction? Find(Component component)
     {
-        var property = component.GetType().GetProperty(Action);
+        var property = ComponentModel.Of(component).Property(Action);
         if (component.Entity is not { } owner || property?.GetValue(component) is not string { Length: > 0 } name || string.IsNullOrWhiteSpace(name))
             return null;
-        var on = property.GetCustomAttribute<ActionNameAttribute>()?.On is { Length: > 0 } onName ? component.GetType().GetProperty(onName) : null;
+        var on = property.GetCustomAttribute<ActionNameAttribute>()?.On is { Length: > 0 } onName ? ComponentModel.Of(component).Property(onName) : null;
         IReadOnlyList<Entity> targets = on?.GetCustomAttribute<EntityNameAttribute>() is { } entityName && on.GetValue(component) is string { } list && !string.IsNullOrWhiteSpace(list)
             ? [.. EntityReferences.Names(list, entityName).SelectMany(n => EntityReferences.Named(owner, entityName, n)).Distinct()]
             : [owner];

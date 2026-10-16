@@ -219,7 +219,7 @@ public sealed class EditorArt
     /// </summary>
     public void PaintFor(Component component, string property = "Image")
     {
-        var current = component.GetType().GetProperty(property)?.GetValue(component) as string;
+        var current = ComponentModel.Of(component).Property(property)?.GetValue(component) as string;
         if (Resolve(current) is null)
             current = null;
         OpenPainter(current, LayoutFor(component), (image, used) =>

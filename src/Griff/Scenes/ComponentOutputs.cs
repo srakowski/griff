@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
 namespace Griff.Scenes;
 
@@ -172,11 +171,9 @@ public sealed class ComponentOutput
 /// </summary>
 public static class ComponentOutputs
 {
-    private static readonly ConditionalWeakTable<Type, IReadOnlyList<ComponentOutput>> Cache = new();
-
     /// <summary>The outputs of <paramref name="type"/> (its base types' too), in the order they're declared, base types first.</summary>
     /// <exception cref="NotSupportedException">One of its outputs can't be read (see <see cref="OutputAttribute"/>), or two have the same name.</exception>
-    public static IReadOnlyList<ComponentOutput> Of(Type type) => Cache.GetValue(type, Discover);
+    public static IReadOnlyList<ComponentOutput> Of(Type type) => ComponentModel.Of(type).Outputs;
 
     /// <summary>
     /// The output of <paramref name="component"/> that <paramref name="reference"/> names (see <see cref="ComponentOutput.IsCalled"/>;
@@ -243,7 +240,8 @@ public static class ComponentOutputs
         return colon < 0 ? "" : reference.AsSpan(colon + 1).Trim().ToString();
     }
 
-    private static IReadOnlyList<ComponentOutput> Discover(Type type)
+    // Found once per type, by its ComponentModel.
+    internal static IReadOnlyList<ComponentOutput> Discover(Type type)
     {
         var outputs = new List<ComponentOutput>();
         var chain = new List<Type>();

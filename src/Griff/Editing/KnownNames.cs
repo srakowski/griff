@@ -339,7 +339,7 @@ public sealed partial class KnownNames : IProjectNames
     {
         if (component is null || kind.Table is not { } property)
             return null;
-        return component.GetType().GetProperty(property)?.GetValue(component) is string table && table.Trim().Length > 0 ? table.Trim() : null;
+        return ComponentModel.Of(component).Property(property)?.GetValue(component) is string table && table.Trim().Length > 0 ? table.Trim() : null;
     }
 
     private static bool IsPattern(string message) => message.Contains('{');

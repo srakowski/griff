@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
 namespace Griff.Scenes;
 
@@ -41,8 +40,6 @@ public sealed class FocusFromAttribute(Type type) : Attribute
 /// </summary>
 public static class ComponentFocus
 {
-    private static readonly ConditionalWeakTable<Type, FocusProperty[]> Cache = new();
-
     /// <summary>A property that says whether a component takes input, and how to read and set it.</summary>
     internal sealed record FocusProperty(PropertyInfo Property, Func<Component, bool> Get, Action<Component, bool> Set);
 
@@ -85,9 +82,10 @@ public static class ComponentFocus
             (game ?? throw new InvalidOperationException("Focus can only be done while the game runs.")).Focus(entity);
     }
 
-    internal static FocusProperty[] Of(Type type) => Cache.GetValue(type, Discover);
+    internal static FocusProperty[] Of(Type type) => ComponentModel.Of(type).FocusProperties;
 
-    private static FocusProperty[] Discover(Type type)
+    // Found once per type, by its ComponentModel.
+    internal static FocusProperty[] Discover(Type type)
     {
         var found = new List<FocusProperty>();
         for (var t = type; t is not null && t != typeof(object); t = t.BaseType)

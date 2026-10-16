@@ -82,10 +82,8 @@ public sealed class TableValues : Component
     /// </summary>
     public IReadOnlyList<string> Settable() =>
         Entity is not { } entity ? [] :
-        [.. entity.Components.Where(c => c != this && c is not MissingComponent and not Transform).SelectMany(c => c.GetType()
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanWrite && p.SetMethod!.IsPublic && p.GetIndexParameters().Length == 0 && p.GetCustomAttribute<DoNotSerializeAttribute>() is null && CanTake(p.PropertyType))
-            .Select(p => $"{c.GetType().Name}.{p.Name}")).Distinct()];
+        [.. entity.Components.Where(c => c != this && c is not MissingComponent and not Transform)
+            .SelectMany(c => ComponentModel.Of(c).Settable.Select(p => $"{c.GetType().Name}.{p.Name}")).Distinct()];
 
     /// <summary>A line of <see cref="Sets"/> written: "Health.Max = Health", or just "Speed" when the column's named like the property.</summary>
     public static string WriteLine(string target, string? column)
@@ -184,9 +182,7 @@ public sealed class TableValues : Component
         {
             if (component is not null && !Matches(candidate, component))
                 continue;
-            var match = candidate.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .FirstOrDefault(p => p.CanWrite && p.SetMethod!.IsPublic && p.GetIndexParameters().Length == 0
-                    && p.GetCustomAttribute<DoNotSerializeAttribute>() is null && Key(p.Name) == key && CanTake(p.PropertyType));
+            var match = ComponentModel.Of(candidate).Settable.FirstOrDefault(p => Key(p.Name) == key)?.Info;
             if (match is not null)
                 found.Add((candidate, match));
         }
@@ -197,9 +193,6 @@ public sealed class TableValues : Component
     private static bool Matches(Component component, string name) => Key(component.GetType().Name) == Key(name);
 
     private static string Key(string name) => new([.. name.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant)]);
-
-    private static bool CanTake(Type type) =>
-        type == typeof(float) || type == typeof(double) || type == typeof(int) || type == typeof(bool) || type == typeof(string) || type.IsEnum || type == typeof(Color);
 
     /// <summary>
     /// Sets the properties from the row, unless they were set from it as it is already (<see cref="Applied"/>, with
@@ -302,12 +295,8 @@ public sealed class TableValues : Component
     }
 
     // The text property marked [RollsFor] the target's property, if its component has one.
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(Type, string), PropertyInfo?> s_rolls = new();
-
     private static PropertyInfo? RollFor(Target target) =>
-        target.Property.PropertyType == typeof(string) ? null : s_rolls.GetOrAdd((target.Component.GetType(), target.Property.Name), key =>
-            key.Item1.GetProperties(BindingFlags.Public | BindingFlags.Instance).FirstOrDefault(p =>
-                p.PropertyType == typeof(string) && p.CanWrite && p.GetCustomAttribute<RollsForAttribute>()?.Property == key.Item2));
+        target.Property.PropertyType == typeof(string) ? null : ComponentModel.Of(target.Component).RollsFor(target.Property.Name);
 
     // FNV-1a, so the same values give the same text in every game and on every machine.
     private static string Fingerprint(string session, string table, string row, IEnumerable<(string Target, string Value)> values)

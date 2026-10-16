@@ -49,6 +49,10 @@ public static class ComponentSwap
             replaced[component] = replacement;
         }
 
+        // The scenes' lists of the replaced kinds go with them.
+        var gone = replaced.Keys.Select(c => c.GetType()).Distinct().ToList();
+        foreach (var scene in snapshot.Items.Select(i => i.Entity.Scene).OfType<Scene>().Distinct())
+            scene.Forget(gone);
         return replaced;
     }
 }

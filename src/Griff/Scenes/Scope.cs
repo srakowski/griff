@@ -1,6 +1,5 @@
 using System.Numerics;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
 namespace Griff.Scenes;
 
@@ -19,10 +18,6 @@ public sealed class AreaAttribute : Attribute;
 /// </summary>
 public static class ComponentAreas
 {
-    private static readonly ConditionalWeakTable<Type, Holder> Cache = new();
-
-    private sealed record Holder(Func<Component, Box>? Read);
-
     /// <summary>True if components of <paramref name="type"/> cover an area of the world (see <see cref="AreaAttribute"/>).</summary>
     public static bool Has(Type type) => Get(type) is not null;
 
@@ -42,9 +37,10 @@ public static class ComponentAreas
         return null;
     }
 
-    private static Func<Component, Box>? Get(Type type) => Cache.GetValue(type, Discover).Read;
+    private static Func<Component, Box>? Get(Type type) => ComponentModel.Of(type).Area;
 
-    private static Holder Discover(Type type)
+    // Found once per type, by its ComponentModel.
+    internal static Func<Component, Box>? Discover(Type type)
     {
         for (var t = type; t is not null && t != typeof(object); t = t.BaseType)
         {
@@ -55,11 +51,11 @@ public static class ComponentAreas
                 if (property.PropertyType != typeof(Box) || property.GetMethod is null || property.GetIndexParameters().Length > 0)
                     throw new NotSupportedException($"{type.Name}.{property.Name} is marked [Area], so it should be a Box property that can be read.");
                 var bind = typeof(ComponentAreas).GetMethod(nameof(Getter), BindingFlags.NonPublic | BindingFlags.Static)!.MakeGenericMethod(property.DeclaringType!);
-                return new Holder((Func<Component, Box>)bind.Invoke(null, [property.GetMethod])!);
+                return (Func<Component, Box>)bind.Invoke(null, [property.GetMethod])!;
             }
         }
 
-        return new Holder(null);
+        return null;
     }
 
     private static Func<Component, Box> Getter<T>(MethodInfo getter) where T : class

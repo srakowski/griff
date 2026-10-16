@@ -965,9 +965,8 @@ internal sealed class KeptFields
     /// </summary>
     public static KeptFields OfComponent(Type type) => s_components.GetValue(type, static t =>
     {
-        var saved = t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.GetMethod?.IsPublic == true && p.SetMethod?.IsPublic == true && p.GetIndexParameters().Length == 0 &&
-                        !p.IsDefined(typeof(DoNotSerializeAttribute)))
+        // What's saved by the one rule its ComponentModel keeps (found without checking each can be saved, as a test's needn't).
+        var saved = ComponentModel.Writable(t)
             .Select(p => p.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var fields = new List<FieldInfo>();

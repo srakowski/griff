@@ -119,26 +119,17 @@ internal static class NetSchema
             if (component is INetState stated)
                 stated.Network(state = new NetState());
 
-            // Its saved properties, but those it keeps to itself.
-            foreach (var property in registry.Get(type).Properties)
+            // What its model says it sends: its saved properties but those it keeps to itself, then what it keeps while playing
+            // that others need to see.
+            foreach (var sent in ComponentModel.Of(type).Sent)
             {
-                var info = property.Info;
-                if ((state?.Skipped.Contains(property.Name) ?? false) || info.IsDefined(typeof(NotSentAttribute), true))
+                var info = sent.Property;
+                if (state?.Skipped.Contains(info.Name) ?? false)
                     continue;
-                // Who has the player's input (see FocusAttribute) is the host's to say, even on a player's own character.
-                var owned = ownerMoved && (movement || info.GetCustomAttribute<SentAttribute>(true) is { ByMover: true }) &&
-                            !info.IsDefined(typeof(FocusAttribute), true);
-                slots.Add(new NetSlot(SlotKind.Property, component, info, property.Type, owned));
-            }
-
-            // What it keeps while playing that others need to see.
-            foreach (var (info, byMover) in NetState.SentOn(type))
-            {
-                if (registry.Get(type).Properties.Any(p => p.Name == info.Name) || (state?.Skipped.Contains(info.Name) ?? false))
-                    continue;
-                if (!NetCodec.CanSend(info.PropertyType))
+                if (!sent.Saved && !NetCodec.CanSend(info.PropertyType))
                     throw new NotSupportedException($"{type.Name}.{info.Name} is [Sent], but a {info.PropertyType.Name} can't be sent.");
-                slots.Add(new NetSlot(SlotKind.Property, component, info, info.PropertyType, ownerMoved && (movement || byMover)));
+                // Who has the player's input (see FocusAttribute) is the host's to say, even on a player's own character.
+                slots.Add(new NetSlot(SlotKind.Property, component, info, info.PropertyType, ownerMoved && (movement || sent.ByMover) && !sent.Focus));
             }
 
             foreach (var (valueType, get, set) in state?.Values ?? [])

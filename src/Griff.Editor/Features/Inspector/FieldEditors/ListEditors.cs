@@ -215,7 +215,7 @@ public sealed class WayChoice(string name, Vector2 way, DirectionEditor owner) :
 public sealed class OutputFormatEditor(PropertyField field, OutputFormatAttribute attribute) : FieldEditor<OutputFormatAttribute>(field, attribute)
 {
     /// <summary>True while the component names an output to show, so the text is how it reads.</summary>
-    public bool ShowsOutput => Component.GetType().GetProperty(Attribute.Output)?.GetValue(Component) is string { Length: > 0 } output && output.Trim().Length > 0;
+    public bool ShowsOutput => ComponentModel.Of(Component).Property(Attribute.Output)?.GetValue(Component) is string { Length: > 0 } output && output.Trim().Length > 0;
 
     /// <summary>"Reads now: Gold: 12", with what the output gives now; or why it can't be read yet.</summary>
     public string Preview

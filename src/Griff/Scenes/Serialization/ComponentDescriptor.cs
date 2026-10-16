@@ -12,25 +12,25 @@ public sealed class ComponentDescriptor
     internal ComponentDescriptor(Type type)
     {
         Type = type;
-        Name = type.GetCustomAttribute<ComponentNameAttribute>()?.Name ?? type.FullName!;
+        Model = ComponentModel.Of(type);
+        Name = Model.Name;
         DisplayName = type.Name;
-        Properties = DiscoverProperties(type);
-        Category = type.GetCustomAttribute<CategoryAttribute>()?.Name;
-        Requires = type.GetCustomAttributes<RequiresAttribute>().Select(a => new ComponentLink(a.Type, a.Note) { Unless = a.Unless }).ToList();
-        _worksWith = type.GetCustomAttributes<WorksWithAttribute>().Select(a => new ComponentLink(a.Type, a.Note)).ToList();
-        FormerNames = type.GetCustomAttributes<FormerNameAttribute>(inherit: false)
-            .SelectMany(a => a.Name.Contains('.') || type.Namespace is null ? [a.Name] : new[] { a.Name, $"{type.Namespace}.{a.Name}" })
-            .Where(n => n != Name)
-            .Distinct()
-            .ToList();
-        Version = type.GetCustomAttribute<ComponentVersionAttribute>()?.Version ?? 1;
-        _upgrades = DiscoverUpgrades(type, Version);
-        Actions = ComponentActions.Of(type);
-        Outputs = ComponentOutputs.Of(type);
+        Properties = Model.Saved;
+        Category = Model.Category;
+        Requires = Model.Requires;
+        _worksWith = [.. Model.WorksWith];
+        FormerNames = Model.FormerNames;
+        Version = Model.Version;
+        _upgrades = Model.Upgrades;
+        Actions = Model.Actions;
+        Outputs = Model.Outputs;
     }
 
     // The step up from version n is at n - 1.
-    private readonly List<Action<SavedData>> _upgrades;
+    private readonly IReadOnlyList<Action<SavedData>> _upgrades;
+
+    /// <summary>What the type exposes, which this is read from: the one model every part of Griff asks about it.</summary>
+    public ComponentModel Model { get; }
 
     public Type Type { get; }
 
@@ -97,7 +97,7 @@ public sealed class ComponentDescriptor
     }
 
     // One static void (SavedData) step from each version below the current one, no more and no fewer.
-    private static List<Action<SavedData>> DiscoverUpgrades(Type type, int version)
+    internal static List<Action<SavedData>> DiscoverUpgrades(Type type, int version)
     {
         if (version < 1)
             throw new NotSupportedException($"{type.Name}'s [ComponentVersion] is {version}; versions start at 1.");
@@ -126,13 +126,10 @@ public sealed class ComponentDescriptor
         return steps.Select(s => s!).ToList();
     }
 
-    private static List<PropertyDescriptor> DiscoverProperties(Type type)
+    // What's saved (see ComponentModel.Saved), checked: found once per type, by the model.
+    internal static List<PropertyDescriptor> DiscoverProperties(Type type)
     {
-        var properties = type
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.GetMethod?.IsPublic == true && p.SetMethod?.IsPublic == true)
-            .Where(p => p.GetIndexParameters().Length == 0)
-            .Where(p => p.GetCustomAttribute<DoNotSerializeAttribute>() is null)
+        var properties = ComponentModel.Writable(type)
             .OrderBy(p => InheritanceDepth(p.DeclaringType!))
             .ThenBy(p => p.MetadataToken)
             .ToList();
@@ -211,7 +208,7 @@ public sealed record ComponentLink(Type Type, string? Note)
     /// component that needs it) doesn't need it as it's set up now (see <see cref="Unless"/>).
     /// </summary>
     public bool IsMetBy(Entity entity, Component? of = null) =>
-        (of is not null && Unless is { } unless && of.GetType().GetProperty(unless)?.GetValue(of) is true) ||
+        (of is not null && Unless is { } unless && ComponentModel.Of(of).Property(unless)?.GetValue(of) is true) ||
         entity.Components.Any(c => Type.IsInstanceOfType(c));
 }
 

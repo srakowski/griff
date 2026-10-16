@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Numerics;
-using System.Reflection;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -133,8 +132,8 @@ internal sealed partial class CardsSystem
     }
 
     // Adds `by` to a number property of the target's components called `stat` ("Value", or "Health.Max" for one
-    // component's). True if it had one.
-    private static bool Raise(Entity target, string stat, float by)
+    // component's), of those its model says cards may set (see ComponentModel.Settable). True if it had one.
+    internal static bool Raise(Entity target, string stat, float by)
     {
         var dot = stat.LastIndexOf('.');
         var (type, name) = dot < 0 ? (null, stat) : (stat[..dot].Trim(), stat[(dot + 1)..].Trim());
@@ -143,12 +142,11 @@ internal sealed partial class CardsSystem
         {
             if (type is not null && !string.Equals(component.GetType().Name, type, StringComparison.OrdinalIgnoreCase))
                 continue;
-            if (component.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) is not { CanWrite: true, CanRead: true } property ||
-                property.SetMethod?.IsPublic != true)
+            if (ComponentModel.Of(component).Settable.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)) is not { } property)
                 continue;
-            if (property.PropertyType == typeof(float))
+            if (property.Type == typeof(float))
                 property.SetValue(component, (float)property.GetValue(component)! + by);
-            else if (property.PropertyType == typeof(int))
+            else if (property.Type == typeof(int))
                 property.SetValue(component, (int)property.GetValue(component)! + (int)MathF.Round(by));
             else
                 continue;

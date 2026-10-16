@@ -1424,7 +1424,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
             .FirstOrDefault(p => p.Name.Equals(fieldName.Replace(" ", ""), StringComparison.OrdinalIgnoreCase));
         // What a component says about itself as it runs and doesn't save (a player's Is On Rope) reads too.
         var value = property is not null ? property.GetValue(component!)
-            : component?.GetType().GetProperty(fieldName.Replace(" ", ""), System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase)?.GetValue(component);
+            : (component is null ? null : Griff.Scenes.ComponentModel.Of(component).Property(fieldName.Replace(" ", ""), StringComparison.OrdinalIgnoreCase)?.GetValue(component));
         if (axis is not null)
         {
             value = (value, axis.ToUpperInvariant()) switch

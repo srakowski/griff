@@ -711,15 +711,7 @@ public sealed partial class SceneViewModel(IProjectSession projectSession, IScen
         /// <see cref="ResizableAttribute"/> (a button's clickable area), or null for none.
         /// </summary>
         public static (System.Reflection.PropertyInfo Property, ResizableAttribute Area)? AreaOf(Component component) =>
-            component is Sprite or Collider ? null : Areas.GetOrAdd(component.GetType(), type => type
-                .GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-                .Where(p => p.PropertyType == typeof(Vector2) && p.GetIndexParameters().Length == 0)
-                .Select(p => (p, System.Reflection.CustomAttributeExtensions.GetCustomAttribute<ResizableAttribute>(p)))
-                .Where(p => p.Item2 is not null)
-                .Select(p => ((System.Reflection.PropertyInfo, ResizableAttribute)?)(p.p, p.Item2!))
-                .FirstOrDefault());
-
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, (System.Reflection.PropertyInfo Property, ResizableAttribute Area)?> Areas = new();
+            component is Sprite or Collider ? null : ComponentModel.Of(component).Resizable;
 
         /// <summary>
         /// True for a shape that grows around its middle as an edge is dragged (a sprite, an area centered on its entity),
@@ -729,7 +721,7 @@ public sealed partial class SceneViewModel(IProjectSession projectSession, IScen
 
         // Where an area's middle is from its entity: the point its Center property names, or the entity itself.
         private static Vector2 MiddleOf(Component shape, ResizableAttribute area) =>
-            area.Center is { } name && shape.GetType().GetProperty(name)?.GetValue(shape) is Vector2 center ? center : Vector2.Zero;
+            area.Center is { } name && ComponentModel.Of(shape).SavedProperty(name)?.GetValue(shape) is Vector2 center ? center : Vector2.Zero;
 
         /// <summary>
         /// Where its handles are, from -1 to 1 along its own axes: corners and edge middles for a rectangle, the four

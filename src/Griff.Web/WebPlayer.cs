@@ -391,7 +391,7 @@ public static partial class WebPlayer
         var name = field.Replace(" ", "", StringComparison.Ordinal);
         foreach (var component in entity.Components)
         {
-            if (component.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) is { CanRead: true } property)
+            if (ComponentModel.Of(component).Property(name, StringComparison.OrdinalIgnoreCase) is { } property)
                 return Convert.ToString(property.GetValue(component), CultureInfo.InvariantCulture) ?? "";
         }
 

@@ -1,6 +1,3 @@
-using System.Collections.Concurrent;
-using System.Reflection;
-
 namespace Griff.Scenes;
 
 // How a component says what it sends in a network game. Without any of these, the host sends every saved property of
@@ -14,10 +11,8 @@ namespace Griff.Scenes;
 [AttributeUsage(AttributeTargets.Class)]
 public sealed class NetLocalAttribute : Attribute
 {
-    private static readonly ConcurrentDictionary<Type, bool> Marked = new();
-
     /// <summary>True if <paramref name="component"/>'s type is marked.</summary>
-    public static bool IsOn(Component component) => Marked.GetOrAdd(component.GetType(), t => t.IsDefined(typeof(NetLocalAttribute), true));
+    public static bool IsOn(Component component) => ComponentModel.Of(component).NetLocal;
 
     /// <summary>True if one of <paramref name="entity"/>'s components is marked.</summary>
     public static bool IsOn(Entity entity)
@@ -40,10 +35,8 @@ public sealed class NetLocalAttribute : Attribute
 [AttributeUsage(AttributeTargets.Class)]
 public sealed class PlayerMovementAttribute : Attribute
 {
-    private static readonly ConcurrentDictionary<Type, bool> Marked = new();
-
     /// <summary>True if <paramref name="component"/>'s type is marked.</summary>
-    public static bool IsOn(Component component) => Marked.GetOrAdd(component.GetType(), t => t.IsDefined(typeof(PlayerMovementAttribute), true));
+    public static bool IsOn(Component component) => ComponentModel.Of(component).PlayerMovement;
 
     /// <summary>True if one of <paramref name="entity"/>'s components is marked.</summary>
     public static bool IsOn(Entity entity)
@@ -130,16 +123,4 @@ public sealed class NetState
 
     /// <summary>Doesn't send the saved property called <paramref name="property"/>.</summary>
     public void Skip(string property) => Skipped.Add(property);
-
-    // The properties of a type marked [Sent], public or not, with whether the mover decides them.
-    private static readonly ConcurrentDictionary<Type, (PropertyInfo Property, bool ByMover)[]> SentProperties = new();
-
-    internal static (PropertyInfo Property, bool ByMover)[] SentOn(Type type) => SentProperties.GetOrAdd(type, t =>
-        t.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            .Where(p => p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0)
-            .Select(p => (Property: p, Sent: p.GetCustomAttribute<SentAttribute>()))
-            .Where(x => x.Sent is not null)
-            .OrderBy(x => x.Property.MetadataToken)
-            .Select(x => (x.Property, x.Sent!.ByMover))
-            .ToArray());
 }

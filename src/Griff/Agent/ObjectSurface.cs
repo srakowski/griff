@@ -50,7 +50,8 @@ public static partial class ObjectSurface
                 continue;
 
             var shown = TryGet(property, target, out var value) ? Shown(value) : "(can't be read now)";
-            if (CanSet(property) && (IsLeaf(property.PropertyType) || Nullable.GetUnderlyingType(property.PropertyType) is not null))
+            if (CanSet(property) && (target is not Component component || ComponentModel.Of(component).SavedProperty(property.Name) is not null) &&
+                (IsLeaf(property.PropertyType) || Nullable.GetUnderlyingType(property.PropertyType) is not null))
                 values[property.Name] = new JsonObject { ["value"] = shown, ["settable"] = AgentValues.Describe(property.PropertyType) };
             else
                 values[property.Name] = shown;
@@ -98,6 +99,10 @@ public static partial class ObjectSurface
             throw new AgentException("Set a property, not a list item.");
         var property = FindProperty(owner.GetType(), member)
             ?? throw new AgentException($"{owner.GetType().Name} has no property \"{member}\". {Listing(owner)}");
+        // A component's are set as its model says agents set them: what's saved, as the scene tools set it.
+        if (owner is Component component && ComponentModel.Of(component).SavedProperty(property.Name) is null)
+            throw new AgentException($"{owner.GetType().Name}.{property.Name} isn't saved, so it can't be set; it can be: " +
+                $"{string.Join(", ", ComponentModel.Of(component).Saved.Select(p => p.Name).DefaultIfEmpty("nothing"))}.");
         if (!CanSet(property))
             throw new AgentException($"{owner.GetType().Name}.{property.Name} can't be changed.");
 
@@ -376,7 +381,9 @@ public static partial class ObjectSurface
         throw new AgentException("The arguments don't fit. " + string.Join(" ", errors));
     }
 
+    // A component's are what its model says agents read: what's saved and what it says while the game runs.
     private static IEnumerable<PropertyInfo> Properties(Type type) =>
+        typeof(Component).IsAssignableFrom(type) ? [.. ComponentModel.Of(type).Saved.Select(p => p.Info), .. ComponentModel.Of(type).Live] :
         type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(p => p.GetIndexParameters().Length == 0 && p.GetMethod?.IsPublic == true && IsOwn(p.DeclaringType))
             .GroupBy(p => p.Name)

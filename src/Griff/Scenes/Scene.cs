@@ -14,7 +14,9 @@ public sealed class Scene
 
     // Components by type, and for each type of component the lists it belongs in (its own type's, its base types').
     private readonly Dictionary<Type, ComponentIndex> _indexes = [];
-    private readonly Dictionary<Type, ComponentIndex[]> _indexesFor = [];
+    // The lists each kind of component joins, worked out once a kind: held weakly, so a script compiled again leaves its old
+    // types to unload.
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type, ComponentIndex[]> _indexesFor = [];
 
     // Every entity, depth first, as last asked for; null once the hierarchy has changed.
     private Entity[]? _entities;
@@ -268,15 +270,15 @@ public sealed class Scene
             _indexes.Add(typeof(T), index);
             // The component types it lists learn of it; the rest are as they were (worked out afresh, a scene's first
             // step, asking for a hundred kinds, spent most of its time and garbage here).
-            List<Type>? lists = null;
-            foreach (var type in _indexesFor.Keys)
+            List<(Type, ComponentIndex[])>? lists = null;
+            foreach (var (type, indexes) in _indexesFor)
             {
                 if (typeof(T).IsAssignableFrom(type))
-                    (lists ??= []).Add(type);
+                    (lists ??= []).Add((type, indexes));
             }
 
-            foreach (var type in lists ?? [])
-                _indexesFor[type] = [.. _indexesFor[type], index];
+            foreach (var (type, indexes) in lists ?? [])
+                _indexesFor.AddOrUpdate(type, [.. indexes, index]);
             _indexesChanged = true;
         }
 
@@ -336,7 +338,11 @@ public sealed class Scene
     private ComponentIndex[] IndexesFor(Component component)
     {
         var type = component.GetType();
-        return _indexesFor.TryGetValue(type, out var indexes) ? indexes : _indexesFor[type] = IndexesListing(type);
+        if (_indexesFor.TryGetValue(type, out var indexes))
+            return indexes;
+        indexes = IndexesListing(type);
+        _indexesFor.AddOrUpdate(type, indexes);
+        return indexes;
     }
 
     // Worked out once a type, apart, so the lambda's closure isn't made on every call (every component, each time the
@@ -367,6 +373,19 @@ public sealed class Scene
             if (index.Stale && !index.Dirty)
                 index.Compact();
         }
+    }
+
+    // Kinds of component replaced for good (scripts compiled again, see ComponentSwap): the lists of their assemblies' types
+    // go with them, so nothing here keeps the old scripts loaded.
+    internal void Forget(IEnumerable<Type> replaced)
+    {
+        var assemblies = replaced.Select(t => t.Assembly).Where(a => a.IsCollectible).ToHashSet();
+        if (assemblies.Count == 0)
+            return;
+        foreach (var type in _indexes.Keys.Where(t => assemblies.Contains(t.Assembly)).ToList())
+            _indexes.Remove(type);
+        foreach (var type in replaced)
+            _indexesFor.Remove(type);
     }
 
     // An entity has been enabled or disabled.

@@ -19,7 +19,7 @@ public static class ActionNames
     {
         if (component.Entity is not { } owner || property.ActionName is not { } kind)
             return [];
-        var on = string.IsNullOrWhiteSpace(kind.On) ? null : component.GetType().GetProperty(kind.On);
+        var on = string.IsNullOrWhiteSpace(kind.On) ? null : ComponentModel.Of(component).Property(kind.On);
         if (on?.GetCustomAttribute<EntityNameAttribute>() is not { } entityName || on.GetValue(component) is not string { } value || string.IsNullOrWhiteSpace(value))
             return [owner];
         return [.. EntityReferences.Names(value, entityName).SelectMany(n => EntityReferences.Named(owner, entityName, n)).Distinct()];

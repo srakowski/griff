@@ -167,7 +167,7 @@ public static class ComponentDescription
             }
         }
 
-        var live = SceneTools.LiveProperties(descriptor).ToList();
+        var live = descriptor.Model.Live;
         if (live.Count > 0)
         {
             text.AppendLine().AppendLine("While the game runs (not saved; entity_get shows them as \"live\" while it plays):");

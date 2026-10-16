@@ -383,26 +383,10 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         return result;
     }
 
-    // What a component says about itself while the game runs and doesn't save: its public values with no setter of their
-    // own (Spawned, IsCollected, a beat clock's Beat), as simple values. Lists and the like are left out.
-    internal static IEnumerable<PropertyInfo> LiveProperties(ComponentDescriptor descriptor)
-    {
-        var saved = descriptor.Properties.Select(p => p.Name).ToHashSet();
-        foreach (var property in descriptor.Type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-        {
-            if (saved.Contains(property.Name) || property.DeclaringType == typeof(Component) || property.GetMethod is not { IsPublic: true } ||
-                property.GetIndexParameters().Length > 0)
-                continue;
-            var type = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-            if (ValueCodec.IsSupported(type) || AgentValues.IsNumber(type) || AgentValues.IsTuple(type) || typeof(Entity).IsAssignableFrom(type) || typeof(Component).IsAssignableFrom(type))
-                yield return property;
-        }
-    }
-
     private static JsonObject Live(Component component, ComponentDescriptor descriptor)
     {
         var live = new JsonObject();
-        foreach (var property in LiveProperties(descriptor))
+        foreach (var property in descriptor.Model.Live)
         {
             try
             {

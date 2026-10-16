@@ -68,7 +68,7 @@ internal sealed class OutputReader
             if (_found is null && elsewhere is not null)
                 Take(elsewhere, name);
         }
-        else if ((Inside(owner, track.AsSpan().Trim()) ?? Named(scene, track.AsSpan().Trim(), owner)) is { } named)
+        else if (EntityNames.Find(scene, track, new NameLookup(owner)) is { } named)
             Take(named, name);
 
         // Not found: look again next time (it may be spawned, renamed or given the component).
@@ -103,44 +103,5 @@ internal sealed class OutputReader
         (_entity, _component, _found) = (entity, found.Component, found.Output);
         _key = found.Output.IsKeyed ? ComponentOutputs.KeyOf(_output!) : null;
         return true;
-    }
-
-    private static Entity? Inside(Entity entity, ReadOnlySpan<char> name)
-    {
-        if (name.SequenceEqual(entity.Name))
-            return entity;
-        foreach (var child in entity.ChildList)
-        {
-            if (Inside(child, name) is { } found)
-                return found;
-        }
-
-        return null;
-    }
-
-    // As Scene.FindNamed finds it: this machine's player's own first in a network game, and one in the same part of the scene
-    // as the owner (a minigame being played, or outside them) before any other.
-    private static Entity? Named(Scene scene, ReadOnlySpan<char> name, Entity owner)
-    {
-        Entity? first = null;
-        Entity? elsewhere = null;
-        var entities = scene.EntitiesNow;
-        for (var i = 0; i < entities.Length; i++)
-        {
-            var entity = entities[i];
-            if (!name.SequenceEqual(entity.Name))
-                continue;
-            if (!Scene.SamePart(entity, owner))
-            {
-                elsewhere ??= entity;
-                continue;
-            }
-
-            if (scene.PreferNamed is null || scene.PreferNamed(entity))
-                return entity;
-            first ??= entity;
-        }
-
-        return first ?? elsewhere;
     }
 }

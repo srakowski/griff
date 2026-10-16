@@ -180,7 +180,7 @@ internal sealed class CombatSystem : GameSystem
     private static Entity? HitboxOf(Attack attack) =>
         string.IsNullOrWhiteSpace(attack.Hitbox)
             ? null
-            : attack.Entity!.SelfAndDescendants().FirstOrDefault(e => e != attack.Entity && e.Name == attack.Hitbox.Trim());
+            : EntityNames.Find(attack.Entity!.Scene!, attack.Hitbox, new NameLookup(attack.Entity, Scope: NameScope.Inside, ExceptFrom: true));
 
     // An "Attack" clip, facing up or down first for a top-down attacker.
     private static string[] AttackClips(Entity owner)

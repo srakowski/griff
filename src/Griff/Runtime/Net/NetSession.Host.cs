@@ -304,7 +304,7 @@ public sealed partial class NetSession
         }
 
         var name = Settings?.Player?.Trim();
-        _template = string.IsNullOrEmpty(name) ? null : _game.Scene.Roots.FirstOrDefault(e => e.Name == name);
+        _template = string.IsNullOrEmpty(name) ? null : EntityNames.Find(_game.Scene, name, new NameLookup(Where: static e => e.Parent is null));
         _templateJson = _template is null ? null : Serializer.SerializeEntity(_template);
         if (Role == NetRole.Server && _template is not null)
             _game.Destroy(_template);

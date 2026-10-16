@@ -104,17 +104,7 @@ internal sealed class LevelGoalSystem : GameSystem
         var name = goal.Targets;
         if (string.IsNullOrWhiteSpace(name))
             return 0;
-        name = name.Trim();
-        var left = 0;
-        var entities = Game.Scene.EntitiesNow;
-        for (var i = 0; i < entities.Length; i++)
-        {
-            var entity = entities[i];
-            if (entity.Name == name && entity.IsActive && entity.GetComponent<Breakable>() is not { Broken: true })
-                left++;
-        }
-
-        return left;
+        return EntityNames.Count(Game.Scene, name, static e => e.IsActive && e.GetComponent<Breakable>() is not { Broken: true });
     }
 
     // Its best stars and score, read from the save data once.
@@ -147,18 +137,7 @@ internal sealed class LevelGoalSystem : GameSystem
 
     private Counter? ScoreOf(LevelGoal goal) => string.IsNullOrWhiteSpace(goal.Score) ? null : Named(goal.Score.Trim())?.GetComponent<Counter>();
 
-    // The first entity called `name`, looked for without making garbage.
-    private Entity? Named(string name)
-    {
-        var entities = Game.Scene.EntitiesNow;
-        for (var i = 0; i < entities.Length; i++)
-        {
-            if (entities[i].Name == name)
-                return entities[i];
-        }
-
-        return null;
-    }
+    private Entity? Named(string name) => EntityNames.Find(Game.Scene, name);
 
     private void StartBonus(LevelGoal goal)
     {

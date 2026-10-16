@@ -907,7 +907,7 @@ internal sealed class LevelSystem : GameSystem
 
     // The entity called name inside box (or the box itself).
     private static Entity? Inside(Entity box, string? name) =>
-        string.IsNullOrWhiteSpace(name) ? null : box.SelfAndDescendants().FirstOrDefault(e => e.Name == name.Trim());
+        box.Scene is { } scene ? EntityNames.Find(scene, name, new NameLookup(box, Scope: NameScope.Inside)) : null;
 
     // The line showing and its choices under it, the one picked with arrows by it that keep the rows lined up.
     private string LineWithChoices(Dialogue dialogue, Text text)
@@ -1057,8 +1057,7 @@ internal sealed class LevelSystem : GameSystem
     {
         if (string.IsNullOrWhiteSpace(name))
             return;
-        name = name.Trim();
-        var prompt = owner.SelfAndDescendants().FirstOrDefault(e => e.Name == name) ?? Game.Find(name);
+        var prompt = EntityNames.Find(Game.Scene, name, new NameLookup(owner));
         if (prompt is not null && prompt.IsEnabled != show)
             prompt.IsEnabled = show;
     }

@@ -144,11 +144,7 @@ public sealed class Switch : Component
     {
         foreach (var name in (names ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            var inside = owner.SelfAndDescendants().Where(e => e.Name == name).ToList();
-            var found = inside.Count > 0 || owner.Scene is null ? inside : owner.Scene.Entities.Where(e => e.Name == name).ToList();
-            // Those in the same part of the scene as the owner (a minigame being played, or outside them), if any are.
-            if (found.Count > 1 && found.Any(e => Scene.SamePart(e, owner)))
-                found = [.. found.Where(e => Scene.SamePart(e, owner))];
+            var found = EntityNames.All(owner, name);
             foreach (var entity in found)
                 yield return entity;
         }

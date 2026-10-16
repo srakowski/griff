@@ -1012,7 +1012,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
                 break;
             case "expectflagged":
                 // "expectflagged: Follow.Target = Heroo": the Inspector flags the field as naming something that isn't
-                // there, those names (comma-separated); "= none" when it shouldn't be flagged.
+                // there, or that several entities answer to, those names (comma-separated); "= none" when it shouldn't be flagged.
                 var (flagTarget, flagNames) = Split2(a, '=');
                 var flagParts = flagTarget.Split('.', StringSplitOptions.TrimEntries);
                 if (flagParts.Length != 2)
@@ -1020,7 +1020,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
                 var wantFlagged = flagNames.Equals("none", StringComparison.OrdinalIgnoreCase) ? ""
                     : string.Join(", ", flagNames.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
                 string? Flagged() => DemoUi.InspectorRow(flagParts[0], Label(flagParts[1]))?.DataContext is PropertyField flagField
-                    ? string.Join(", ", flagField.UnmatchedNames) : null;
+                    ? string.Join(", ", flagField.UnmatchedNames.Concat(flagField.AmbiguousNames)) : null;
                 if (!await Until(() => Flagged() == wantFlagged, 3000))
                     throw new InvalidOperationException($"Expected {flagTarget} to flag \"{wantFlagged}\", but it flags \"{Flagged()}\".");
                 break;

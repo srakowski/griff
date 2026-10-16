@@ -653,20 +653,6 @@ internal sealed class VersusSystem : GameSystem
             Game.PlayShared(sound.Trim());
     }
 
-    // The first entity called `name`, looked for without making garbage.
-    private Entity? Named(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return null;
-        name = name.Trim();
-        var entities = Game.Scene.Entities;
-        for (var i = 0; i < entities.Count; i++)
-        {
-            var entity = entities[i];
-            if (entity.IsEnabled && string.Equals(entity.Name, name, StringComparison.Ordinal))
-                return entity;
-        }
-
-        return null;
-    }
+    // The enabled entity called `name`.
+    private Entity? Named(string? name) => EntityNames.Find(Game.Scene, name, new NameLookup(Where: static e => e.IsEnabled));
 }

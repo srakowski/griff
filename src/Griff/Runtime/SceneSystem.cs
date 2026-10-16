@@ -565,7 +565,7 @@ internal sealed class SceneSystem : GameSystem
         {
             if (entity == spot || !entity.IsActive)
                 continue;
-            var traveller = arriving.Traveller is { } name && entity.Name == name;
+            var traveller = EntityNames.Is(entity, arriving.Traveller);
             if (traveller || PlayerMovementAttribute.IsOn(entity) && Game.HasFocus(entity) && !arrivers.Any(a => entity.IsSelfOrDescendantOf(a)))
                 arrivers.Add(entity);
         }

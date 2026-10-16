@@ -316,13 +316,22 @@ public sealed class PropertyField : ObservableObject
 
     private IReadOnlyList<string>? _unmatched;
 
-    public bool IsUnmatched => UnmatchedNames.Count > 0;
+    /// <summary>
+    /// The names an entity field holds that several entities answer to where it needs one (see
+    /// <see cref="EntityReferences.Ambiguous"/>): flagged like a name that matches nothing.
+    /// </summary>
+    public IReadOnlyList<string> AmbiguousNames => _ambiguous ??= IsMixed || IsFaded || Kind != FieldKind.Entity ? [] : EntityReferences.Ambiguous(new(_components[0], _property));
+
+    private IReadOnlyList<string>? _ambiguous;
+
+    public bool IsUnmatched => UnmatchedNames.Count > 0 || AmbiguousNames.Count > 0;
 
     /// <summary>
     /// Says which names match nothing, e.g. "Nothing in the scene is called "Playr"" or "There's no prefab called
     /// "Bulet" in the project".
     /// </summary>
     public string? UnmatchedTip => !IsUnmatched ? null
+        : UnmatchedNames.Count == 0 ? EntityReferences.AmbiguousProblem(new(_components[0], _property), AmbiguousNames)
         : Kind == FieldKind.Name ? KnownNames.Problem(_property.Names!, UnmatchedNames)
         : Kind == FieldKind.Action ? ActionNames.Problem(UnmatchedNames)
         : Kind == FieldKind.Output ? OutputNames.Problem(UnmatchedNames)
@@ -828,6 +837,7 @@ public sealed class PropertyField : ObservableObject
     public void Refresh()
     {
         _unmatched = null;
+        _ambiguous = null;
         OnPropertyChanged(string.Empty);
         foreach (var axis in Axes)
             axis.Refresh();

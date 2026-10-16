@@ -81,39 +81,9 @@ internal sealed class TriggerSystem : GameSystem
         return new MessageRoute(from, null, false);
     }
 
-    // The entity a field on owner means by name: one inside it first, otherwise the first in the scene (in the same part of
-    // it, a minigame being played or outside them, first).
-    internal static Entity? NamedFrom(Entity owner, ReadOnlySpan<char> name)
-    {
-        if (Inside(owner, name) is { } inside)
-            return inside;
-        if (owner.Scene is not { } scene)
-            return null;
-        Entity? elsewhere = null;
-        foreach (var entity in scene.EntitiesNow)
-        {
-            if (!name.SequenceEqual(entity.Name))
-                continue;
-            if (Scene.SamePart(entity, owner))
-                return entity;
-            elsewhere ??= entity;
-        }
-
-        return elsewhere;
-
-        static Entity? Inside(Entity entity, ReadOnlySpan<char> name)
-        {
-            if (name.SequenceEqual(entity.Name))
-                return entity;
-            foreach (var child in entity.ChildList)
-            {
-                if (Inside(child, name) is { } found)
-                    return found;
-            }
-
-            return null;
-        }
-    }
+    // The entity a field on owner means by name (see EntityNames).
+    internal static Entity? NamedFrom(Entity owner, ReadOnlySpan<char> name) =>
+        owner.Scene is { } scene ? EntityNames.Find(scene, name, new NameLookup(owner)) : null;
 
     // The triggers waiting for this message go off; each returns whether one did.
     internal int FireTriggers(string message, object? data, in MessageRoute route)

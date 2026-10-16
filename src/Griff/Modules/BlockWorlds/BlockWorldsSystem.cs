@@ -450,7 +450,7 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
         var name = builder.World?.Trim();
         var maps = Game.Present<Tilemap>();
         if (!string.IsNullOrEmpty(name))
-            return maps.FirstOrDefault(m => m.Entity!.Name == name);
+            return EntityNames.Find(Scene, name, new NameLookup(Where: static e => e.GetComponent<Tilemap>() is not null))?.GetComponent<Tilemap>();
         return maps.FirstOrDefault(m => m.Entity!.GetComponent<Blocks>() is not null) ?? maps.FirstOrDefault(m => m.Solid);
     }
 
@@ -577,8 +577,8 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
     private bool IsNear(Entity crafter, string station, float reach)
     {
         var here = CenterOf(crafter);
-        if (Scene.Entities.Any(e => e.Name.Equals(station, StringComparison.OrdinalIgnoreCase) && e != crafter && e.IsActive &&
-                                    Vector2.Distance(CenterOf(e), here) <= reach))
+        if (EntityNames.Find(Scene, station, new NameLookup(crafter, ActiveOnly: true, Scope: NameScope.Scene, ExceptFrom: true,
+                Where: e => Vector2.Distance(CenterOf(e), here) <= reach)) is not null)
             return true;
         foreach (var blocks in Game.Present<Blocks>())
         {

@@ -134,7 +134,8 @@ Transform.Scale = new Vector3(0, 0, 1);
 ScaleTo(Vector2.One, 0.4f, Ease.OutBack);
 MoveTo(new Vector2(4, 2), 1f).Then(() => FadeTo(0, 0.3f).Then(() => Game.Destroy(Entity!)));
 
-// Find things. Every copy of a prefab shares its name; scripts are found by type.
+// Find things. Every copy of a prefab shares its name, so Game.Find("Player") takes this machine's player in a network game
+// and one in the screen's minigame first; scripts are found by type.
 foreach (var enemy in Game.FindAll<Enemy>())
     enemy.Hit();
 Game.Find<ScoreCounter>()?.Add(1);

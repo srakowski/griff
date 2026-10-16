@@ -42,7 +42,7 @@ public enum LevelPhase
 public sealed class LevelGoal : Component, IPlaytestReport
 {
     /// <summary>What has to be knocked out, by name: every entity called this, e.g. "Target". The level's won once none is left.</summary>
-    [EntityName]
+    [EntityName(Every = true)]
     public string? Targets { get; set; } = "Target";
 
     /// <summary>The slingshot whose shots the level is played with, by name. Empty is the scene's first.</summary>

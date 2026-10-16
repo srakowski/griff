@@ -211,6 +211,9 @@ public sealed class EntityNameAttribute : Attribute
     /// <summary>It names several, separated by commas (a switch's Targets): picking one adds it, or takes it out again.</summary>
     public bool Many { get; init; }
 
+    /// <summary>It means every entity with the name (a level's Targets, to knock out), so several answering to it are not ambiguous.</summary>
+    public bool Every { get; init; }
+
     /// <summary>It names one inside the entity (an attack's Hitbox, a panel's First control), so those are the ones listed.</summary>
     public bool Inside { get; init; }
 

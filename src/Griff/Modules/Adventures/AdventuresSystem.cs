@@ -314,7 +314,7 @@ internal sealed partial class AdventuresSystem : GameSystem, IHudLayout, IMouseO
         walker.RaiseArrived();
         if (string.IsNullOrEmpty(walker.Heading))
             return;
-        var hotspot = walker.HeadingHotspot is { Entity: { } entity } heading && entity.Scene == Game.Scene && entity.Name == walker.Heading
+        var hotspot = walker.HeadingHotspot is { Entity: { } entity } heading && entity.Scene == Game.Scene && EntityNames.Is(entity, walker.Heading)
             ? heading
             : FindHotspot(walker.Heading);
         var (verb, item) = (walker.HeadingVerb, walker.HeadingItem);
@@ -324,16 +324,8 @@ internal sealed partial class AdventuresSystem : GameSystem, IHudLayout, IMouseO
     }
 
     // The hotspot on an entity called this (one rewound to, whose walker named it).
-    private Hotspot? FindHotspot(string name)
-    {
-        foreach (var hotspot in Game.Showing<Hotspot>())
-        {
-            if (hotspot.Entity!.Name == name)
-                return hotspot;
-        }
-
-        return null;
-    }
+    private Hotspot? FindHotspot(string name) =>
+        EntityNames.Find(Game.Scene, name, new NameLookup(ActiveOnly: true, Where: static e => e.GetComponent<Hotspot>() is not null))?.GetComponent<Hotspot>();
 
     // Walk and Idle clips, the Up and Down ones going up or down the screen.
     private static void Animate(Walker walker)

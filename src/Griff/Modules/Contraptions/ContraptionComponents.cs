@@ -527,25 +527,10 @@ internal static class Contraptions
     }
 
     /// <summary>The entity called <paramref name="name"/> nearest to <paramref name="from"/> (not itself), or null.</summary>
-    public static Entity? Find(Entity from, string? name)
-    {
-        name = name?.Trim();
-        if (string.IsNullOrEmpty(name) || from.Scene is not { } scene)
-            return null;
-        var here = CenterOf(from);
-        Entity? best = null;
-        var bestDistance = float.PositiveInfinity;
-        foreach (var entity in scene.EntitiesNow)
-        {
-            if (entity == from || entity.Name != name)
-                continue;
-            var distance = Vector2.DistanceSquared(CenterOf(entity), here);
-            if (distance < bestDistance)
-                (best, bestDistance) = (entity, distance);
-        }
-
-        return best;
-    }
+    public static Entity? Find(Entity from, string? name) =>
+        from.Scene is { } scene
+            ? EntityNames.Find(scene, name, new NameLookup(from, Scope: NameScope.Scene, ExceptFrom: true, Centre: CenterOf))
+            : null;
 
     /// <summary>How big a part's label is: big enough to read on it, small enough to fit.</summary>
     public static float LabelSize(Entity entity)

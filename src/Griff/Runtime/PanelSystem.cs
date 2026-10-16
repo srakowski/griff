@@ -82,7 +82,7 @@ internal sealed class PanelSystem : GameSystem
     }
 
     public Panel? PanelNamed(string name) =>
-        Game.Scene.Entities.Where(e => e.Name == name.Trim()).SelectMany(e => e.GetComponents<Panel>()).FirstOrDefault();
+        EntityNames.Find(Game.Scene, name, new NameLookup(Where: static e => e.GetComponent<Panel>() is not null))?.GetComponent<Panel>();
 
     internal static bool Inside(Entity entity, Panel panel) => panel.Entity is { } owner && entity.IsSelfOrDescendantOf(owner);
 

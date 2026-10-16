@@ -125,13 +125,8 @@ public static class EntityReferences
     /// targets: those inside the owner with the name (itself too, unless the field names one inside it), otherwise every
     /// one in the scene with it.
     /// </summary>
-    public static IReadOnlyList<Entity> Named(Entity owner, EntityNameAttribute kind, string name)
-    {
-        var own = owner.SelfAndDescendants().Skip(kind.Inside ? 1 : 0).Where(e => e.Name == name).ToList();
-        if (own.Count > 0 || kind.Inside || owner.Scene is null)
-            return own;
-        return [.. owner.Scene.Entities.Where(e => e.Name == name)];
-    }
+    public static IReadOnlyList<Entity> Named(Entity owner, EntityNameAttribute kind, string name) =>
+        EntityNames.All(owner, name, skipOwner: kind.Inside, insideOnly: kind.Inside);
 
     /// <summary>
     /// The links out of <paramref name="entity"/>: each entity its fields name (see <see cref="Named"/>), other than
@@ -151,14 +146,24 @@ public static class EntityReferences
     /// the owner first (a lever's own "Hint"), otherwise the only one in the scene with that name. Null when nothing
     /// has the name, or several outside the owner do (the game picks between them as it plays).
     /// </summary>
-    public static Entity? Resolve(Entity owner, EntityNameAttribute kind, string name)
+    public static Entity? Resolve(Entity owner, EntityNameAttribute kind, string name) =>
+        EntityNames.Resolve(owner, name, skipOwner: kind.Inside, insideOnly: kind.Inside);
+
+    /// <summary>
+    /// The names <paramref name="reference"/> holds that several entities answer to where the field needs one (a camera's
+    /// Follow, a wire's From; not a field that names several or means every one, or "*"): the game picks between them by its rule (see
+    /// <see cref="EntityNames"/>), so the Inspector, scene_tree and Output say which names do. Empty for a field not used.
+    /// </summary>
+    public static IReadOnlyList<string> Ambiguous(Reference reference)
     {
-        var own = owner.SelfAndDescendants().Skip(kind.Inside ? 1 : 0).FirstOrDefault(e => e.Name == name);
-        if (own is not null || kind.Inside)
-            return own;
-        var named = Candidates(owner, kind).Where(e => e.Name == name).Take(2).ToList();
-        return named.Count == 1 ? named[0] : null;
+        if (reference.Component.Entity is not { } owner || !reference.IsUsed || reference.Kind.Many || reference.Kind.Every)
+            return [];
+        return [.. reference.Names.Where(n => EntityNames.Ambiguous(owner, n, reference.Kind.Inside, reference.Kind.Inside).Count > 0).Distinct()];
     }
+
+    /// <summary>"Several entities in the scene are called "Door": the game takes one, the nearest of them or this player's own."</summary>
+    public static string AmbiguousProblem(Reference reference, IReadOnlyList<string> names) =>
+        $"Several entities {(reference.Kind.Inside ? $"inside {reference.Component.Entity?.Name}" : "in the scene")} are called {string.Join(" and ", names.Select(n => $"\"{n}\""))}, so which one it means depends on the game; give them different names.";
 
     /// <summary>
     /// Renames <paramref name="entity"/>, and every field in its scene that names it by its old name, as one undo step.

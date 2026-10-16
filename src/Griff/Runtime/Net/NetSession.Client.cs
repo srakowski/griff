@@ -148,7 +148,7 @@ public sealed partial class NetSession
         var scene = _game.Scene;
         var name = (_hostSettings?.Player ?? Settings?.Player)?.Trim();
         _templateParts = [];
-        if (!string.IsNullOrEmpty(name) && scene.Roots.FirstOrDefault(e => e.Name == name) is { } template)
+        if (!string.IsNullOrEmpty(name) && EntityNames.Find(scene, name, new NameLookup(Where: static e => e.Parent is null)) is { } template)
         {
             _templateParts = template.SelfAndDescendants().Skip(1).Where(NetSchema.IsLocalItself)
                 .Where(e => !NetSchema.IsLocal(e.Parent!) || e.Parent == template)

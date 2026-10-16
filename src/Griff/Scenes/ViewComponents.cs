@@ -191,15 +191,7 @@ public sealed class Follow : Component, IViewFocus
         if (string.IsNullOrWhiteSpace(StayInside))
             return null;
 
-        // Looked for without making garbage, every step.
-        var entities = scene.EntitiesNow;
-        for (var i = 0; i < entities.Length; i++)
-        {
-            if (entities[i].Name == StayInside)
-                return AreaOf(entities[i]);
-        }
-
-        return null;
+        return EntityNames.Find(scene, StayInside, new NameLookup(Entity)) is { } area ? AreaOf(area) : null;
     }
 
     /// <summary>The world-space box an entity covers: its tilemap's grid, else its box collider, else its sprite.</summary>

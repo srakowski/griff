@@ -81,7 +81,7 @@ internal sealed class DungeonsSystem : GameSystem
         map.Tiles = layout.Tiles;
         var grid = GridCells.Of(map);
 
-        var holder = dungeon.Entity!.Children.FirstOrDefault(c => c.Name == DungeonGenerator.SpawnsName && c.GetComponent<Tilemap>() is null);
+        var holder = EntityNames.Find(Game.Scene, DungeonGenerator.SpawnsName, new NameLookup(dungeon.Entity, Scope: NameScope.Inside, ExceptFrom: true, Where: static e => e.GetComponent<Tilemap>() is null));
         if (holder is null)
             holder = Game.Spawn(new Entity(DungeonGenerator.SpawnsName), dungeon.Entity);
         foreach (var child in holder.Children.ToList())

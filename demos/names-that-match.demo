@@ -1,5 +1,5 @@
 title: Names that match
-intro: A trigger or counter that names an action or output nothing has is flagged, and a renamed action keeps answering to its old name.
+intro: A trigger or counter that names an action or output nothing has is flagged, a renamed action keeps answering to its old name, and a name two entities answer to is flagged too.
 project: Platformer | Names
 
 chapter: A trigger doing something nothing can | Flagged in the Inspector
@@ -23,3 +23,19 @@ expectflagged: Counter.Output = Silver
 set: Counter.Output = Speed
 expectflagged: Counter.Output = none
 say: A script that renames an action or output with FormerName keeps every trigger, button, counter and wire that still names the old one working.
+
+chapter: A name two things answer to | One way to find an entity
+create: Empty
+rename: Lamp
+create: Empty
+rename: Lamp
+select: Rules
+add: Follow
+set: Follow.Target = Lamp
+expectflagged: Follow.Target = Lamp
+explain: field:Follow.Target | Target | Two entities in the scene are called Lamp, and a camera follows one, so which it is would depend on the game. The field is flagged, listed by scene_tree and said in Output. Inside the entity first, then the scene, this player's own in a network game: the running game, renaming and the Inspector all find a name the same way.
+select: Lamp
+rename: Lantern
+select: Rules
+expectflagged: Follow.Target = none
+say: Give the two different names and the flag goes away.

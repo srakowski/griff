@@ -148,39 +148,13 @@ public sealed class Scene
     public Entity? Find(Guid id) => _byId.GetValueOrDefault(id);
 
     /// <summary>
-    /// The entity called <paramref name="name"/>. When several are (every player's character is "Player" in a network
-    /// game), the one this machine's player plays comes first, so a camera or health bar follows your own. While a minigame
-    /// is played in the scene (see <see cref="MinigameRoot"/>), one in the same part of the scene as <paramref name="near"/>
-    /// comes first (the minigame it's in, or the rest of the scene), or without it, one in the minigame that has the screen.
+    /// The entity called <paramref name="name"/>, found the one way names find entities (see <see cref="EntityNames"/>):
+    /// one inside <paramref name="near"/> first, then the scene, in near's part of it (a minigame played in the scene, or
+    /// outside them; without near, the minigame that has the screen) before another, and in a network game this machine's
+    /// player's own first, so a camera or health bar follows your own.
     /// </summary>
-    public Entity? FindNamed(string name, bool activeOnly = false, Entity? near = null)
-    {
-        if (ActiveNow<MinigameRoot>().Count > 0)
-        {
-            var world = near is not null ? MinigameRoot.Of(near) : MinigameRoot.Shown(this);
-            if (Find(name, activeOnly, world, worldOnly: true) is { } same)
-                return same;
-        }
-
-        return Find(name, activeOnly, null, worldOnly: false);
-    }
-
-    // The first called that (this player's own first), only in `world` (a minigame's root, or null for outside them) if it
-    // says so.
-    private Entity? Find(string name, bool activeOnly, Entity? world, bool worldOnly)
-    {
-        Entity? first = null;
-        foreach (var entity in EntitiesNow)
-        {
-            if (entity.Name != name || (activeOnly && !entity.IsActive) || (worldOnly && MinigameRoot.Of(entity) != world))
-                continue;
-            if (PreferNamed is null || PreferNamed(entity))
-                return entity;
-            first ??= entity;
-        }
-
-        return first;
-    }
+    public Entity? FindNamed(string name, bool activeOnly = false, Entity? near = null) =>
+        EntityNames.Find(this, name, new NameLookup(near, activeOnly));
 
     /// <summary>
     /// True if <paramref name="entity"/> is in the same part of the scene as <paramref name="near"/>: the same minigame being

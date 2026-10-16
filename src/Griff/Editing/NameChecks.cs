@@ -18,6 +18,8 @@ public static class NameChecks
     /// </summary>
     public static string? Problem(Component component, PropertyDescriptor property)
     {
+        if (property.EntityName is not null && EntityReferences.Ambiguous(new(component, property)) is { Count: > 0 } several)
+            return EntityReferences.AmbiguousProblem(new(component, property), several);
         if (property.ActionName is not null && ActionNames.Unmatched(component, property) is { Count: > 0 } actions)
             return ActionNames.Problem(actions);
         if (property.OutputName is not null && OutputNames.Unmatched(component, property) is { Count: > 0 } outputs)

@@ -115,11 +115,9 @@ internal sealed class BattlesSystem : GameSystem
 
         foreach (var part in battler.Foe.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            foreach (var entity in Game.Scene.EntitiesNow)
-            {
-                if (entity.Name == part && entity.IsActive && entity != battler.Entity && Health.Of(entity) is not { IsDead: true })
-                    return entity;
-            }
+            if (EntityNames.Find(Game.Scene, part, new NameLookup(battler.Entity, ActiveOnly: true, Scope: NameScope.Scene, ExceptFrom: true,
+                    Where: static e => Health.Of(e) is not { IsDead: true })) is { } foe)
+                return foe;
         }
 
         return null;

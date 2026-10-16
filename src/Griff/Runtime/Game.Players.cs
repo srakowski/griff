@@ -153,19 +153,8 @@ public sealed partial class Game
     {
         if (!Net.IsOnline)
             return Find(name);
-        Entity? best = null;
-        var bestDistance = float.PositiveInfinity;
-        foreach (var entity in Scene.EntitiesNow)
-        {
-            if (entity.Name != name || !entity.IsActive || Health.Of(entity) is { IsDead: true })
-                continue;
-            var at = entity.Transform.WorldPosition;
-            var distance = Vector2.DistanceSquared(from, new Vector2(at.X, at.Y));
-            if (distance < bestDistance)
-                (best, bestDistance) = (entity, distance);
-        }
-
-        return best ?? Find(name);
+        return EntityNames.Find(Scene, name, new NameLookup(ActiveOnly: true, Scope: NameScope.Scene, Where: static e => Health.Of(e) is not { IsDead: true },
+            Centre: static e => new Vector2(e.Transform.WorldPosition.X, e.Transform.WorldPosition.Y), Around: from)) ?? Find(name);
     }
 
     /// <summary>Everyone's controls that this machine knows: its own, and on the host, every other player's too.</summary>

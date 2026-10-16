@@ -319,7 +319,7 @@ internal sealed partial class CardsSystem : GameSystem
     // Its discard pile's cards shuffled back in, face down.
     private void Refill(Deck deck, List<Deck> decks)
     {
-        if (string.IsNullOrWhiteSpace(deck.RefillFrom) || Named(deck.RefillFrom, decks) is not { } pile || pile == deck)
+        if (string.IsNullOrWhiteSpace(deck.RefillFrom) || Named(deck.RefillFrom) is not { } pile || pile == deck)
             return;
         var cards = CardZone.CardsIn(pile.Entity);
         if (cards.Count == 0)
@@ -587,16 +587,15 @@ internal sealed partial class CardsSystem : GameSystem
 
     // The deck a hand draws from: the one its Deck names, or the scene's first face-down deck.
     private Deck? DeckOf(Hand hand, List<Deck> decks) =>
-        string.IsNullOrWhiteSpace(hand.Deck) ? decks.FirstOrDefault(d => !d.FaceUp) : Named(hand.Deck, decks);
+        string.IsNullOrWhiteSpace(hand.Deck) ? decks.FirstOrDefault(d => !d.FaceUp) : Named(hand.Deck);
 
     // A discard pile: the one named, or the scene's first face-up deck.
     private Deck? PileOf(string? name, List<Deck> decks) =>
-        string.IsNullOrWhiteSpace(name) ? decks.FirstOrDefault(d => d.FaceUp) : Named(name, decks);
+        string.IsNullOrWhiteSpace(name) ? decks.FirstOrDefault(d => d.FaceUp) : Named(name);
 
-    private Deck? Named(string name, List<Deck> decks)
+    private Deck? Named(string name)
     {
-        name = name.Trim();
-        return decks.FirstOrDefault(d => d.Entity!.Name == name) ?? Scene.FindNamed(name)?.GetComponent<Deck>();
+        return EntityNames.Find(Scene, name, new NameLookup(Where: static e => e.GetComponent<Deck>() is not null))?.GetComponent<Deck>();
     }
 
     // The hand a deck's Draw action draws into: of those that draw from it, the first whose team's turn it is, else the first.

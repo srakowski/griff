@@ -208,7 +208,7 @@ public sealed partial class Game : IGameContext
     public Entity? Find(string name) => Scene.FindNamed(name);
 
     /// <summary>Every entity called <paramref name="name"/>, e.g. all the copies of the "Enemy" prefab.</summary>
-    public IReadOnlyList<Entity> FindAll(string name) => Scene.Entities.Where(e => e.Name == name).ToList();
+    public IReadOnlyList<Entity> FindAll(string name) => EntityNames.Every(Scene, name);
 
     /// <summary>The first component of type <typeparamref name="T"/> in the scene, e.g. <c>Game.Find&lt;ScoreCounter&gt;()</c>.</summary>
     public T? Find<T>() where T : Component => Scene.AllNow<T>().FirstOrDefault();

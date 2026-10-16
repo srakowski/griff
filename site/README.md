@@ -193,37 +193,62 @@ are done, the Site workflow's deploy job fails (its build and link check still r
 Releases are made by `.github/workflows/release.yml` when a version tag is pushed. Nothing is released from the
 repository's side: tagging and pushing is the maintainer's step.
 
-**Versions** are `MAJOR.MINOR.PATCH` and the tag is the version with a `v`: `v0.1.0`. Below 1.0 a new minor version
-(`v0.2.0`) is a release with new features, and may change how projects and scripts work; a patch (`v0.1.1`) only fixes.
-The first release is `v0.1.0`. The workflow ignores any other tag.
+**Versions** are `MAJOR.MINOR.PATCH` and the tag is the version with a `v`: `v0.1.0`. A **pre-release** adds a label after
+a hyphen: `v0.1.0-alpha.1`, `v0.1.0-alpha.2`, then `v0.1.0-beta.1` and so on (SemVer: `0.1.0-alpha.2` comes after
+`0.1.0-alpha.1` and before `0.1.0`). While Griff is pre-alpha its releases are pre-releases; the first is `v0.1.0-alpha.1`.
+Below 1.0 a new minor version (`v0.2.0`) is a release with new features, and may change how projects and scripts work; a
+patch (`v0.1.1`) only fixes. The workflow ignores any other tag.
 
 1. **Check main is ready**: it is pushed, its CI run (Actions → CI) is green and its Site run deployed. The workflow runs
    both test suites again and stops before releasing anything if one fails.
-2. **Tag and push** it:
+2. **Tag and push** it (a pre-release here; `v0.1.0` the same way for a release):
 
    ```sh
    git switch main
-   git tag v0.1.0
-   git push origin v0.1.0
+   git tag v0.1.0-alpha.1
+   git push origin v0.1.0-alpha.1
    ```
 
-3. **Watch** Actions → Release. It builds the editor in Release on Windows, runs the tests, zips the editor with its
-   game players, free fonts, LICENSE and `THIRD-PARTY-NOTICES.txt` as `Griff-0.1.0-win-x64.zip`, and creates the GitHub
-   Release with the commits since the previous tag as its notes. Then it starts the Site workflow, which lists the
-   release on https://griff.games/releases/. The Download button on the landing page goes to
-   `https://github.com/srakowski/griff/releases/latest`, so it follows the newest release by itself (and to the
-   releases page while there is none).
-4. **Look at it**: open the release on GitHub, edit its notes if you want to say more than the commit list does, and try the
-   zip (unzip, run `Griff.Editor.exe`).
+3. **Watch** Actions → Release (about 15 minutes). The build job builds the editor in Release on Windows with the tag's
+   version (`-p:Version=0.1.0-alpha.1`: the editor's title bar says "Griff 0.1.0-alpha.1"), runs the tests, zips the editor
+   with its game players, free fonts, LICENSE and `THIRD-PARTY-NOTICES.txt` as `Griff-0.1.0-alpha.1-win-x64.zip` (the
+   portable copy), and packs the same with Velopack (`vpk`, a tool in `dotnet-tools.json`) on the tag's channel:
+   `prerelease` for a pre-release tag, `stable` for a release. That makes `GriffEditor-prerelease-Setup.exe` (the
+   installer: per user, no admin, installs the .NET 10 Desktop Runtime if it's missing), the full package
+   `GriffEditor-0.1.0-alpha.1-prerelease-full.nupkg`, a delta package from the previous release on the channel (fetched
+   first with `vpk download github`; none for the first), and the feed `releases.prerelease.json`. The publish job creates
+   the GitHub Release as a draft with the zip and the notes (the commits since the previous tag, pre-releases included,
+   after how to install it), marked **pre-release** for a pre-release tag, then `vpk upload github` adds the installer,
+   the packages and the feed and publishes it. Then it starts the Site workflow, which lists the release on
+   https://griff.games/releases/ with the installer as the download and the zip as the portable one. The landing page's
+   **Download (pre-alpha)** button goes to that page, which shows the newest release, pre-releases included (GitHub's
+   `releases/latest` skips pre-releases, so nothing links there). After the first release that isn't a pre-release, take
+   "(pre-alpha)" off the button in `src/content/docs/index.mdx`.
+4. **Look at it**: open the release on GitHub, edit its notes if you want to say more than the commit list does, and try
+   the installer: it's not code-signed, so SmartScreen says "Windows protected your PC": **More info**, then **Run
+   anyway**. It installs into `%LOCALAPPDATA%\GriffEditor` and starts Griff; Help → Check for Updates says it's up to date.
+   An installed pre-release updates to newer pre-releases and to the first newer release; an installed release takes
+   releases only. Each looks a little after it starts (unless Help → Check for Updates Automatically is off), downloads
+   quietly and asks before restarting.
 
-To redo a release that failed before it was created, delete the tag (`git push origin :refs/tags/v0.1.0`, then
-`git tag -d v0.1.0`) and tag again after fixing main; a created release has to be deleted on GitHub first.
+To redo a release that failed before it was created, delete the tag (`git push origin :refs/tags/v0.1.0-alpha.1`, then
+`git tag -d v0.1.0-alpha.1`) and tag again after fixing main; a created release (or a draft left by a failed upload) has to
+be deleted on GitHub first. Don't reuse a version that installed editors may have taken: tag the next one instead.
 
-To try the release locally, without GitHub: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release.ps1 -Version 0.1.0`
-makes the same zip in `artifacts\release\`, and `tools\release-notes.ps1 -Tag v0.1.0` writes the notes (it needs the tag).
-`tools/release-notices.cs` writes the notices from the files the editor folder holds and fails when a package has none
-on record: add its license to `src/Griff.Scripting/Notices/` and `ThirdPartyNotices`.
+To try the release locally, without GitHub: `powershell -NoProfile -ExecutionPolicy Bypass -File toolselease.ps1 -Version 0.1.0-alpha.1`
+makes the same zip and Velopack files in `artifactselease\` (`-NoInstaller` just the zip), and
+`toolselease-notes.ps1 -Tag v0.1.0-alpha.1` writes the notes (it needs the tag). Packing a second version into the same
+`-Out` folder makes a delta and a feed with both, to update from: [Building Griff](https://griff.games/docs/building/#releases)
+says how to install the first and update it from that folder (`GRIFF_UPDATE_SOURCE`). `tools/release-notices.cs` writes
+the notices from the files the editor folder holds and fails when a package has none on record: add its license to
+`src/Griff.Scripting/Notices/` and `ThirdPartyNotices`.
+
+**Code signing.** The installer, `Update.exe` and the editor aren't signed, so SmartScreen warns until a download has
+built up a reputation. To sign them, `vpk pack` takes `--signParams` (signtool's arguments, for a certificate) or
+`--azureTrustedSignFile` (Azure Trusted Signing); add one to `tools/release.ps1` with the secret in the workflow.
 
 The Releases page (`src/content/docs/releases.mdx`, `src/components/Releases.astro`) reads GitHub's list of releases when
-the site is built (`src/data/releases.mjs`), and says "No release yet" when there is none or GitHub can't be reached.
+the site is built (`src/data/releases.mjs`): pre-releases too, labelled pre-alpha, each with its installer (the
+`-Setup.exe`) and its portable zip (its other files are the installed editor's updates). It says "No release yet" when
+there is none or GitHub can't be reached.
 `GRIFF_RELEASES_FILE=<json>` reads a saved copy of the API's answer instead, to see the page with releases offline.

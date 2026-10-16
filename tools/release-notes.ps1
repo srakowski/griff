@@ -11,20 +11,30 @@ param(
 $ErrorActionPreference = 'Stop'
 Push-Location (Split-Path $PSScriptRoot -Parent)
 try {
-    if ($Tag -notmatch '^v\d+\.\d+\.\d+$') { throw "A release tag is vMAJOR.MINOR.PATCH, like v0.1.0, not '$Tag'." }
+    $release = '^v\d+\.\d+\.\d+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$'
+    if ($Tag -notmatch $release) { throw "A release tag is vMAJOR.MINOR.PATCH, like v0.1.0, or a pre-release like v0.1.0-alpha.1, not '$Tag'." }
+    $prerelease = $Tag.Contains('-')
     git rev-parse --verify --quiet "$Tag^{commit}" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "There is no tag $Tag in this repository." }
 
-    # The nearest earlier release tag that is an ancestor of this one.
+    # The nearest earlier release tag (a release's or a pre-release's) on this one's history: the one the fewest commits back.
     $previous = $null
-    foreach ($candidate in (git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --merged "$Tag^" --sort=-v:refname)) {
-        if ($candidate -match '^v\d+\.\d+\.\d+$' -and $candidate -ne $Tag) { $previous = $candidate; break }
+    $nearest = [int]::MaxValue
+    foreach ($candidate in (git tag --list 'v[0-9]*' --merged "$Tag^")) {
+        if ($candidate -notmatch $release -or $candidate -eq $Tag) { continue }
+        $distance = [int](git rev-list --count "$candidate..$Tag")
+        if ($distance -lt $nearest) { $previous = $candidate; $nearest = $distance }
     }
 
     $notes = [System.Collections.Generic.List[string]]::new()
-    $notes.Add("Griff $($Tag.Substring(1)) for 64-bit Windows.")
+    $channel = if ($prerelease) { 'prerelease' } else { 'stable' }
+    $notes.Add("Griff $($Tag.Substring(1)) for 64-bit Windows$(if ($prerelease) { ', a pre-alpha: expect rough edges, and projects made with it may need changes in later versions' }).")
     $notes.Add('')
-    $notes.Add('Unzip it anywhere you can write to and run `Griff.Editor.exe`. It needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0). More at https://griff.games/docs/getting-started/.')
+    $notes.Add("**Install it**: download ``GriffEditor-$channel-Setup.exe`` and run it. It installs Griff for you (no administrator needed, and the .NET 10 Desktop Runtime if it's missing), adds it to the Start menu and the desktop, and keeps it up to date: Griff looks for a newer $(if ($prerelease) { 'pre-release (or release)' } else { 'release' }) after it starts and asks before restarting into it. The installer isn't code-signed yet, so Windows SmartScreen may warn that it's from an unknown publisher: pick **More info**, then **Run anyway**.")
+    $notes.Add('')
+    $notes.Add('**Or the portable copy**: unzip `Griff-' + $Tag.Substring(1) + '-win-x64.zip` anywhere you can write to and run `Griff.Editor.exe`. It needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) and doesn''t update itself.')
+    $notes.Add('')
+    $notes.Add('More at https://griff.games/docs/getting-started/. The `.nupkg` and `releases.*.json` files are the installed editor''s updates.')
     $notes.Add('')
     if ($previous) {
         $notes.Add("## Changes since $previous")

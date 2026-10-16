@@ -45,14 +45,14 @@ public sealed class ThirdPartyNoticesTests : IDisposable
     public void Notices_CoverWhatTheEditorReleaseCarries_UnderItsOwnIntroduction()
     {
         var notices = ThirdPartyNotices.For(
-            ["Griff.Editor.exe", "ICSharpCode.AvalonEdit.dll", "CommunityToolkit.Mvvm.dll", "Humanizer.dll", "Microsoft.CodeAnalysis.dll", "NAudio.WinMM.dll"],
+            ["Griff.Editor.exe", "ICSharpCode.AvalonEdit.dll", "CommunityToolkit.Mvvm.dll", "Humanizer.dll", "Microsoft.CodeAnalysis.dll", "NAudio.WinMM.dll", "Velopack.dll"],
             introduction: "The editor's introduction.");
 
         Assert.Empty(notices.Unlisted);
         Assert.StartsWith("Third-party notices", notices.Text, StringComparison.Ordinal);
         Assert.Contains("The editor's introduction.", notices.Text, StringComparison.Ordinal);
         Assert.DoesNotContain("This game was made with Griff", notices.Text, StringComparison.Ordinal);
-        foreach (var expected in new[] { "AvalonEdit", "AlphaSierraPapa", "Community Toolkit", "Humanizer", "Permission is hereby granted" })
+        foreach (var expected in new[] { "AvalonEdit", "AlphaSierraPapa", "Community Toolkit", "Humanizer", "Velopack Ltd.", "Permission is hereby granted" })
             Assert.Contains(expected, notices.Text, StringComparison.Ordinal);
     }
 

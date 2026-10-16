@@ -7,14 +7,23 @@ import { readFile } from 'node:fs/promises';
 
 export const repo = 'srakowski/griff';
 export const repoUrl = `https://github.com/${repo}`;
-/** GitHub redirects this to the newest release, or to the releases page while there is none. */
-export const latestUrl = `${repoUrl}/releases/latest`;
+/**
+ * Every release on GitHub, pre-releases too. (GitHub's releases/latest skips pre-releases, so it can't be the newest
+ * while Griff is pre-alpha.)
+ */
+export const releasesUrl = `${repoUrl}/releases`;
+
+// A release tag: v0.1.0, or a pre-release's, v0.1.0-alpha.1.
+const releaseTag = /^v\d+\.\d+\.\d+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$/;
 
 let cached;
 
 /**
- * Published releases, newest first: { tag, version, name, date, prerelease, url, notes (HTML), assets: [{ name, url, size }] }.
- * Drafts never show; neither does a release with no files to download.
+ * Published releases and pre-releases, newest first: { tag, version, name, date, prerelease, url, notes (HTML), installer,
+ * portable, assets }. installer is the Setup.exe (installs Griff and keeps it up to date) and portable the zip, each
+ * { name, url, size } or null; assets is those two, the installer first. (A release's other files, the installed editor's
+ * update packages and feed, aren't for downloading by hand.) Drafts never show; neither does a release with nothing to
+ * download.
  */
 export function getReleases() {
 	cached ??= load();
@@ -36,17 +45,24 @@ async function load() {
 		if (!Array.isArray(raw)) throw new Error('the answer is not a list');
 
 		return raw
-			.filter((r) => !r.draft && /^v\d+\.\d+\.\d+$/.test(r.tag_name ?? ''))
-			.map((r) => ({
-				tag: r.tag_name,
-				version: r.tag_name.slice(1),
-				name: r.name || `Griff ${r.tag_name.slice(1)}`,
-				date: (r.published_at ?? r.created_at ?? '').slice(0, 10),
-				prerelease: !!r.prerelease,
-				url: r.html_url,
-				notes: r.body_html ?? '',
-				assets: (r.assets ?? []).map((a) => ({ name: a.name, url: a.browser_download_url, size: a.size })),
-			}))
+			.filter((r) => !r.draft && releaseTag.test(r.tag_name ?? ''))
+			.map((r) => {
+				const files = (r.assets ?? []).map((a) => ({ name: a.name, url: a.browser_download_url, size: a.size }));
+				const installer = files.find((a) => a.name.endsWith('-Setup.exe')) ?? null;
+				const portable = files.find((a) => a.name.endsWith('.zip')) ?? null;
+				return {
+					tag: r.tag_name,
+					version: r.tag_name.slice(1),
+					name: r.name || `Griff ${r.tag_name.slice(1)}`,
+					date: (r.published_at ?? r.created_at ?? '').slice(0, 10),
+					prerelease: !!r.prerelease,
+					url: r.html_url,
+					notes: r.body_html ?? '',
+					installer,
+					portable,
+					assets: [installer, portable].filter(Boolean),
+				};
+			})
 			.filter((r) => r.assets.length > 0)
 			.sort((a, b) => b.date.localeCompare(a.date) || b.tag.localeCompare(a.tag, 'en', { numeric: true }));
 	} catch (error) {

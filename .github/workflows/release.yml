@@ -1,13 +1,16 @@
-# Publishes an editor release when a version tag is pushed (git tag v0.1.0; git push origin v0.1.0): builds the editor in
-# Release, runs both test suites, zips the editor with its players, free fonts, LICENSE and third-party notices
-# (tools/release.ps1, which you can run yourself), and attaches the zip to a GitHub Release whose notes are the commits
-# since the previous tag (tools/release-notes.ps1). The site's Download button follows the latest release by itself.
-# See site/README.md, "Cutting a release".
+# Publishes an editor release when a version tag is pushed (git tag v0.1.0-alpha.1; git push origin v0.1.0-alpha.1): builds
+# the editor in Release, runs both test suites, zips the editor with its players, free fonts, LICENSE and third-party
+# notices and packs the same as the installer and its updates with Velopack (tools/release.ps1, which you can run
+# yourself), and publishes a GitHub Release with all of it, whose notes are the commits since the previous tag
+# (tools/release-notes.ps1). A tag with a pre-release label (v0.1.0-alpha.1) makes a pre-release on the "prerelease"
+# update channel; a plain one (v0.1.0) a release on "stable". The site's Releases page and Download button list it once the
+# Site workflow it starts has run. See site/README.md, "Cutting a release".
 name: Release
 
 on:
   push:
-    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+    # v0.1.0, and pre-releases like v0.1.0-alpha.1 (tools/release.ps1 checks the rest of the label).
+    tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']
 
 # Building and testing only read the repository; the one job that publishes gets contents: write.
 permissions:
@@ -36,8 +39,26 @@ jobs:
         with:
           deployment-choice: '1'
 
-      # The tag is vMAJOR.MINOR.PATCH, the version is the tag without its v.
-      - name: Build the release zip
+      # Velopack's vpk, from dotnet-tools.json.
+      - name: Restore the tools
+        run: dotnet tool restore
+
+      # The previous release's full package on this tag's channel, so the pack makes a delta update from it (none before
+      # the first). Reading the public releases needs no write permission.
+      - name: Fetch the previous release's package
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $pre = $env:TAG.Contains('-')
+          $channel = if ($pre) { 'prerelease' } else { 'stable' }
+          $arguments = @('vpk', 'download', 'github', '--repoUrl', "https://github.com/$env:GITHUB_REPOSITORY", '--channel', $channel, '--token', $env:GH_TOKEN, '--outputDir', 'artifacts/release/velopack', '--skip-updates')
+          if ($pre) { $arguments += '--pre' }
+          dotnet @arguments
+
+      # The tag is vMAJOR.MINOR.PATCH[-label], the version is the tag without its v.
+      - name: Build the release zip and the installer
         shell: pwsh
         env:
           TAG: ${{ github.ref_name }}
@@ -72,33 +93,68 @@ jobs:
           path: TestResults
           if-no-files-found: ignore
 
-      - name: Keep the zip and the notes for the release
+      # The Velopack folder as vpk left it (vpk upload reads it whole, and uploads only this version's files).
+      - name: Keep the zip, the installer and the notes for the release
         uses: actions/upload-artifact@v7
         with:
           name: release
           path: |
             artifacts/release/*.zip
             artifacts/release/release-notes.md
+            artifacts/release/velopack/
           if-no-files-found: error
 
   publish:
     needs: build
-    runs-on: ubuntu-latest
+    # vpk uploads the Velopack files; it reads the Windows packages the build made.
+    runs-on: windows-latest
     permissions:
-      contents: write # the release and its zip
+      contents: write # the release and its files
       actions: write  # to start the Site workflow, which lists the new release
     steps:
+      # Only what the tools need: global.json and dotnet-tools.json.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            global.json
+            dotnet-tools.json
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore the tools
+        run: dotnet tool restore
+
       - uses: actions/download-artifact@v8
         with:
           name: release
           path: release
 
+      # A draft first, with the zip and the notes; vpk adds the installer, the packages and the feed to it and publishes
+      # it, so the release appears with everything at once. A pre-release tag (v0.1.0-alpha.1) makes a GitHub pre-release.
       - name: Create the GitHub Release
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" release/*.zip --verify-tag --title "Griff ${TAG#v}" --notes-file release/release-notes.md
+        run: |
+          $version = $env:TAG.Substring(1)
+          $pre = $env:TAG.Contains('-')
+          $channel = if ($pre) { 'prerelease' } else { 'stable' }
+          $create = @('release', 'create', $env:TAG, (Get-Item release/*.zip).FullName, '--verify-tag', '--draft', '--title', "Griff $version", '--notes-file', 'release/release-notes.md')
+          if ($pre) { $create += '--prerelease' }
+          gh @create
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $upload = @('vpk', 'upload', 'github', '--repoUrl', "https://github.com/$env:GH_REPO", '--token', $env:GH_TOKEN, '--tag', $env:TAG, '--releaseName', "Griff $version", '--channel', $channel, '--outputDir', 'release/velopack', '--merge', '--publish', '--skip-updates')
+          if ($pre) { $upload += '--pre' }
+          dotnet @upload
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Published either way, also if vpk found it published already.
+          gh release edit $env:TAG --draft=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # A release made with the workflow's own token starts no other workflow, so the site is started by hand.
       - name: Rebuild the site, so the Releases page lists it

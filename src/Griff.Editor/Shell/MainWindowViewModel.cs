@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Play;
+using Griff.Editor.Features.Updates;
 
 namespace Griff.Editor.Shell;
 
@@ -41,8 +42,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
     // What's showing: the scene, or a prefab in its tab.
     public string Title => Workspace.Project is { } project
-        ? $"{(Workspace.Scene is { IsPrefab: true } prefab ? $"{prefab.Name}{(prefab.IsDirty ? "*" : "")} (prefab)" : SceneTitle)} - {project.Name} - Griff"
-        : "Griff";
+        ? $"{(Workspace.Scene is { IsPrefab: true } prefab ? $"{prefab.Name}{(prefab.IsDirty ? "*" : "")} (prefab)" : SceneTitle)} - {project.Name} - {AppVersion.Title}"
+        : AppVersion.Title;
 
     public string SceneLocation => Workspace.Project is { } project && Workspace.Scene is { } scene
         ? project.GetRelativePath(scene.FilePath)

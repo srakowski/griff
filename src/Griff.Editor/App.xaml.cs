@@ -32,6 +32,7 @@ using Griff.Editor.Features.Projects;
 using Griff.Editor.Features.Scenes;
 using Griff.Editor.Features.SceneView;
 using Griff.Editor.Features.Scripts;
+using Griff.Editor.Features.Updates;
 using Griff.Editor.Shell;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -68,6 +69,7 @@ public partial class App : Application
         new FightingEditorModule(),
         new RhythmEditorModule(),
         new DesignSystemModule(),
+        new UpdatesModule(),
         new AgentModule(),
     ];
 

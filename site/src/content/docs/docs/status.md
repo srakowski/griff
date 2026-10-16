@@ -4,6 +4,7 @@ description: "What Griff doesn't do yet."
 ---
 
 Griff is young. Known gaps:
+- Griff is pre-alpha, and its installer (and the editor it installs) isn't code-signed, so Windows SmartScreen warns about an unknown publisher the first time it runs ("More info", then "Run anyway"). Installers and updates are for Windows only.
 - CI runs on Windows only, and Griff.Platform.Windows has no tests of its own: the player smoke test covers it end to end. The OpenGL renderer's tests draw off the screen (with Mesa's software OpenGL in CI), and whether the browser draws the same pixels, plays sound and keeps saves is checked by `tools\web.ps1 -Compare` and `-Check`, which CI doesn't run (they need Chrome or Edge and publish the web player).
  The layer test checks Griff.Scenes; Runtime still reaches into Rendering.
 - Modules are found only in Griff itself: a project can't add one. Templates several modules share pictures from (the crate, the crypt's hero and walls) keep those in the core's `TemplateArt`.

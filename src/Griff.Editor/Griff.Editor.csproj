@@ -10,6 +10,8 @@
     <PackageReference Include="AvalonEdit" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <!-- The installer and its updates (MIT; see Features/Updates and tools/release.ps1). -->
+    <PackageReference Include="Velopack" />
   </ItemGroup>
 
   <!-- JetBrains Mono, the code font (SIL Open Font License 1.1: free to embed and ship; see Themes/Fonts/JetBrainsMono-OFL.txt). -->
@@ -42,6 +44,13 @@
     <NoWarn>$(NoWarn);CS1591;CS1573;CS0419;CS1574;CS1584;CS1658</NoWarn>
     <!-- The player is self-contained; the editor isn't. -->
     <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+    <!-- Program.Main runs Velopack (the installer and its updates) before the application starts. -->
+    <StartupObject>Griff.Editor.Program</StartupObject>
+    <!--
+      A build from source is "-dev" (and its title says just "Griff"). A release is built with its tag's version
+      (tools\release.ps1 passes -p:Version=0.1.0-alpha.1), which replaces this.
+    -->
+    <VersionSuffix>dev</VersionSuffix>
   </PropertyGroup>
 
   <!-- Ship the game players next to the editor so Build Game and Build for Web can export them. -->

@@ -1,8 +1,9 @@
 ---
-// The Releases page's content: the newest release with its download, then the earlier ones, read from GitHub when the
-// site is built (src/data/releases.mjs). With no release yet (or none readable) it says so and points to the source and
-// to GitHub's releases page, which is where the Download button goes too.
-import { getReleases, repoUrl, latestUrl } from '../data/releases.mjs';
+// The Releases page's content: the newest release, pre-releases included (GitHub's releases/latest skips those), with its
+// installer as the download and the zip as the portable copy, then the earlier ones; read from GitHub when the site is
+// built (src/data/releases.mjs). With no release yet (or none readable) it says so and points to the source and to
+// GitHub's releases page.
+import { getReleases, repoUrl, releasesUrl } from '../data/releases.mjs';
 
 const releases = await getReleases();
 const [latest, ...earlier] = releases;
@@ -13,36 +14,51 @@ const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(0)} MB`;
 	latest ? (
 		<>
 			<section class="release latest" aria-labelledby="latest">
-				<h2 id="latest">{latest.name}</h2>
+				<h2 id="latest">
+					{latest.name}
+					{latest.prerelease && <span class="badge">pre-alpha</span>}
+				</h2>
 				<p class="meta">
-					The latest release{latest.prerelease && ', a pre-release'}, published {latest.date}.
+					The newest release{latest.prerelease && ', a pre-alpha: expect rough edges, and projects made with it may need changes in later versions'}. Published {latest.date}.
 				</p>
 				<p class="downloads">
-					{latest.assets.map((asset) => (
-						<a class="sl-link-button primary" href={asset.url}>
-							Download {asset.name} ({megabytes(asset.size)})
+					{latest.installer && (
+						<a class="sl-link-button primary" href={latest.installer.url}>
+							Download the installer ({megabytes(latest.installer.size)})
 						</a>
-					))}
+					)}
+					{latest.portable && (
+						<a class={`sl-link-button ${latest.installer ? 'secondary' : 'primary'}`} href={latest.portable.url}>
+							Portable zip ({megabytes(latest.portable.size)})
+						</a>
+					)}
 				</p>
+				{latest.installer && (
+					<p>
+						For 64-bit Windows. The installer (<code>{latest.installer.name}</code>) sets Griff up for you, with no administrator needed and the .NET 10 Desktop Runtime if it's missing, and keeps it up to date: Griff looks for a newer version after it starts and asks before restarting into it. It isn't code-signed yet, so Windows SmartScreen may say it's from an unknown publisher: pick <strong>More info</strong>, then <strong>Run anyway</strong>.
+					</p>
+				)}
 				<p>
-					64-bit Windows, with the <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 Desktop Runtime</a>. Unzip it anywhere you can write to and run <code>Griff.Editor.exe</code>.
+					The portable zip runs from wherever you unzip it (somewhere you can write to: run <code>Griff.Editor.exe</code>) and doesn't update itself. It needs the <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 Desktop Runtime</a>.
 				</p>
 				<div class="notes" set:html={latest.notes} />
 				<p>
-					<a href={latest.url}>This release on GitHub</a> · <a href={latestUrl}>Always the latest</a>
+					<a href={latest.url}>This release on GitHub</a> · <a href={releasesUrl}>All releases on GitHub</a>
 				</p>
 			</section>
 
 			{earlier.length > 0 && <h2 id="earlier">Earlier releases</h2>}
 			{earlier.map((release) => (
 				<section class="release" aria-labelledby={`v${release.version}`}>
-					<h3 id={`v${release.version}`}>{release.name}</h3>
+					<h3 id={`v${release.version}`}>
+						{release.name}
+						{release.prerelease && <span class="badge">pre-alpha</span>}
+					</h3>
 					<p class="meta">
-						Published {release.date}{release.prerelease && ', a pre-release'}.{' '}
-						{release.assets.map((asset) => (
-							<a href={asset.url}>{asset.name}</a>
-						))}{' '}
-						· <a href={release.url}>Notes on GitHub</a>
+						Published {release.date}.{' '}
+						{release.installer && <a href={release.installer.url}>Installer</a>}
+						{release.installer && release.portable && ' · '}
+						{release.portable && <a href={release.portable.url}>Portable zip</a>} · <a href={release.url}>Notes on GitHub</a>
 					</p>
 				</section>
 			))}
@@ -51,7 +67,7 @@ const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(0)} MB`;
 		<section class="release none" aria-labelledby="none">
 			<h2 id="none">No release yet</h2>
 			<p>
-				Griff's first release isn't out yet, or its list couldn't be read when this page was built. Releases appear here as soon as they are published, and <a href={latestUrl}>the latest one is always at GitHub</a>.
+				Griff's first release isn't out yet, or its list couldn't be read when this page was built. Releases appear here as soon as they are published, and <a href={releasesUrl}>they are all on GitHub</a>.
 			</p>
 			<p>
 				Until then you can build the editor from source in a minute: see <a href="/docs/getting-started/">Getting started</a>. The code is at <a href={repoUrl}>GitHub</a>.
@@ -84,6 +100,17 @@ const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(0)} MB`;
 	}
 	.notes {
 		margin-block: 1rem;
+	}
+	.badge {
+		margin-inline-start: 0.6rem;
+		padding: 0.1rem 0.5rem;
+		border: 1px solid var(--sl-color-accent);
+		border-radius: 999px;
+		color: var(--sl-color-accent-high);
+		font-size: var(--sl-text-xs);
+		font-weight: 600;
+		vertical-align: middle;
+		white-space: nowrap;
 	}
 	.notes :global(ul) {
 		padding-inline-start: 1.25rem;

@@ -7,7 +7,11 @@ Griff runs on 64-bit Windows.
 
 ## Get the editor
 
-Download the latest zip from the [Releases](/releases/) page, unzip it anywhere you can write to and run `Griff.Editor.exe`. It needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0). Or build the editor from source (before the first release, the only way): it takes the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and a minute.
+Griff is pre-alpha: expect rough edges, and projects made with one version may need changes in a later one.
+
+Download the installer from the [Releases](/releases/) page (the newest pre-release is at the top) and run it. It installs Griff for you, with no administrator needed and the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) if it's missing, puts it in the Start menu and on the desktop, and keeps it up to date: a little after Griff starts it looks for a newer version, downloads it and asks whether to restart into it now or the next time it starts (Help → **Check for Updates** looks right away; Help → **Check for Updates Automatically** turns the check after starting off). The installer isn't code-signed yet, so Windows SmartScreen may warn that it's from an unknown publisher: pick **More info**, then **Run anyway**. Remove Griff from Windows' **Installed apps**; your projects and settings stay.
+
+The portable zip on the same page runs from wherever you unzip it (somewhere you can write to: run `Griff.Editor.exe`) and doesn't update itself; it needs the .NET 10 Desktop Runtime. Or build the editor from source: it takes the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and a minute.
 
 ```sh
 git clone https://github.com/srakowski/griff.git

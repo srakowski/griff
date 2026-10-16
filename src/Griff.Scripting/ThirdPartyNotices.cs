@@ -58,6 +58,10 @@ public static class ThirdPartyNotices
             name => name.StartsWith("CommunityToolkit.", StringComparison.OrdinalIgnoreCase), () => [Read("CommunityToolkit-LICENSE.txt")]),
         new("Humanizer, by the .NET Foundation and contributors, under the MIT License", "Humanizer",
             name => name.Equals("Humanizer", StringComparison.OrdinalIgnoreCase), () => [Read("Humanizer-LICENSE.txt")]),
+        // The installer's and updates' library; its own programs (Setup.exe, and Update.exe beside an installed editor) come
+        // with it, built from Velopack's Rust code and crates under licenses its project allows (MIT, Apache-2.0, BSD and the like).
+        new("Velopack, by Caelan Sayler and Velopack Ltd., under the MIT License", "Velopack (and the installer's Setup.exe and Update.exe)",
+            name => name.Equals("Velopack", StringComparison.OrdinalIgnoreCase), () => [Read("Velopack-LICENSE.txt")]),
         .. BuiltInFonts.All.Select(font => new Component(font.About, "Griff.Fonts (the font is inside it)",
             name => name.Equals("Griff.Fonts", StringComparison.OrdinalIgnoreCase), () => [font.License])),
     ];

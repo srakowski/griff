@@ -54,6 +54,12 @@ public sealed class EditorSettings
     /// GRIFF_MUTE=1 never writes it.
     /// </summary>
     public bool Mute { get; set; }
+
+    /// <summary>
+    /// Whether an installed Griff looks for a newer release a little after it starts (Help > Check for Updates
+    /// Automatically). A build from source or the portable zip never does.
+    /// </summary>
+    public bool CheckForUpdates { get; set; } = true;
 }
 
 /// <summary>A breakpoint kept between sessions: the project's folder, the script's path in its Assets, and the line.</summary>

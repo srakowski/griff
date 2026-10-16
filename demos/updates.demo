@@ -1,0 +1,24 @@
+title: Installer and updates
+intro: Griff's releases come with an installer that keeps the editor up to date. Help, Check for Updates looks for a newer Griff, downloads it quietly and asks before restarting into it, and the check a little after Griff starts can be turned off.
+project: Platformer | Update Check
+
+chapter: Check for Updates | Help menu
+spot: menu:Help | Help menu
+say: An installed Griff looks for a newer version a little after it starts, without slowing the start. Help, Check for Updates looks right away.
+menu: Help > Check for Updates...
+say: An installed Griff would look at Griff's releases on GitHub now. When there's a newer one it downloads it quietly, then asks: restart now to use it, or let it be put in place the next time Griff starts.
+say: Griff installed from a pre-release takes newer pre-releases, and the first full release after them.
+say: This editor was built from source, so the status bar says it doesn't update itself. Neither does the portable zip: only the installer's Griff updates.
+agent: Help_CheckForUpdates {}
+expectagent: doesn't update itself
+
+chapter: Turning the automatic check off | Help > Check for Updates Automatically
+say: The check after starting can be turned off. It's ticked in the Help menu while it's on, and the choice is kept.
+menu: Help > Check for Updates Automatically
+agent: ui_inspect {"target": "EditorUpdates", "path": "ChecksAutomatically"}
+expectagent: false
+say: Now Griff only looks when you ask. Clicking it again turns the check back on.
+menu: Help > Check for Updates Automatically
+agent: ui_inspect {"target": "EditorUpdates", "path": "ChecksAutomatically"}
+expectagent: true
+say: Agents get both as tools, and answer the question about restarting the way they answer any of the editor's questions.

@@ -108,8 +108,8 @@ internal sealed class SceneSystem : GameSystem, ISceneTravel, ICarryStore
             throw new InvalidOperationException("This game can't load scenes (no scene loader is set).");
 
         // On a player's machine, going to another scene (a menu's Quit to Title) leaves the host's game.
-        if (Game.Net.IsClient || Game.Net.IsConnecting)
-            Game.Net.Leave();
+        if (Game.Network.IsClient || Game.Network.IsConnecting)
+            Game.Network.Leave();
 
         _arriving = string.IsNullOrWhiteSpace(arriveAt) ? null : (arriveAt.Trim(), traveller?.Name);
         (_freshScene, _startingOver) = (fresh, false);
@@ -231,12 +231,12 @@ internal sealed class SceneSystem : GameSystem, ISceneTravel, ICarryStore
         Game.AtmosphereSystem.StopSoundSources();
         Game.MenuSystem.SetFocus(null);
         Game.PanelSystem.SyncPanels();
-        if (Game.Net.IsHost)
-            Game.Net.StartHostScene();
+        if (Game.Network.IsHost)
+            Game.NetworkSystem.StartHostScene();
         else if (_netLoading)
         {
             _netLoading = false;
-            Game.Net.HostSceneLoaded();
+            Game.NetworkSystem.HostSceneLoaded();
         }
 
         Game.RaiseSceneChanged(next);
@@ -269,7 +269,7 @@ internal sealed class SceneSystem : GameSystem, ISceneTravel, ICarryStore
         if (Game.SceneLoader is null || string.IsNullOrEmpty(name))
         {
             // Nothing to load it with (tests): use the scene already showing.
-            Game.Net.HostSceneLoaded();
+            Game.NetworkSystem.HostSceneLoaded();
             return;
         }
 
@@ -372,7 +372,7 @@ internal sealed class SceneSystem : GameSystem, ISceneTravel, ICarryStore
     // minigames being played in it.
     private void RememberLeaving()
     {
-        if (Game.Net.IsClient || Game.SceneName is not { Length: > 0 } name)
+        if (Game.Network.IsClient || Game.SceneName is not { Length: > 0 } name)
             return;
         RememberScene? memory = null;
         foreach (var found in Game.Scene.ActiveNow<RememberScene>())
@@ -422,7 +422,7 @@ internal sealed class SceneSystem : GameSystem, ISceneTravel, ICarryStore
     // as the other scenes left it.
     private Scene? Recalled(string name)
     {
-        if (Game.Net.IsClient || !_remembered.TryGetValue(SceneNameOf(name), out var squeezed))
+        if (Game.Network.IsClient || !_remembered.TryGetValue(SceneNameOf(name), out var squeezed))
             return null;
         Scene scene;
         try
@@ -574,7 +574,7 @@ internal sealed class SceneSystem : GameSystem, ISceneTravel, ICarryStore
         if (_arriving is not { } arriving)
             return null;
         _arriving = null;
-        if (Game.Net.IsClient || Game.Scene.FindNamed(arriving.Spot) is not { } spot)
+        if (Game.Network.IsClient || Game.Scene.FindNamed(arriving.Spot) is not { } spot)
             return null;
         ArrivedAt = spot;
         var at = spot.ComponentList.OfType<IArrivalSpot>().FirstOrDefault()?.ArrivalPoint ?? Game.CenterOf(spot);

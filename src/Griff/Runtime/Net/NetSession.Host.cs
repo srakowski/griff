@@ -135,8 +135,8 @@ public sealed partial class NetSession
     {
         if (!IsHost)
             return null;
-        if (player.Avatar is { } old && old.Scene == _game.Scene && old != _template)
-            _game.Destroy(old);
+        if (player.Avatar is { } old && old.Scene == _network.Scene && old != _template)
+            _network.Destroy(old);
         player.Avatar = null;
         return SpawnAvatar(player, fresh: true);
     }
@@ -215,7 +215,7 @@ public sealed partial class NetSession
         var w = new NetWriter();
         w.VarInt(player.Id);
         w.VarInt(_epoch);
-        w.String(_game.SceneName ?? "");
+        w.String(_network.SceneName ?? "");
         WriteSettings(w);
         return NetConnectReply.Accept(w.ToArray());
     }
@@ -230,7 +230,7 @@ public sealed partial class NetSession
 
         connection.Tag = player;
         player.Connection = connection;
-        player.Remote = new RemoteInput(_game.Input);
+        player.Remote = new RemoteInput(_network.Input);
         _players.Add(player);
         ChooseTeam(player);
         SpawnAvatar(player, fresh: true);
@@ -240,19 +240,19 @@ public sealed partial class NetSession
 
     private void Joined(NetPlayer player)
     {
-        PlayerJoined?.Invoke(player);
-        _game.Send("PlayerJoined", player);
+        _network.RaisePlayerJoined(player);
+        _network.SendHere("PlayerJoined", player);
     }
 
     private void OnPlayerDisconnected(NetConnection connection, string reason)
     {
         if (connection.Tag is not NetPlayer player || !_players.Contains(player))
             return;
-        PlayerLeft?.Invoke(player);
-        _game.Send("PlayerLeft", player);
+        _network.RaisePlayerLeft(player);
+        _network.SendHere("PlayerLeft", player);
         Remember(player);
-        if (player.Avatar is { } avatar && avatar.Scene == _game.Scene)
-            _game.Destroy(avatar);
+        if (player.Avatar is { } avatar && avatar.Scene == _network.Scene)
+            _network.Destroy(avatar);
         player.Avatar = null;
         _players.Remove(player);
         player.Connection = null;
@@ -264,8 +264,8 @@ public sealed partial class NetSession
         foreach (var player in _players.Where(p => !p.IsLocal))
         {
             Remember(player);
-            if (player.Avatar is { } avatar && avatar.Scene == _game.Scene)
-                _game.Destroy(avatar);
+            if (player.Avatar is { } avatar && avatar.Scene == _network.Scene)
+                _network.Destroy(avatar);
         }
 
         foreach (var entity in _avatarOwners.Keys)
@@ -294,7 +294,7 @@ public sealed partial class NetSession
         var w = new NetWriter();
         w.Byte((byte)NetMessage.Scene);
         w.VarInt(_epoch);
-        w.String(_game.SceneName ?? "");
+        w.String(_network.SceneName ?? "");
         WriteSettings(w);
         foreach (var player in _players.Where(p => p.Connection is not null))
         {
@@ -304,10 +304,10 @@ public sealed partial class NetSession
         }
 
         var name = Settings?.Player?.Trim();
-        _template = string.IsNullOrEmpty(name) ? null : EntityNames.Find(_game.Scene, name, new NameLookup(Where: static e => e.Parent is null));
+        _template = string.IsNullOrEmpty(name) ? null : EntityNames.Find(_network.Scene, name, new NameLookup(Where: static e => e.Parent is null));
         _templateJson = _template is null ? null : Serializer.SerializeEntity(_template);
         if (Role == NetRole.Server && _template is not null)
-            _game.Destroy(_template);
+            _network.Destroy(_template);
 
         foreach (var player in _players)
         {
@@ -315,7 +315,7 @@ public sealed partial class NetSession
             SpawnAvatar(player, fresh: false);
         }
 
-        _game.NetworkSystem.NetSceneStarted();
+        _network.NetSceneStarted();
     }
 
     private Entity? SpawnAvatar(NetPlayer player, bool fresh)
@@ -325,7 +325,7 @@ public sealed partial class NetSession
             return null;
 
         Entity? avatar = null;
-        if (player.IsLocal && !fresh && _template is { } own && own.Scene == _game.Scene)
+        if (player.IsLocal && !fresh && _template is { } own && own.Scene == _network.Scene)
         {
             avatar = own;
             Place(avatar, player);
@@ -337,7 +337,7 @@ public sealed partial class NetSession
             {
                 avatar = remembered is not null ? Serializer.DeserializeEntity(remembered)
                     : _templateJson is not null ? Serializer.DeserializeEntity(_templateJson)
-                    : _game.TryLoadPrefab(name, null, "The prefab of the network game's player avatar");
+                    : _network.TryLoadPrefab(name, "The prefab of the network game's player avatar");
             }
             catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or JsonException)
             {
@@ -350,7 +350,7 @@ public sealed partial class NetSession
                 RemoveLocalParts(avatar);
             if (remembered is null)
                 Place(avatar, player);
-            _game.Spawn(avatar);
+            _network.Spawn(avatar);
         }
 
         var networked = avatar.GetComponent<Networked>() ?? avatar.AddComponent<Networked>();
@@ -383,10 +383,10 @@ public sealed partial class NetSession
 
     private void Place(Entity avatar, NetPlayer player)
     {
-        var spawns = _game.Scene.ActiveNow<PlayerSpawn>()
+        var spawns = _network.Scene.ActiveNow<PlayerSpawn>()
             .Where(s => string.IsNullOrWhiteSpace(s.Team) || Teams.Same(s.Team, player.Team))
             .ToList();
-        var others = _players.Where(p => p != player && p.Avatar?.Scene == _game.Scene).Select(p => Flat(p.Avatar!.Transform.WorldPosition)).ToList();
+        var others = _players.Where(p => p != player && p.Avatar?.Scene == _network.Scene).Select(p => Flat(p.Avatar!.Transform.WorldPosition)).ToList();
         Vector2 at;
         if (spawns.Count > 0)
         {
@@ -465,23 +465,23 @@ public sealed partial class NetSession
 
     private void Remember(NetPlayer player)
     {
-        if (Settings is not { RememberPlayers: true } || player.Avatar is not { } avatar || avatar.Scene != _game.Scene)
+        if (Settings is not { RememberPlayers: true } || player.Avatar is not { } avatar || avatar.Scene != _network.Scene)
             return;
         var all = LoadRemembered();
         all[RememberKey(player)] = Serializer.SerializeEntity(avatar);
-        _game.SaveData.Set(RememberedSaveKey, JsonSerializer.Serialize(all));
+        _network.SaveData.Set(RememberedSaveKey, JsonSerializer.Serialize(all));
     }
 
     private string? Recall(NetPlayer player) =>
         Settings is { RememberPlayers: true } && LoadRemembered().TryGetValue(RememberKey(player), out var json) ? json : null;
 
-    private string RememberKey(NetPlayer player) => $"{_game.SceneName}/{player.Name.ToLowerInvariant()}";
+    private string RememberKey(NetPlayer player) => $"{_network.SceneName}/{player.Name.ToLowerInvariant()}";
 
     private Dictionary<string, string> LoadRemembered()
     {
         try
         {
-            return _game.SaveData.GetString(RememberedSaveKey) is { } json
+            return _network.SaveData.GetString(RememberedSaveKey) is { } json
                 ? JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? []
                 : [];
         }
@@ -564,7 +564,7 @@ public sealed partial class NetSession
     private void Sync()
     {
         _syncTick++;
-        var scene = _game.Scene;
+        var scene = _network.Scene;
         var order = new List<NetObject>(_objects.Count);
         foreach (var entity in scene.EntitiesNow)
         {
@@ -770,7 +770,7 @@ public sealed partial class NetSession
     private List<Vector2> Eyes(NetPlayer player)
     {
         var eyes = new List<Vector2>();
-        if (player.Avatar is { } avatar && avatar.Scene == _game.Scene)
+        if (player.Avatar is { } avatar && avatar.Scene == _network.Scene)
             eyes.Add(Flat(avatar.Transform.WorldPosition));
         if (player.Remote is { HasView: true } input)
             eyes.Add(input.View.Center);
@@ -811,7 +811,7 @@ public sealed partial class NetSession
         var ghost = new Ghost(obj, ++obj.Spawns);
         player.Ghosts[obj] = ghost;
         var entity = obj.Entity;
-        var siblings = entity.Parent?.Children ?? _game.Scene.Roots;
+        var siblings = entity.Parent?.Children ?? _network.Scene.Roots;
         var w = new NetWriter(512);
         w.Byte((byte)NetMessage.Spawn);
         w.VarInt(_epoch);
@@ -850,7 +850,7 @@ public sealed partial class NetSession
     private void SendReparent(NetConnection connection, NetObject obj)
     {
         var entity = obj.Entity;
-        var siblings = entity.Parent?.Children ?? _game.Scene.Roots;
+        var siblings = entity.Parent?.Children ?? _network.Scene.Roots;
         var w = new NetWriter(16);
         w.Byte((byte)NetMessage.Reparent);
         w.VarInt(_epoch);
@@ -1008,7 +1008,7 @@ public sealed partial class NetSession
                 {
                     var name = r.String() ?? "";
                     var args = ReadData(ref r);
-                    _game.NetworkSystem.RunNetCommand(player, name, args);
+                    _network.RunNetCommand(player, name, args);
                     break;
                 }
             }
@@ -1122,10 +1122,10 @@ public sealed partial class NetSession
     // What MessageBytes wrote after a message's data: its route, or null when it's for an entity this machine hasn't got.
     private MessageRoute? ReadRoute(ref NetReader r)
     {
-        var from = r.Bool() ? _game.Scene.Find(r.Guid()) : null;
+        var from = r.Bool() ? _network.Scene.Find(r.Guid()) : null;
         if (!r.Bool())
             return new MessageRoute(from, null, false);
-        var to = _game.Scene.Find(r.Guid());
+        var to = _network.Scene.Find(r.Guid());
         var children = r.Bool();
         return to is null ? null : new MessageRoute(from, to, children);
     }
@@ -1164,7 +1164,7 @@ public sealed partial class NetSession
             throw new ArgumentException($"A {data!.GetType().Name} can't be sent to other players. Send a number, text, a vector, a color, an entity or a player.", nameof(data));
         if (!IsOnline)
         {
-            _game.Send(message, data);
+            _network.SendHere(message, data);
             return;
         }
 
@@ -1214,7 +1214,7 @@ public sealed partial class NetSession
         Sender = from;
         try
         {
-            _game.MessageSystem.SendFromNetwork(message, data, relay, route);
+            _network.SendFromNetwork(message, data, relay, route);
         }
         finally
         {
@@ -1235,7 +1235,7 @@ public sealed partial class NetSession
             return;
         }
 
-        _game.NetworkSystem.RunNetCommand(LocalPlayer, name, args);
+        _network.RunNetCommand(LocalPlayer, name, args);
     }
 
     private void WriteData(NetWriter w, object? data) =>

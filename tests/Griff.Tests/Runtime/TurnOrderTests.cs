@@ -361,9 +361,9 @@ public class TurnOrderTests
         var host = world.Host;
         var client = world.Client;
         TurnOrder Order(Game game) => game.Scene.Entities.First(e => e.Name == "Turns").GetComponent<TurnOrder>()!;
-        var clientMe = host.Net.Players.First(p => !p.IsLocal);
+        var clientMe = host.Network.Players.First(p => !p.IsLocal);
         Assert.Equal("Red", clientMe.Team);
-        var redOnHost = host.Scene.Entities.First(e => e.Name == "Player" && host.Net.OwnerOf(e) == clientMe);
+        var redOnHost = host.Scene.Entities.First(e => e.Name == "Player" && host.Network.OwnerOf(e) == clientMe);
         Assert.Equal("Blue", Order(host).Current);
         Assert.Equal("Blue", Order(client).Current);
 

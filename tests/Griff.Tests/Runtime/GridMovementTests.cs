@@ -385,7 +385,7 @@ public class GridMovementTests
 
         var world = new NetWorld(Arena);
         var client = world.Client;
-        var mine = client.Net.LocalPlayer!.Avatar!;
+        var mine = client.Network.LocalPlayer!.Avatar!;
         var movement = mine.GetComponent<GridMovement>()!;
         var start = movement.Cell;
         var hostCopy = world.Host.Scene.Find(mine.Id)!;

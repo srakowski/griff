@@ -102,7 +102,7 @@ internal sealed class AtmosphereSystem : GameSystem, ISounds
     internal void PlaySoundAt(string sound, Vector2 position, float volume, float pitch, bool relay)
     {
         if (relay)
-            Game.Net.RelaySound(sound, volume, pitch, position);
+            Game.NetworkSystem.RelaySound(sound, volume, pitch, position);
         var (loudness, pan) = Hearing(position, range: 0);
         if (loudness <= 0)
             return;

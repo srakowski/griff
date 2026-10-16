@@ -16,14 +16,14 @@ internal sealed class FocusSystem : GameSystem, IInputFocus
         ArgumentNullException.ThrowIfNull(entity);
         if (entity.Scene != Game.Scene)
             throw new InvalidOperationException("Only an entity in the running scene can be given focus.");
-        var player = NetSession.OwnerIdOf(entity);
+        var player = Networked.OwnerIdOf(entity);
         var local = PlayedBy.Of(entity);
         var entities = Game.Scene.EntitiesNow;
         for (var i = 0; i < entities.Length; i++)
         {
             var other = entities[i];
             var inside = other.IsSelfOrDescendantOf(entity);
-            if (!inside && (!SamePlayer(player, NetSession.OwnerIdOf(other)) || !SamePlayer(local, PlayedBy.Of(other))))
+            if (!inside && (!SamePlayer(player, Networked.OwnerIdOf(other)) || !SamePlayer(local, PlayedBy.Of(other))))
                 continue;
             var components = other.ComponentList;
             for (var c = 0; c < components.Count; c++)

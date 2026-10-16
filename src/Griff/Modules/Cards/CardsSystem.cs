@@ -614,7 +614,7 @@ internal sealed partial class CardsSystem : GameSystem
         var side = hand.Team;
         if (side.Length > 0 && Game.TurnOrderOf(hand.Entity) is { } order && order.IsComputer(side))
             return false;
-        if (Game.Net.IsOnline && player is { Team.Length: > 0 } && side.Length > 0 && !Teams.Same(side, player.Team))
+        if (Game.Network.IsOnline && player is { Team.Length: > 0 } && side.Length > 0 && !Teams.Same(side, player.Team))
             return false;
         return !now || !Game.Waiting(hand.Entity);
     }
@@ -644,8 +644,8 @@ internal sealed partial class CardsSystem : GameSystem
     }
 
     private void SendPlay(Card card, CardZone zone, Vector2? at, Entity? target) =>
-        Game.Net.SendCommand(CardsCommand, new object?[] { PlayCommand, card.Entity, zone.Entity, at?.X ?? float.NaN, at?.Y ?? float.NaN, target });
+        Game.Network.SendCommand(CardsCommand, new object?[] { PlayCommand, card.Entity, zone.Entity, at?.X ?? float.NaN, at?.Y ?? float.NaN, target });
 
     private void SendDraw(Deck deck, Hand hand) =>
-        Game.Net.SendCommand(CardsCommand, new object?[] { DrawCommand, deck.Entity, hand.Entity, 0f, 0f, null });
+        Game.Network.SendCommand(CardsCommand, new object?[] { DrawCommand, deck.Entity, hand.Entity, 0f, 0f, null });
 }

@@ -32,7 +32,7 @@ internal sealed class FirstPersonSystem : GameSystem, IViewDrawer, ISeesThroughE
     // The player seen through, and in a network game, each player's own character named as the viewer.
     public bool LooksThrough(Entity entity) =>
         FirstPersonView is { } view && (ViewerOf(view) == entity ||
-                                        (Game.Net.IsOnline && entity.GetComponent<FirstPersonMovement>() is not null && view.Viewer?.Trim() == entity.Name));
+                                        (Game.Network.IsOnline && entity.GetComponent<FirstPersonMovement>() is not null && view.Viewer?.Trim() == entity.Name));
 
     /// <summary>
     /// The camera's <see cref="FirstPersonView"/>, if the game is played in first person: the main camera's, or else that of

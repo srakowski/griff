@@ -129,9 +129,6 @@ internal sealed partial class AdventuresSystem
     // a demo can find its items).
     public void LayOutHud()
     {
-        // The host doesn't keep other players' bars: each player's machine lays out its own, and says if the mouse is on it.
-        if (Game.ActingFor is not null)
-            return;
         _onBar = false;
         Walker? mine = null;
         foreach (var walker in Game.Showing<Walker>())

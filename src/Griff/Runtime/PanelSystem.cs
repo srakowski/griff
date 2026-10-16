@@ -141,7 +141,7 @@ internal sealed class PanelSystem : GameSystem, IPanels
         foreach (var (panel, _) in _open)
             panel.IsTop = panel == TopPanel;
         // A network game is shared, so it can't stop for one player's menu (their keys just don't reach it meanwhile).
-        Game.Time.IsPaused = !Game.Net.IsOnline && AnyPanelPauses();
+        Game.Time.IsPaused = !Game.Network.IsOnline && AnyPanelPauses();
         // One that pauses only a group stops it at once, as one that pauses the whole game does.
         Game.PauseSystem.SyncPauses();
     }
@@ -188,10 +188,10 @@ internal sealed class PanelSystem : GameSystem, IPanels
             return false;
         return button.Action switch
         {
-            ButtonAction.LoadGame or ButtonAction.DeleteSave => ReadingSystem.SlotOf(button) is { } slot && Game.HasSave(slot) && (button.Action == ButtonAction.DeleteSave || !Game.Net.IsOnline),
-            ButtonAction.QuickLoad => Game.HasSave(Game.QuickSlot) && !Game.Net.IsOnline,
-            ButtonAction.Continue => !Game.Net.IsOnline && Game.LatestSave is not null,
-            ButtonAction.SaveGame or ButtonAction.QuickSave => !Game.Net.IsOnline,
+            ButtonAction.LoadGame or ButtonAction.DeleteSave => ReadingSystem.SlotOf(button) is { } slot && Game.HasSave(slot) && (button.Action == ButtonAction.DeleteSave || !Game.Network.IsOnline),
+            ButtonAction.QuickLoad => Game.HasSave(Game.QuickSlot) && !Game.Network.IsOnline,
+            ButtonAction.Continue => !Game.Network.IsOnline && Game.LatestSave is not null,
+            ButtonAction.SaveGame or ButtonAction.QuickSave => !Game.Network.IsOnline,
             _ => true,
         };
     }

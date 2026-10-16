@@ -383,7 +383,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
             case "hold":
                 var (name, seconds) = Split2(a, ' ');
                 await GameKey(name, double.Parse(seconds, CultureInfo.InvariantCulture));
-                if ((CurrentGame?.Net.LocalPlayer?.Avatar ?? CurrentGame?.Find("Player")) is { } walker)
+                if ((CurrentGame?.Network.LocalPlayer?.Avatar ?? CurrentGame?.Find("Player")) is { } walker)
                     options.Log($"hold: {a} -> Player at {walker.Transform.WorldPosition.X:0.0}, {walker.Transform.WorldPosition.Y:0.0}");
                 break;
             case "gameclick":
@@ -1593,13 +1593,13 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
         if (!await Until(() => play.IsPlaying, 3000))
             play.Play(players);
         bool AllIn() => play.PlayerCount == players &&
-                        Enumerable.Range(1, players).All(n => play.PlayerGame(n) is { Net.LocalPlayer.Avatar: not null } g && g.Net.Players.Count == players);
+                        Enumerable.Range(1, players).All(n => play.PlayerGame(n) is { Network.LocalPlayer.Avatar: not null } g && g.Network.Players.Count == players);
         if (!await Until(AllIn, 8000))
             throw new TimeoutException($"Not all {players} players joined (there are {play.PlayerCount}).");
         _player = 1;
-        options.Log($"players: {players} -> {string.Join(", ", play.PlayerGame(1)!.Net.Players.Select(p => p.Name))}");
+        options.Log($"players: {players} -> {string.Join(", ", play.PlayerGame(1)!.Network.Players.Select(p => p.Name))}");
         for (var n = 1; play.PlayerGame(n) is { } game; n++)
-            options.Log($"  player {n}: {game.Net.Describe()}");
+            options.Log($"  player {n}: {game.Network.Session?.Describe()}");
         await DemoUi.Settle(300);
     }
 
@@ -1613,9 +1613,9 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
             window.Activate();
         else
             await ui.FocusEditor();
-        options.Log($"player: {number} -> {CurrentGame!.Net.LocalPlayer?.Name}");
+        options.Log($"player: {number} -> {CurrentGame!.Network.LocalPlayer?.Name}");
         for (var n = 1; play.PlayerGame(n) is { } game; n++)
-            options.Log($"  player {n}: {game.Net.Describe()}");
+            options.Log($"  player {n}: {game.Network.Session?.Describe()}");
         await DemoUi.Settle(150);
     }
 
@@ -1680,7 +1680,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
         // In a network game, a player's name ("Player 1") is their character.
         var entity = game.Scene.Entities.Where(e => e.Name == name && e.IsActive)
             .OrderBy(e => System.Numerics.Vector3.Distance(e.Transform.WorldPosition, camera)).FirstOrDefault()
-            ?? game.Net.Players.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Avatar
+            ?? game.Network.Players.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Avatar
             ?? throw new InvalidOperationException($"No {name} in the running game.");
         return MiddleOf(entity) + offset;
     }

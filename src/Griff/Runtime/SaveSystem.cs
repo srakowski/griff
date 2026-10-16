@@ -193,7 +193,7 @@ internal sealed class SaveSystem : GameSystem
     // Saving and loading are this machine's own, so not in a network game.
     private bool CanSave()
     {
-        if (!Game.Net.IsOnline)
+        if (!Game.Network.IsOnline)
             return true;
         Game.Warn("Games can't be saved or loaded during a network game.");
         return false;

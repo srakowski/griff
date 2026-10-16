@@ -1,13 +1,19 @@
+using System.Net;
 using System.Numerics;
+using Griff.Networking;
 using Griff.Scenes;
+using Griff.Scenes.Serialization;
 
 namespace Griff.Runtime;
 
 /// <summary>
-/// Runs the network session at either end of each step and the commands players' machines and the host send each other
-/// (Griff's own and the modules'), and on the host runs each other player's tools for them, as them.
+/// Owns multiplayer (<see cref="INetwork"/>): the network session while the game is networked, made when it hosts or
+/// joins and dropped when that ends, run at either end of each step; the commands players' machines and the host send each
+/// other (Griff's own and the modules'); and on the host, each other player's tools, run for them with their controls.
+/// The session works through this system: what it needs of the game (the scene, the save data, spawning, messages, the
+/// scene the host loads) it asks here, and this asks the systems that own each.
 /// </summary>
-internal sealed class NetworkSystem : GameSystem
+internal sealed class NetworkSystem : GameSystem, INetwork
 {
     [NotState("what's registered as the game is set up")]
     private readonly Dictionary<string, Action<NetPlayer?, object?>> _netCommands = new(StringComparer.Ordinal);
@@ -15,41 +21,301 @@ internal sealed class NetworkSystem : GameSystem
     [NotState("what's registered as the game is set up")]
     private readonly Dictionary<string, Action<object?>> _hostCommands = new(StringComparer.Ordinal);
 
+    [NotState("a network game's connection")]
+    private NetSession? _session;
+
+    [NotState("a network game's connection")]
+    private string _status = "";
+
+    [NotState("the host's")]
+    private NetConditions _fakeLag = new();
+
+    [NotState("the host's")]
+    private string? _unavailable = OperatingSystem.IsBrowser() ? NetSession.BrowserUnavailable : null;
+
+    [NotState("worked out again from the scene")]
+    private (Scene? Scene, long Version, Multiplayer? Settings) _settings = (null, -1, null);
+
     public override string Name => "Network";
 
-    internal void BeginNetwork() => Game.Net.BeginFrame(Game.Time.UnscaledDelta);
+    // ----- INetwork -----
 
-    internal void EndNetwork() => Game.Net.EndFrame(Game.Time.UnscaledDelta);
+    public NetSession? Session => _session;
 
-    // The host runs each other player's tools for them, as them: each system lays out its HUD for their screen, then runs
-    // their controls.
-    internal void RunOtherPlayersTools()
+    public NetRole Role => _session?.Role ?? NetRole.Offline;
+
+    public bool IsOnline => _session is { IsOnline: true };
+
+    public bool IsHost => _session is { IsHost: true };
+
+    public bool IsClient => _session is { IsClient: true };
+
+    public bool IsConnecting => _session is { IsConnecting: true };
+
+    public string Status => _session?.Status ?? _status;
+
+    public NetPlayer? LocalPlayer => _session?.LocalPlayer;
+
+    public IReadOnlyList<NetPlayer> Players => _session?.Players ?? [];
+
+    public IReadOnlyList<NetPlayer> RemotePlayers
     {
-        if (!Game.Net.IsHost)
-            return;
-        Game.ForEachRemotePlayer(player =>
+        get
         {
-            Game.HudSystem.LayOutHuds();
-            for (var i = 0; i < Game.Systems.Count; i++)
-                Game.Systems[i].RunForOtherPlayer(player);
+            if (_session is not { IsHost: true } session)
+                return [];
+            List<NetPlayer>? remote = null;
+            foreach (var player in session.Players)
+            {
+                if (!player.IsLocal && player.Input is not null)
+                    (remote ??= []).Add(player);
+            }
+
+            return remote ?? (IReadOnlyList<NetPlayer>)[];
+        }
+    }
+
+    public NetPlayer? Sender => _session?.Sender;
+
+    public string PlayerName
+    {
+        get => Game.SaveData.GetString(NetSession.NameSaveKey) is { Length: > 0 } saved ? saved : DefaultName();
+        set
+        {
+            var name = (value ?? "").Trim();
+            if (name.Length > 24)
+                name = name[..24];
+            if (name.Length == 0)
+                Game.SaveData.Delete(NetSession.NameSaveKey);
+            else
+                Game.SaveData.Set(NetSession.NameSaveKey, name);
+        }
+    }
+
+    public string? Unavailable
+    {
+        get => _unavailable;
+        set => _unavailable = value;
+    }
+
+    public NetConditions FakeLag
+    {
+        get => _fakeLag;
+        set
+        {
+            _fakeLag = value ?? new NetConditions();
+            _session?.UseConditions(_fakeLag);
+        }
+    }
+
+    public Multiplayer? Settings
+    {
+        get
+        {
+            var scene = Game.Scene;
+            if (_settings.Scene != scene || _settings.Version != scene.Version)
+                _settings = (scene, scene.Version, scene.AllNow<Multiplayer>().FirstOrDefault());
+            return _settings.Settings;
+        }
+    }
+
+    public bool Host(int port = 0) => Start(session => session.Host(port, dedicated: false));
+
+    public bool HostServer(int port = 0) => Start(session => session.Host(port, dedicated: true));
+
+    public void Host(INetSocket socket, bool dedicated = false) => Start(session =>
+    {
+        session.Host(socket, dedicated);
+        return true;
+    });
+
+    public void Join(string? address, int port = 0) => Start(session =>
+    {
+        session.Join(address, port);
+        return true;
+    });
+
+    public void Join(INetSocket socket, EndPoint host)
+    {
+        // Joining again on the socket already joining with keeps the session.
+        if (_session is { } joining && joining.UsesSocket(socket))
+        {
+            joining.Join(socket, host);
+            return;
+        }
+
+        Start(session =>
+        {
+            session.Join(socket, host);
+            return true;
         });
     }
 
-    // ----- Called by the session -----
+    public void Leave(string reason = "Left the game.")
+    {
+        if (_session is not { } session)
+            return;
+        session.Leave(reason);
+        Drop(session, reason);
+    }
+
+    public event Action<NetPlayer>? PlayerJoined;
+
+    public event Action<NetPlayer>? PlayerLeft;
+
+    public event Action<string>? Ended;
+
+    public NetPlayer? OwnerOf(Entity? entity) => _session?.OwnerOf(entity);
+
+    public bool IsMine(Entity? entity) => _session is not { IsOnline: true } session || session.IsMine(entity);
+
+    public NetPlayer? PlayerById(int id) => _session?.PlayerById(id);
+
+    public void Send(string message, object? data = null)
+    {
+        if (_session is { } session)
+        {
+            session.Send(message, data);
+            return;
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+        if (!NetCodec.CanSend(data))
+            throw new ArgumentException($"A {data!.GetType().Name} can't be sent to other players. Send a number, text, a vector, a color, an entity or a player.", nameof(data));
+        Game.Send(message, data);
+    }
+
+    public void SendCommand(string name, object? args)
+    {
+        if (_session is { } session)
+            session.SendCommand(name, args);
+        else
+            RunNetCommand(null, name, args);
+    }
+
+    public void SendCommandTo(NetPlayer player, string name, object? data) => _session?.SendCommandTo(player, name, data);
+
+    public void AddScore(NetPlayer player, int points) => _session?.AddScore(player, points);
+
+    public IReadOnlyList<string> TeamNames() => _session?.TeamNames() ?? [.. Formats.Names(Settings?.Teams)];
+
+    // A new session in place of any there is, kept if it starts.
+    private bool Start(Func<NetSession, bool> start)
+    {
+        Leave();
+        var session = new NetSession(this);
+        _session = session;
+        if (start(session))
+            return true;
+        Drop(session, session.Status);
+        return false;
+    }
+
+    // The session ended (left, lost or never got going): this machine carries on by itself, saying why.
+    private void Drop(NetSession session, string why)
+    {
+        if (_session != session)
+            return;
+        _session = null;
+        _status = why;
+    }
+
+    private static string DefaultName()
+    {
+        var name = Environment.UserName;
+        return string.IsNullOrWhiteSpace(name) ? "Player" : name.Length > 24 ? name[..24] : name;
+    }
+
+    // ----- Each step -----
+
+    internal void BeginNetwork() => _session?.BeginFrame(Game.Time.UnscaledDelta);
+
+    internal void EndNetwork() => _session?.EndFrame(Game.Time.UnscaledDelta);
+
+    // The host runs each other player's tools for them: each system with a player's own tools is handed the player and
+    // their controls, and lays out their HUD for their screen itself. This machine's controls stay its own.
+    internal void RunOtherPlayersTools()
+    {
+        if (!IsHost)
+            return;
+        foreach (var player in RemotePlayers)
+        {
+            if (player.Avatar is null || player.Input is not { } input)
+                continue;
+            for (var i = 0; i < Game.Systems.Count; i++)
+                Game.Systems[i].RunForOtherPlayer(player, input);
+        }
+    }
+
+    internal void HostSceneLoaded() => _session?.HostSceneLoaded();
+
+    internal void StartHostScene() => _session?.StartHostScene();
+
+    internal void RelaySound(string sound, float volume, float pitch, Vector2? at) => _session?.RelaySound(sound, volume, pitch, at);
+
+    internal void Relay(string message, object? data, MessageRoute route) => _session?.Relay(message, data, route);
+
+    internal void CountDefeat(Entity defeated, Entity? by) => _session?.CountDefeat(defeated, by);
+
+    // ----- What the session asks of the game -----
+
+    internal Scene Scene => Game.Scene;
+
+    internal string? SceneName => Game.SceneName;
+
+    internal SaveData SaveData => Game.SaveData;
+
+    // This machine's own controls.
+    internal IInput Input => Game.Input;
+
+    internal string? Title => Game.Title;
+
+    internal ComponentRegistry Registry => Game.Components ?? ComponentRegistry.CreateDefault();
+
+    internal bool MouseOnUi => Game.MouseOnUi;
+
+    internal bool LocalInputBlocked => Game.LocalInputBlocked;
+
+    // What this machine's player sees, for the host to lay out their HUD by.
+    internal (Vector2 Center, float HalfHeight, float Aspect) View => Game.HudView();
+
+    internal void Spawn(Entity entity) => Game.Spawn(entity);
+
+    internal void Destroy(Entity entity) => Game.Destroy(entity);
+
+    internal Entity? TryLoadPrefab(string name, string what) => Game.TryLoadPrefab(name, null, what);
+
+    internal void ShakeCamera(float strength, float duration) => Game.ShakeCamera(strength, duration);
+
+    internal void LoadSceneForNetwork(string scene) => Game.SceneSystem.LoadSceneForNetwork(scene);
+
+    // A message delivered here, as Game.Send would (on the host, passed on to everyone when it should be).
+    internal void SendFromNetwork(string message, object? data, bool relay, MessageRoute route) =>
+        Game.MessageSystem.SendFromNetwork(message, data, relay, route);
+
+    // A message for this machine only, as Game.Send.
+    internal void SendHere(string message, object? data) => Game.Send(message, data);
+
+    internal void RaisePlayerJoined(NetPlayer player) => PlayerJoined?.Invoke(player);
+
+    internal void RaisePlayerLeft(NetPlayer player) => PlayerLeft?.Invoke(player);
+
+    internal void RaiseEnded(string reason) => Ended?.Invoke(reason);
+
+    /// <summary>The session ended (left, lost or never got going): the scene's entities are this machine's own again.</summary>
+    internal void SessionEnded(NetSession session, string reason)
+    {
+        Drop(session, reason);
+        Game.Scene.PreferNamed = null;
+        foreach (var entity in Game.Scene.EntitiesNow)
+            entity.NetFlags = NetFlags.None;
+    }
 
     /// <summary>A scene started in a network game (the host's, or the copy of it here): settle who's who in it.</summary>
     internal void NetSceneStarted()
     {
-        Game.Scene.PreferNamed = Game.Net.IsOnline ? e => Game.Net.IsMine(e) && NetSession.OwnerIdOf(e) != 0 : null;
+        Game.Scene.PreferNamed = IsOnline ? e => IsMine(e) && Networked.OwnerIdOf(e) != 0 : null;
         NetPlayersChanged();
-    }
-
-    /// <summary>The session ended: this machine carries on by itself.</summary>
-    internal void NetEnded()
-    {
-        Game.Scene.PreferNamed = null;
-        foreach (var entity in Game.Scene.EntitiesNow)
-            entity.NetFlags = NetFlags.None;
     }
 
     /// <summary>The host went away: back to the menu, or this scene from the start.</summary>
@@ -98,18 +364,26 @@ internal sealed class NetworkSystem : GameSystem
 
     internal void OnHostCommand(string name, Action<object?> command) => _hostCommands[name] = command;
 
-    public ComponentList<T> Mine<T>(bool evenPaused = false) where T : Component =>
-        Game.Net.IsOnline ? MineOnline<T>(evenPaused) : evenPaused ? Game.Present<T>() : Game.Active<T>();
+    // ----- Who has what -----
 
-    private ComponentList<T> MineOnline<T>(bool evenPaused) where T : Component
+    public ComponentList<T> Mine<T>(bool evenPaused = false) where T : Component => Owned<T>(null, evenPaused);
+
+    // What one player has: what's on their own character, and for this machine's player, what no one owns that runs here.
+    public ComponentList<T> Owned<T>(NetPlayer? player, bool evenPaused = false) where T : Component
     {
-        var id = (Game.ActingFor ?? Game.Net.LocalPlayer)?.Id ?? 0;
-        return Game.Where(evenPaused ? Game.Scene.ActiveNow<T>() : Game.Scene.RunningNow<T>(), entity =>
-        {
-            var owner = NetSession.OwnerIdOf(entity);
-            return (owner != 0 && owner == id) || (owner == 0 && Game.ActingFor is null && Game.Runs(entity));
-        });
+        if (!IsOnline)
+            return evenPaused ? Game.Present<T>() : Game.Active<T>();
+        var local = player is null || player.IsLocal;
+        return OwnedOnline<T>(local ? LocalPlayer?.Id ?? 0 : player!.Id, local, evenPaused);
     }
+
+    // Apart, so offline makes no closure.
+    private ComponentList<T> OwnedOnline<T>(int id, bool local, bool evenPaused) where T : Component =>
+        Game.Where(evenPaused ? Game.Scene.ActiveNow<T>() : Game.Scene.RunningNow<T>(), entity =>
+        {
+            var owner = Networked.OwnerIdOf(entity);
+            return (owner != 0 && owner == id) || (owner == 0 && local && Game.Runs(entity));
+        });
 
     public void Claim(Entity spawned, Entity by)
     {
@@ -117,14 +391,14 @@ internal sealed class NetworkSystem : GameSystem
         if (Teams.Of(spawned).Length == 0 && Teams.Of(by) is { Length: > 0 } team)
             spawned.AddComponent(new Team { Name = team });
 
-        var owner = Game.Net.IsOnline ? NetSession.OwnerIdOf(by) : 0;
+        var owner = IsOnline ? Networked.OwnerIdOf(by) : 0;
         if (owner == 0)
             return;
         var networked = spawned.GetComponent<Networked>() ?? spawned.AddComponent<Networked>();
         networked.Owner = owner;
 
         // Shots in their player's color, a little lighter, so it's clear whose they are.
-        if (Game.Net.Settings is { ColorPlayers: true } && Game.Net.PlayerById(owner) is { } player && spawned.GetComponent<Sprite>() is { } sprite)
+        if (Settings is { ColorPlayers: true } && PlayerById(owner) is { } player && spawned.GetComponent<Sprite>() is { } sprite)
         {
             var c = player.Color;
             sprite.Tint = new Color(c.R + (1 - c.R) * 0.45f, c.G + (1 - c.G) * 0.45f, c.B + (1 - c.B) * 0.45f, sprite.Tint.A);
@@ -135,34 +409,34 @@ internal sealed class NetworkSystem : GameSystem
     {
         if (source is null)
             return true;
-        var friendlyFire = Game.Net.IsOnline && Game.Net.Settings is { FriendlyFire: true };
+        var friendlyFire = IsOnline && Settings is { FriendlyFire: true };
         if (!friendlyFire && Teams.Allies(Game.TeamOf(source), Game.TeamOf(target)))
             return false;
-        if (!Game.Net.IsOnline)
+        if (!IsOnline)
             return true;
-        var by = Game.Net.OwnerOf(source);
-        var hurt = Game.Net.OwnerOf(target);
+        var by = OwnerOf(source);
+        var hurt = OwnerOf(target);
         return by is null || hurt is null || by != hurt;
     }
 
     public void PlayShared(string sound)
     {
         Game.Audio.Play(sound);
-        Game.Net.RelaySound(sound, 1, 1, null);
+        RelaySound(sound, 1, 1, null);
     }
 
     public void ShakeFor(Entity entity, float strength, float duration)
     {
-        if (Game.Net.IsMine(entity))
+        if (IsMine(entity))
             Game.ShakeCamera(strength, duration);
-        else if (Game.Net.OwnerOf(entity) is { } player)
-            Game.Net.SendShake(player, strength, duration);
+        else if (OwnerOf(entity) is { } player)
+            _session?.SendShake(player, strength, duration);
     }
 
     /// <summary>The list of players changed (someone joined or left, or changed team), or a network game's scene started.</summary>
     internal void NetPlayersChanged()
     {
-        if (!Game.Net.IsOnline)
+        if (!IsOnline)
             return;
         foreach (var system in Game.Systems.ToList())
             system.RunPlayersChanged();

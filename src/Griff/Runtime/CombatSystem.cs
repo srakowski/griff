@@ -273,7 +273,7 @@ internal sealed class CombatSystem : GameSystem
 
             if (!health.TakeDeath())
                 continue;
-            Game.Net.CountDefeat(health.Entity!, health.LastHitBy);
+            Game.NetworkSystem.CountDefeat(health.Entity!, health.LastHitBy);
             if (!string.IsNullOrWhiteSpace(health.DeathSound))
                 Game.PlaySoundAt(health.DeathSound.Trim(), at);
             if (!string.IsNullOrWhiteSpace(health.DeathMessage))

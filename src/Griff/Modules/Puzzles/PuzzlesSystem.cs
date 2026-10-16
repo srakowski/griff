@@ -93,7 +93,7 @@ internal sealed class PuzzlesSystem : GameSystem, IGridStepListener
     // (or offline): a player's presses reach it from their machine. A restart and an undo in the same frame just restart.
     internal void RunMoveHistory()
     {
-        if (Game.Net.IsClient || Game.Net.IsConnecting)
+        if (Game.Network.IsClient || Game.Network.IsConnecting)
             return;
         foreach (var history in Game.Active<MoveHistory>())
         {
@@ -169,7 +169,7 @@ internal sealed class PuzzlesSystem : GameSystem, IGridStepListener
     public void GridStepStarting(GridMovement movement)
     {
         var mover = movement.Entity!;
-        if (Game.Net.IsOnline || !IsGridPlayer(mover))
+        if (Game.Network.IsOnline || !IsGridPlayer(mover))
             return;
         foreach (var history in Game.Active<MoveHistory>())
         {
@@ -181,7 +181,7 @@ internal sealed class PuzzlesSystem : GameSystem, IGridStepListener
     // Back to the moment before the last move. Online there's no undo: everyone's moves are their own.
     private void UndoMove(MoveHistory history)
     {
-        if (Game.Net.IsOnline || history.Past.Count == 0)
+        if (Game.Network.IsOnline || history.Past.Count == 0)
             return;
         var to = history.Past[^1];
         history.Past.RemoveAt(history.Past.Count - 1);
@@ -195,7 +195,7 @@ internal sealed class PuzzlesSystem : GameSystem, IGridStepListener
     // Back to where the level started, as a move Undo can take back; or the scene reloaded (online, for everyone).
     private void RestartMoves(MoveHistory history)
     {
-        var reloads = (history.RestartReloads || Game.Net.IsOnline) && Game.SceneLoader is not null && Game.SceneName is not null;
+        var reloads = (history.RestartReloads || Game.Network.IsOnline) && Game.SceneLoader is not null && Game.SceneName is not null;
         if (reloads)
         {
             if (Game.IsChangingScene)
@@ -204,7 +204,7 @@ internal sealed class PuzzlesSystem : GameSystem, IGridStepListener
         }
         else
         {
-            if (Game.Net.IsOnline || history.Moves == 0 || history.Start is not { } start)
+            if (Game.Network.IsOnline || history.Moves == 0 || history.Start is not { } start)
                 return;
             history.Remember(MoveSnapshot.Take(Game.Scene, history.Moves, history.Covering()));
             PutBack(history, start);

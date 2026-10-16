@@ -107,8 +107,8 @@ public sealed partial class NetSession
 
         var exit = _hostSettings?.ExitScene is { Length: > 0 } hosts ? hosts : Settings?.ExitScene;
         Leave(reason);
-        Ended?.Invoke(reason);
-        _game.NetworkSystem.LeftHost(exit);
+        _network.RaiseEnded(reason);
+        _network.LeftHost(exit);
     }
 
     private void StopMirroring()
@@ -135,7 +135,7 @@ public sealed partial class NetSession
         _mirrors.Clear();
         _mirrorOf.Clear();
         _clientEpoch = -1;
-        _game.SceneSystem.LoadSceneForNetwork(scene);
+        _network.LoadSceneForNetwork(scene);
     }
 
     /// <summary>Called by the game once a scene the host asked for has loaded (or straight away if it was already showing).</summary>
@@ -145,7 +145,7 @@ public sealed partial class NetSession
             return;
 
         // Everything shared comes from the host; this machine keeps its camera, HUD and menus.
-        var scene = _game.Scene;
+        var scene = _network.Scene;
         var name = (_hostSettings?.Player ?? Settings?.Player)?.Trim();
         _templateParts = [];
         if (!string.IsNullOrEmpty(name) && EntityNames.Find(scene, name, new NameLookup(Where: static e => e.Parent is null)) is { } template)
@@ -162,7 +162,7 @@ public sealed partial class NetSession
         _clientEpoch = _loadingEpoch;
         _loadingEpoch = -1;
         _loadingScene = null;
-        _game.NetworkSystem.NetSceneStarted();
+        _network.NetSceneStarted();
         var w = new NetWriter(8);
         w.Byte((byte)NetMessage.Ready);
         w.VarInt(_clientEpoch);
@@ -216,21 +216,21 @@ public sealed partial class NetSession
                     var volume = r.Float();
                     var pitch = r.Float();
                     Vector2? at = r.Bool() ? r.Vector2() : null;
-                    _game.NetworkSystem.PlayRelayedSound(sound, volume, pitch, at);
+                    _network.PlayRelayedSound(sound, volume, pitch, at);
                     break;
                 }
 
                 case NetMessage.Rumble:
-                    _game.Input.Rumble(r.Float(), r.Float());
+                    _network.Input.Rumble(r.Float(), r.Float());
                     break;
                 case NetMessage.Shake:
-                    _game.ShakeCamera(r.Float(), r.Float());
+                    _network.ShakeCamera(r.Float(), r.Float());
                     break;
                 case NetMessage.HostCommand:
                 {
                     var name = r.String() ?? "";
                     var args = ReadData(ref r);
-                    _game.NetworkSystem.RunHostCommand(name, args);
+                    _network.RunHostCommand(name, args);
                     break;
                 }
             }
@@ -267,11 +267,11 @@ public sealed partial class NetSession
         _players.AddRange(now);
         if (now.FirstOrDefault(p => p.IsLocal) is { } me)
             LocalPlayer = me;
-        _game.NetworkSystem.NetPlayersChanged();
+        _network.NetPlayersChanged();
         foreach (var joined in now.Where(p => !before.Contains(p) && !p.IsLocal))
-            PlayerJoined?.Invoke(joined);
+            _network.RaisePlayerJoined(joined);
         foreach (var left in before.Where(p => !now.Contains(p) && !p.IsLocal))
-            PlayerLeft?.Invoke(left);
+            _network.RaisePlayerLeft(left);
     }
 
     private void ReceiveSpawn(ref NetReader r)
@@ -286,7 +286,7 @@ public sealed partial class NetSession
         var owner = r.VarInt();
         var json = r.String() ?? "{}";
 
-        var scene = _game.Scene;
+        var scene = _network.Scene;
         if (_mirrors.TryGetValue(id, out var old))
             RemoveMirror(old);
         var entity = Serializer.DeserializeEntityKeepingIds(json);
@@ -346,8 +346,8 @@ public sealed partial class NetSession
                 _mirrors.Remove(inner.Id);
         }
 
-        if (entity.Scene == _game.Scene)
-            _game.NetworkSystem.RemoveForNetwork(entity);
+        if (entity.Scene == _network.Scene)
+            _network.RemoveForNetwork(entity);
         foreach (var player in _players.Where(p => p.Avatar == entity))
             player.Avatar = null;
     }
@@ -392,8 +392,8 @@ public sealed partial class NetSession
         var parent = parentId != 0 ? MirrorEntity(parentId) : null;
         if (parent is not null && parent.IsSelfOrDescendantOf(mirror.Entity))
             return;
-        var siblings = parent?.Children ?? _game.Scene.Roots;
-        _game.Scene.Move(mirror.Entity, parent, Math.Clamp(index, 0, siblings.Count));
+        var siblings = parent?.Children ?? _network.Scene.Roots;
+        _network.Scene.Move(mirror.Entity, parent, Math.Clamp(index, 0, siblings.Count));
     }
 
     private void ReceiveState(ref NetReader r)
@@ -556,14 +556,12 @@ public sealed partial class NetSession
         if (_hostConnection is not { State: NetConnectionState.Connected } connection || _clientEpoch < 0)
             return;
 
-        if (_game.Input is InputState input)
+        if (_network.Input is InputState input)
         {
-            var blocked = _game.LocalInputBlocked;
+            var blocked = _network.LocalInputBlocked;
             _report.Sample(input, blocked);
-            var camera = Views.FindCamera(_game.Scene);
-            var view = (camera is null ? Vector2.Zero : Flat(camera.Transform.WorldPosition),
-                camera?.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize, _game.ViewAspect);
-            var (data, acked) = _report.Write(input, blocked, _game.MouseOnUi, view);
+            var view = _network.View;
+            var (data, acked) = _report.Write(input, blocked, _network.MouseOnUi, view);
             connection.SendUnreliable(data, acked);
         }
 

@@ -40,7 +40,7 @@ public sealed class MultiplayerTemplateTests : IDisposable
     {
         var (project, registry) = await Create();
         var world = new NetWorld(() => GameLoader.LoadScene(project, registry, "Arena"), players: 2, setUp: Loaders(project, registry));
-        var players = world.Host.Net.Players;
+        var players = world.Host.Network.Players;
         Assert.Equal(3, players.Count);
         Assert.Equal(3, players.Select(p => p.Color).Distinct().Count());
 
@@ -60,7 +60,7 @@ public sealed class MultiplayerTemplateTests : IDisposable
         Assert.Equal(["Guest1", "Guest2", "Hosty"], seen.Select(e => e.Children.Single(c => c.Name == "Name").GetComponent<Text>()!.Value).Order());
         world.Run(1);
         var camera = guest.Scene.Entities.First(e => e.GetComponent<Camera>() is not null);
-        var mine = guest.Net.LocalPlayer!.Avatar!;
+        var mine = guest.Network.LocalPlayer!.Avatar!;
         Assert.Equal(mine, camera.GetComponent<Follow>()!.TargetEntity);
         Assert.Contains("Scores", guest.Scene.Entities.First(e => e.Name == "Scores").GetComponent<Text>()!.Value);
         Assert.Contains("Guest2 (you)", guest.Scene.Entities.First(e => e.Name == "Scores").GetComponent<Text>()!.Value);
@@ -89,7 +89,7 @@ public sealed class MultiplayerTemplateTests : IDisposable
         world.Run(1.5);
         Assert.Equal("Arena", host.SceneName);
         Assert.Equal("Arena", world.Client.SceneName);
-        Assert.NotNull(world.Client.Net.LocalPlayer!.Avatar);
+        Assert.NotNull(world.Client.Network.LocalPlayer!.Avatar);
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public sealed class MultiplayerTemplateTests : IDisposable
             input.EndFrame();
         }
 
-        Assert.False(game.Net.IsOnline);
+        Assert.False(game.Network.IsOnline);
         Assert.Single(game.FindAll("Player"));
         Assert.Equal("You", game.Find("Player")!.Children.Single(c => c.Name == "Name").GetComponent<Text>()!.Value);
         Assert.Contains("Practice", game.Find("Scores")!.GetComponent<Text>()!.Value);
@@ -136,9 +136,9 @@ public sealed class MultiplayerTemplateTests : IDisposable
         var world = new NetWorld(WithMultiplayer(project, registry, m => (m.Player, m.Teams) = ("", "Player, Enemy")),
             setUp: Loaders(project, registry), sceneName: Project.DefaultSceneName);
         var client = world.Client;
-        Assert.Equal("Enemy", client.Net.LocalPlayer!.Team);
+        Assert.Equal("Enemy", client.Network.LocalPlayer!.Team);
         // Its own scene has no Multiplayer (as when a player's copy of the game differs): it goes by the host's.
-        Assert.Null(client.Net.Settings);
+        Assert.Null(client.Network.Settings);
         Assert.Equal("Enemy", client.Find<Commander>()!.Team);
 
         // Red's workers, sent to their nearest gold mine by the player on red's side.
@@ -169,7 +169,7 @@ public sealed class MultiplayerTemplateTests : IDisposable
         var world = new NetWorld(WithMultiplayer(project, registry), setUp: Loaders(project, registry), sceneName: Project.DefaultSceneName);
         world.Run(1.5);
         var client = world.Client;
-        var mine = client.Net.LocalPlayer!.Avatar!;
+        var mine = client.Network.LocalPlayer!.Avatar!;
         var hostMap = world.Host.Find<Blocks>()!.Entity!.GetComponent<Tilemap>()!;
         var clientMap = client.Find<Blocks>()!.Entity!.GetComponent<Tilemap>()!;
         Assert.Equal(hostMap.Tiles, clientMap.Tiles);
@@ -196,9 +196,9 @@ public sealed class MultiplayerTemplateTests : IDisposable
         var (project, registry) = await Create("Shooter");
         var world = new NetWorld(WithMultiplayer(project, registry), setUp: Loaders(project, registry), sceneName: Project.DefaultSceneName);
         var client = world.Client;
-        var mine = client.Net.LocalPlayer!.Avatar!;
+        var mine = client.Network.LocalPlayer!.Avatar!;
         Assert.Equal(mine, client.FirstPersonViewer);
-        Assert.Equal(world.Host.Net.LocalPlayer!.Avatar, world.Host.FirstPersonViewer);
+        Assert.Equal(world.Host.Network.LocalPlayer!.Avatar, world.Host.FirstPersonViewer);
 
         // Turning happens on the player's own machine, and the host sees which way they face.
         NetWorld.Keys(client).SetKey(Key.Left, true);

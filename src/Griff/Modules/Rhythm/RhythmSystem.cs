@@ -263,7 +263,7 @@ internal sealed class RhythmSystem : GameSystem
         lanes.Progress = 1;
         KeepBest(lanes);
         lanes.RaiseCompleted();
-        Game.Net.SendCommand(RhythmCommand, new object?[] { CompletedCommand, lanes.Entity!.Name, 0, lanes.Score });
+        Game.Network.SendCommand(RhythmCommand, new object?[] { CompletedCommand, lanes.Entity!.Name, 0, lanes.Score });
     }
 
     // The best score of the song at its difficulty kept so far, as a play starts.
@@ -487,7 +487,7 @@ internal sealed class RhythmSystem : GameSystem
     // listen while they're on the top panel (or none is open), and while they have the player's input.
     private void ReadInput(NoteLanes lanes, Span<bool> pressed)
     {
-        var input = Game.LocalInput;
+        var input = Game.Input;
         var down = lanes.Down;
         Array.Clear(down);
         var top = Game.TopPanel;
@@ -644,7 +644,7 @@ internal sealed class RhythmSystem : GameSystem
         if (!string.IsNullOrWhiteSpace(sound))
             Audio.Play(sound.Trim());
         lanes.RaiseJudged(judgment, lane);
-        Game.Net.SendCommand(RhythmCommand, new object?[] { JudgedCommand, lanes.Entity!.Name, (int)judgment, points });
+        Game.Network.SendCommand(RhythmCommand, new object?[] { JudgedCommand, lanes.Entity!.Name, (int)judgment, points });
     }
 
     // ----- What the host does with them -----
@@ -668,8 +668,8 @@ internal sealed class RhythmSystem : GameSystem
         if (kind != JudgedCommand || !Enum.IsDefined((NoteJudgment)judged) || (NoteJudgment)judged == NoteJudgment.None)
             return;
         points = Math.Clamp(points, 0, NoteLanes.PerfectPoints);
-        if (Game.Net.IsOnline && player is not null && points > 0)
-            Game.Net.AddScore(player, points);
+        if (Game.Network.IsOnline && player is not null && points > 0)
+            Game.Network.AddScore(player, points);
         if ((NoteJudgment)judged == NoteJudgment.Miss)
         {
             Send(lanes?.MissMessage, null, lanes);

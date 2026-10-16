@@ -371,7 +371,7 @@ public static partial class WebPlayer
             case "touches":
                 return string.Join(';', s_input.Touches.Select(t => string.Create(CultureInfo.InvariantCulture, $"{t.World.X:0.##},{t.World.Y:0.##}")));
             case "status":
-                return game.Net.Status;
+                return game.Network.Status;
             case "fullscreen=1" or "fullscreen=0":
                 game.Fullscreen = name[^1] == '1';
                 return game.Fullscreen ? "1" : "0";
@@ -487,11 +487,11 @@ public static partial class WebPlayer
             });
         }
 
-        var status = game.Net.Status;
+        var status = game.Network.Status;
         if (!ReferenceEquals(status, s_netStatus))
         {
             s_netStatus = status;
-            if (status == game.Net.Unavailable)
+            if (status == game.Network.Unavailable)
                 Browser.Notice(status);
         }
     }
@@ -499,7 +499,7 @@ public static partial class WebPlayer
     // A scene set up for network play says, once, that it isn't there in a browser.
     private static void NoticeNetwork(Scene scene)
     {
-        if (s_noticed || s_game?.Net.Unavailable is not { } why || !NetSession.IsUsedIn(scene))
+        if (s_noticed || s_game?.Network.Unavailable is not { } why || !NetSession.IsUsedIn(scene))
             return;
         s_noticed = true;
         Browser.Notice(why);

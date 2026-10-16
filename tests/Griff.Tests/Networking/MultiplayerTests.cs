@@ -24,8 +24,8 @@ internal sealed class NetWorld
         _sceneName = sceneName;
         Host = new Game(scene(), new InputState()) { SceneName = sceneName };
         setUp?.Invoke(Host);
-        Host.Net.PlayerName = "Hosty";
-        Host.Net.Host(Network.Open(7777), dedicated);
+        Host.Network.PlayerName = "Hosty";
+        Host.Network.Host(Network.Open(7777), dedicated);
         for (var i = 0; i < players; i++)
             AddClient(scene, setUp);
         Run(0.5);
@@ -37,8 +37,8 @@ internal sealed class NetWorld
     {
         var client = new Game(scene(), new InputState()) { SceneName = _sceneName };
         setUp?.Invoke(client);
-        client.Net.PlayerName = name ?? $"Guest{Clients.Count + 1}";
-        client.Net.Join(Network.Open(), HostAddress);
+        client.Network.PlayerName = name ?? $"Guest{Clients.Count + 1}";
+        client.Network.Join(Network.Open(), HostAddress);
         Clients.Add(client);
         return client;
     }
@@ -111,21 +111,21 @@ public sealed class MultiplayerTests
         var host = world.Host;
         var client = world.Client;
 
-        Assert.Equal(NetRole.Host, host.Net.Role);
-        Assert.Equal(NetRole.Client, client.Net.Role);
-        Assert.Equal(["Hosty", "Guest1"], host.Net.Players.Select(p => p.Name));
-        Assert.Equal(["Hosty", "Guest1"], client.Net.Players.Select(p => p.Name));
+        Assert.Equal(NetRole.Host, host.Network.Role);
+        Assert.Equal(NetRole.Client, client.Network.Role);
+        Assert.Equal(["Hosty", "Guest1"], host.Network.Players.Select(p => p.Name));
+        Assert.Equal(["Hosty", "Guest1"], client.Network.Players.Select(p => p.Name));
         Assert.Equal(2, Named(host, "Player").Count);
         Assert.Equal(2, Named(client, "Player").Count);
         Assert.Single(Named(client, "Coin"));
         Assert.Single(Named(client, "Main Camera"));
 
         // Each machine's camera follows its own player's character.
-        var mine = client.Net.LocalPlayer!.Avatar;
+        var mine = client.Network.LocalPlayer!.Avatar;
         Assert.NotNull(mine);
-        Assert.True(client.Net.IsMine(mine));
+        Assert.True(client.Network.IsMine(mine));
         Assert.Equal(mine, client.Find("Player"));
-        Assert.Equal(host.Net.LocalPlayer!.Avatar, host.Find("Player"));
+        Assert.Equal(host.Network.LocalPlayer!.Avatar, host.Find("Player"));
         Assert.NotEqual(Named(host, "Player")[0].Transform.Position, Named(host, "Player")[1].Transform.Position);
     }
 
@@ -134,10 +134,10 @@ public sealed class MultiplayerTests
     {
         var world = new NetWorld(Arena);
         var client = world.Client;
-        var mine = client.Net.LocalPlayer!.Avatar!;
+        var mine = client.Network.LocalPlayer!.Avatar!;
         var start = mine.Transform.Position.X;
         var hostCopy = world.Host.Scene.Find(mine.Id)!;
-        var hostOwn = world.Host.Net.LocalPlayer!.Avatar!;
+        var hostOwn = world.Host.Network.LocalPlayer!.Avatar!;
         var hostOwnStart = hostOwn.Transform.Position;
 
         NetWorld.Keys(client).SetKey(Key.D, true);
@@ -164,7 +164,7 @@ public sealed class MultiplayerTests
     {
         var world = new NetWorld(Arena);
         var client = world.Client;
-        var mine = client.Net.LocalPlayer!.Avatar!;
+        var mine = client.Network.LocalPlayer!.Avatar!;
         mine.Transform.Position = new Vector3(8, 4, 0);
         world.Run(0.5);
 
@@ -179,13 +179,13 @@ public sealed class MultiplayerTests
     {
         var world = new NetWorld(Arena);
         var left = new List<string>();
-        world.Host.Net.PlayerLeft += p => left.Add(p.Name);
-        world.Client.Net.Leave();
+        world.Host.Network.PlayerLeft += p => left.Add(p.Name);
+        world.Client.Network.Leave();
         world.Run(0.5);
         Assert.Equal(["Guest1"], left);
-        Assert.Single(world.Host.Net.Players);
+        Assert.Single(world.Host.Network.Players);
         Assert.Single(Named(world.Host, "Player"));
-        Assert.Equal(NetRole.Offline, world.Client.Net.Role);
+        Assert.Equal(NetRole.Offline, world.Client.Network.Role);
     }
 
     [Fact]
@@ -204,9 +204,9 @@ public sealed class MultiplayerTests
             var host = new Game(Make(), hostKeys) { SceneName = "Arena", SceneLoader = _ => Make() };
             void Tick(Game g) { g.Tick(random.NextDouble() * 0.05 + 0.002); ((InputState)g.Input).EndFrame(); }
             for (var i = 0; i < random.Next(1, 60); i++) Tick(host);
-            host.Net.Host(network.Open(7777));
+            host.Network.Host(network.Open(7777));
             var client = new Game(Make(), new InputState()) { SceneName = "Arena", SceneLoader = _ => Make() };
-            client.Net.Join(network.Open(), new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 7777));
+            client.Network.Join(network.Open(), new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 7777));
             void Both(int frames)
             {
                 for (var i = 0; i < frames; i++)
@@ -220,10 +220,10 @@ public sealed class MultiplayerTests
             Both(60);
             hostKeys.SetKey(Key.W, false);
             Both(60);
-            var hostAvatar = host.Net.LocalPlayer!.Avatar!;
+            var hostAvatar = host.Network.LocalPlayer!.Avatar!;
             var seen = client.Scene.Find(hostAvatar.Id);
             if (seen is null || Vector3.Distance(seen.Transform.Position, hostAvatar.Transform.Position) > 0.2f)
-                failures.Add($"run {run}: host {hostAvatar.Transform.Position} seen {seen?.Transform.Position} :: {client.Net.Describe()}");
+                failures.Add($"run {run}: host {hostAvatar.Transform.Position} seen {seen?.Transform.Position} :: {client.Network.Session!.Describe()}");
         }
 
         Assert.True(failures.Count == 0, string.Join("\n", failures));

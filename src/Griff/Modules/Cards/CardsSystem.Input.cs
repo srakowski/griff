@@ -107,7 +107,7 @@ internal sealed partial class CardsSystem
             hand.Shown = CardZone.CardsIn(hand.Entity).Count;
             var back = DeckOf(hand, decks);
             (hand.BackImage, hand.BackColor) = back is null ? (null, CardLook.DefaultBack) : (back.Back, back.BackColor);
-            hand.CanPlay = MayPlay(hand, Game.Net.LocalPlayer, now: true);
+            hand.CanPlay = MayPlay(hand, Game.Network.LocalPlayer, now: true);
             hand.Computer = ComputerPlays(hand);
             hand.Aiming = View.Aiming is { } aiming && aiming.Zone == hand ? aiming : null;
         }
@@ -168,8 +168,8 @@ internal sealed partial class CardsSystem
     {
         if (!hand.Hidden || hand.Team is not { Length: > 0 } side)
             return false;
-        if (Game.Net.IsOnline)
-            return !Teams.Same(side, Game.Net.LocalPlayer?.Team ?? "");
+        if (Game.Network.IsOnline)
+            return !Teams.Same(side, Game.Network.LocalPlayer?.Team ?? "");
         if (Game.TurnOrderOf(hand.Entity) is not { } order)
             return false;
         if (order.IsComputer(side))
@@ -179,7 +179,7 @@ internal sealed partial class CardsSystem
 
     private void Control(List<Hand> hands, List<Deck> decks, List<PlayZone> tables)
     {
-        var me = Game.Net.LocalPlayer;
+        var me = Game.Network.LocalPlayer;
         var mine = hands.Where(h => h.Controllable && !h.Entity!.IsPaused && MayPlay(h, me, now: false)).ToList();
 
         // A card taken up that can't be played any more (played by a script, its turn over) is put back.
@@ -229,7 +229,7 @@ internal sealed partial class CardsSystem
 
         if (input.WasPressed(MouseButton.Left) && inView && !overUi)
         {
-            if (View.Hovered is { Zone: Hand hand } card && MayPlay(hand, Game.Net.LocalPlayer, now: true))
+            if (View.Hovered is { Zone: Hand hand } card && MayPlay(hand, Game.Network.LocalPlayer, now: true))
             {
                 (View.Pressed, View.PressedAt, View.Dragging) = (card, mouse, false);
                 View.Grip = Visual(card) - mouse;
@@ -239,7 +239,7 @@ internal sealed partial class CardsSystem
                 PlayHere(picked, zone, null);
             }
             else if (ZoneAt(mouse, decks, tables, z => z is Deck { ClickToDraw: true }) is Deck deck &&
-                     mine.FirstOrDefault(h => DeckOf(h, decks) == deck && MayPlay(h, Game.Net.LocalPlayer, now: true)) is { } drawer)
+                     mine.FirstOrDefault(h => DeckOf(h, decks) == deck && MayPlay(h, Game.Network.LocalPlayer, now: true)) is { } drawer)
             {
                 Unpick();
                 SendDraw(deck, drawer);
@@ -299,7 +299,7 @@ internal sealed partial class CardsSystem
     // Pick Action plays it there. The Cancel Action puts it back; the Draw Action draws from the hand's deck.
     private void Keys(List<Hand> mine, List<Deck> decks, List<PlayZone> tables)
     {
-        var me = Game.Net.LocalPlayer;
+        var me = Game.Network.LocalPlayer;
         var hand = (View.Aiming ?? View.Picked)?.Zone as Hand ?? mine.FirstOrDefault(h => MayPlay(h, me, now: true)) ?? mine.FirstOrDefault();
         if (View.KeyHand != hand)
             (View.KeyHand, View.Cursor) = (hand, -1);
@@ -472,7 +472,7 @@ internal sealed partial class CardsSystem
             return;
         }
 
-        if (Game.Net.IsClient)
+        if (Game.Network.IsClient)
             View.Pending[card] = PendingFor;
         else
             View.Pending.Remove(card);

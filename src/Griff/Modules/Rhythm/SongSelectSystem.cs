@@ -126,7 +126,7 @@ internal sealed class SongSelectSystem : GameSystem
     private bool ReadInput(SongSelect select)
     {
         var game = Game;
-        var input = game.LocalInput;
+        var input = game.Input;
         var (x, y) = Held(select, input);
         if (y != 0)
             MoveTo(select, select.Index - y);

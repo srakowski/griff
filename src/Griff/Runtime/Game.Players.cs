@@ -8,9 +8,11 @@ namespace Griff.Runtime;
 // Replicated and left alone), runs its own camera, HUD and menus, and moves its player's own character.
 public sealed partial class Game
 {
-    /// <summary>Multiplayer: host a game, join one, see who's playing, send messages to other machines.</summary>
-    [field: NotState("a network game's connection")]
-    public NetSession Net { get; }
+    /// <summary>
+    /// Multiplayer (the game's <see cref="INetwork"/> service): host a game, join one, see who's playing, send messages to
+    /// other machines. Its <see cref="INetwork.Session"/> is there only while the game is networked.
+    /// </summary>
+    public INetwork Network => _network;
 
     /// <summary>The game's name, set by the host (editor or player). Only copies of the same game can play together.</summary>
     [field: NotState("the host's")]
@@ -46,12 +48,12 @@ public sealed partial class Game
     {
         if (entity is null)
             return Input;
-        var owner = Net.IsOnline ? NetSession.OwnerIdOf(entity) : 0;
+        var owner = _network.IsOnline ? Networked.OwnerIdOf(entity) : 0;
         if (owner == 0)
             return LocalPlayers.Playing > 1 && PlayedBy.Of(entity) is var player && player > 0 ? LocalPlayers.Input(player) : Input;
-        if (Net.LocalPlayer is { } me && me.Id == owner)
+        if (_network.LocalPlayer is { } me && me.Id == owner)
             return LocalInputBlocked ? NoControls : Input;
-        return Net.PlayerById(owner)?.Remote is { } remote ? remote : NoControls;
+        return _network.PlayerById(owner)?.Remote is { } remote ? remote : NoControls;
     }
 
     [NotState("the players on this machine and their controls, the host's")]
@@ -97,49 +99,6 @@ public sealed partial class Game
         return false;
     }
 
-    // ----- Running a player's tools for them, on the host -----
-
-    // The player whose hotbar, tools and building the host is running right now, with their controls.
-    [NotState("a network game's player")]
-    private NetPlayer? _acting;
-    [NotState("a network game's player")]
-    private IInput? _actingInput;
-
-    /// <summary>
-    /// The other player the host is running tools for right now (see <see cref="IPlayerTools.RunForPlayer"/>), or null when
-    /// it's this machine's own player: what a system keeps for a player should be theirs while it's set.
-    /// </summary>
-    public NetPlayer? ActingFor => _acting;
-
-    /// <summary>
-    /// On the host of a network game, runs <paramref name="run"/> once for each other player with a character: as if their
-    /// keys were this machine's and their screen this one. For one player's own tools (a hotbar, building tools).
-    /// </summary>
-    internal void ForEachRemotePlayer(Action<NetPlayer> run)
-    {
-        if (!Net.IsHost)
-            return;
-        foreach (var player in Net.Players.ToList())
-        {
-            if (player.IsLocal || player.Remote is null || player.Avatar is null)
-                continue;
-            (_acting, _actingInput) = (player, player.Remote);
-            try
-            {
-                run(player);
-            }
-            finally
-            {
-                (_acting, _actingInput) = (null, null);
-            }
-        }
-    }
-
-    /// <summary>
-    /// A menu open on this machine (not counting another player's, whose tools the host is running for them).
-    /// </summary>
-    public bool PanelOpenHere => _acting is null && TopPanel is not null;
-
     /// <summary>True if the mouse of the player whose <paramref name="input"/> this is, on another machine, is over their UI.</summary>
     public static bool MouseOnUiOf(IInput input) => input is RemoteInput { MouseOnUi: true };
 
@@ -151,7 +110,7 @@ public sealed partial class Game
     /// </summary>
     internal Entity? Nearest(string name, Vector2 from)
     {
-        if (!Net.IsOnline)
+        if (!_network.IsOnline)
             return Find(name);
         return EntityNames.Find(Scene, name, new NameLookup(ActiveOnly: true, Scope: NameScope.Scene, Where: static e => Health.Of(e) is not { IsDead: true },
             Centre: static e => new Vector2(e.Transform.WorldPosition.X, e.Transform.WorldPosition.Y), Around: from)) ?? Find(name);
@@ -161,9 +120,9 @@ public sealed partial class Game
     public IEnumerable<IInput> PlayerInputs()
     {
         yield return Input;
-        if (!Net.IsHost)
+        if (!_network.IsHost)
             yield break;
-        foreach (var player in Net.Players)
+        foreach (var player in _network.Players)
         {
             if (player.Remote is { } remote)
                 yield return remote;

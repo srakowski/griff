@@ -18,8 +18,8 @@ internal sealed partial class StrategySystem
     // for real (here it only shows: the marker, the sound).
     private void Order(Commander commander, string kind, Action apply, params object?[] args)
     {
-        if (Game.Net.IsClient)
-            Game.Net.SendCommand(StrategyCommand, new object?[] { kind }.Concat(args).Concat(MySelected(commander)).ToArray());
+        if (Game.Network.IsClient)
+            Game.Network.SendCommand(StrategyCommand, new object?[] { kind }.Concat(args).Concat(MySelected(commander)).ToArray());
         apply();
     }
 
@@ -28,14 +28,14 @@ internal sealed partial class StrategySystem
     {
         var before = (Rts.Targeting, Rts.Placing);
         button.Press();
-        if (Game.Net.IsClient && (Rts.Targeting, Rts.Placing) == before)
-            Game.Net.SendCommand(StrategyCommand, new object?[] { "card", button.Label }.Concat(MySelected(commander)).ToArray());
+        if (Game.Network.IsClient && (Rts.Targeting, Rts.Placing) == before)
+            Game.Network.SendCommand(StrategyCommand, new object?[] { "card", button.Label }.Concat(MySelected(commander)).ToArray());
     }
 
     // A computer player stands aside for a person playing its team.
     private bool PlayedByPerson(Opponent opponent) =>
-        Game.Net.IsOnline && opponent.Entity?.GetComponent<Faction>()?.Team is { } team &&
-        Game.Net.Players.Any(p => p.Team.Length > 0 && SameTeam(p.Team, team));
+        Game.Network.IsOnline && opponent.Entity?.GetComponent<Faction>()?.Team is { } team &&
+        Game.Network.Players.Any(p => p.Team.Length > 0 && SameTeam(p.Team, team));
 
     // On the host: a player's order, with what they had selected.
     internal void RunStrategyOrder(NetPlayer? player, object? data)
@@ -114,9 +114,9 @@ internal sealed partial class StrategySystem
     // In a game with teams, a strategy player commands their team's faction; computer players leave human teams alone.
     public void PlayersChanged()
     {
-        if (Game.Net.TeamNames().Count == 0)
+        if (Game.Network.TeamNames().Count == 0)
             return;
-        if (Game.Net.LocalPlayer is { Team.Length: > 0 } me)
+        if (Game.Network.LocalPlayer is { Team.Length: > 0 } me)
         {
             foreach (var commander in Scene.AllNow<Commander>())
             {

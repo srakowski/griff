@@ -89,6 +89,7 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
                 ("watch", Schema.Array(Schema.String("entity"), "Entities to report on afterwards, by name (the first so called), id or path (default: Player).")),
                 ("pause_after", Schema.Bool("Pause the game when the steps are done (the next game_input resumes it).")),
                 ("flags", Schema.Map("Dialogue flags to set (true) or clear (false) before the steps, e.g. {\"HasKey\": true}.")),
+                ("player", Schema.Integer("In Play with Players, whose keys to press: 1 (default) is the Game tab's host, 2 and on the players' own windows, each its own machine's game (keys only; the mouse is player 1's).")),
             ]),
             Invoke = InputAsync,
         };
@@ -310,8 +311,13 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
 
     private async Task<ToolResult> InputAsync(ToolArgs args)
     {
-        if (play.Game is not { } game || game.Input is not InputState input)
+        var player = args.TryGet("player", out var which) && which.ValueKind == JsonValueKind.Number ? which.GetInt32() : 1;
+        if (play.Game is null)
             throw new AgentException("The game isn't running. Start it with Game_Play.");
+        if (play.PlayerGame(player) is not { } game || game.Input is not InputState input)
+            throw new AgentException($"There's no player {player}: Play with Players (Game_PlayWith2) starts the others.");
+        if (player != 1 && (args.TryGet("steps", out var all) ? all.EnumerateArray().Any(UsesMouse) : UsesMouse(args.Root)))
+            throw new AgentException("The mouse is player 1's: another player's steps can hold and tap keys, and wait.");
         // Paused (by pause_after, or the pause button): the steps are played, so it resumes.
         if (play.IsPaused)
             play.TogglePause();
@@ -344,6 +350,24 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
         }
     }
 
+    // A step of the mouse's (only player 1's game has the mouse).
+    private static bool UsesMouse(JsonElement step) =>
+        step.ValueKind == JsonValueKind.Object && MouseSteps.Any(name => step.TryGetProperty(name, out _));
+
+    private static readonly string[] MouseSteps = ["point", "click", "drag", "release", "touch", "scroll"];
+
+    // The game is still playing: the host's, or one of the other players' (Play with Players).
+    private bool StillPlaying(Griff.Runtime.Game game)
+    {
+        for (var n = 1; n <= 8; n++)
+        {
+            if (play.PlayerGame(n) == game)
+                return true;
+        }
+
+        return false;
+    }
+
     private async Task<ToolResult> PlayStepsAsync(Griff.Runtime.Game game, InputState input, List<JsonElement> steps, ToolArgs args,
         StringBuilder log, double startTime, Dictionary<string, bool> flags)
     {
@@ -357,7 +381,7 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
 
             if (await MouseStepAsync(game, input, step))
             {
-                if (play.Game != game)
+                if (!StillPlaying(game))
                 {
                     log.AppendLine("The game stopped.");
                     return ToolResult.Ok(log.ToString());
@@ -379,7 +403,7 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
                 await UntilBreakpointAsync(Task.Delay(TimeSpan.FromSeconds(Math.Min(seconds, 60))));
             foreach (var key in hold)
                 key.Set(input, false);
-            if (play.Game != game)
+            if (!StillPlaying(game))
             {
                 log.AppendLine("The game stopped.");
                 return ToolResult.Ok(log.ToString());

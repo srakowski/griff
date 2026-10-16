@@ -13,6 +13,13 @@ public sealed partial class Game
     public ComponentList<T> Mine<T>(bool evenPaused = false) where T : Component =>
         _network.Mine<T>(evenPaused);
 
+    /// <summary>
+    /// What <paramref name="player"/> has (their hotbar, their tools): in a network game, what's on their own character;
+    /// for this machine's player (or null), the same as <see cref="Mine{T}"/>. For what runs for another player on the host.
+    /// </summary>
+    public ComponentList<T> Owned<T>(NetPlayer? player, bool evenPaused = false) where T : Component =>
+        _network.Owned<T>(player, evenPaused);
+
     /// <summary>In a network game, marks what <paramref name="by"/> fired or made as its player's: what it hits counts for them.</summary>
     public void Claim(Entity spawned, Entity by) =>
         _network.Claim(spawned, by);

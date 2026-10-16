@@ -24,7 +24,7 @@ internal sealed class Match3System : GameSystem
         {
             if (board.Entity!.GetComponent<Tilemap>() is not { } map)
                 continue;
-            board.LocalPlayer = Game.Net.LocalPlayer?.Id ?? 0;
+            board.LocalPlayer = Game.Network.LocalPlayer?.Id ?? 0;
             // Paused itself, or with a group it's in (see Entity.IsPaused).
             if (board.Paused || board.Entity.IsPaused)
                 continue;
@@ -344,13 +344,13 @@ internal sealed class Match3System : GameSystem
             return;
         }
 
-        if (Game.PausedThisFrame || Game.Net.IsClient)
+        if (Game.PausedThisFrame || Game.Network.IsClient)
             return;
         if (Game.TopPanel is null)
-            Play(board, map, Game.Net.LocalPlayer?.Id ?? 0, Game.LocalInput, swaps);
-        if (Game.Net.IsHost)
+            Play(board, map, Game.Network.LocalPlayer?.Id ?? 0, Game.Input, swaps);
+        if (Game.Network.IsHost)
         {
-            foreach (var player in Game.Net.Players.Where(p => !p.IsLocal && p.Input is not null).ToList())
+            foreach (var player in Game.Network.RemotePlayers)
                 Play(board, map, player.Id, player.Input!, swaps);
         }
     }

@@ -37,20 +37,20 @@ public sealed partial class TestSocketTests
         var host = new Game(new Scene(), new InputState());
         try
         {
-            Assert.True(host.Net.Host(port), host.Net.Status);
-            Assert.Equal($"Hosting on 127.0.0.1:{port}", host.Net.Status);
+            Assert.True(host.Network.Host(port), host.Network.Status);
+            Assert.Equal($"Hosting on 127.0.0.1:{port}", host.Network.Status);
             var listeners = IPGlobalProperties.GetIPGlobalProperties().GetActiveUdpListeners().Where(e => e.Port == port).ToList();
             Assert.NotEmpty(listeners);
             Assert.All(listeners, e => Assert.True(IPAddress.IsLoopback(e.Address), $"Hosting bound {e}."));
         }
         finally
         {
-            host.Net.Leave();
+            host.Network.Leave();
         }
 
         var guest = new Game(new Scene(), new InputState());
-        guest.Net.Join("lan");
-        guest.Net.Leave();
+        guest.Network.Join("lan");
+        guest.Network.Leave();
     }
 
     // Everything that binds a socket goes through UdpNetSocket, which the switch keeps on loopback; anything else must

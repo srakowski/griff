@@ -444,8 +444,8 @@ internal sealed partial class PinballSystem
         _inputs.Clear();
         if (Game.Waiting(entity))
             return;
-        var net = Game.Net;
-        if (!net.IsOnline || NetSession.OwnerIdOf(entity) != 0)
+        var net = Game.Network;
+        if (!net.IsOnline || Networked.OwnerIdOf(entity) != 0)
         {
             _inputs.Add(Game.InputOf(entity));
             return;

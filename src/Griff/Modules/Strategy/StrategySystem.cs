@@ -252,7 +252,7 @@ internal sealed partial class StrategySystem : GameSystem, IMouseOnHud, IClaimsB
         SyncGames(Game.Present<Commander>());
         ShareOut(_allUnits, _allBuildings);
 
-        var simulates = Time.Delta > 0 && !Game.PausedThisFrame && !Game.Net.IsClient;
+        var simulates = Time.Delta > 0 && !Game.PausedThisFrame && !Game.Network.IsClient;
         if (simulates)
         {
             foreach (var fighter in Game.Active<Fighter>())

@@ -629,7 +629,7 @@ public sealed class CardTests
         var world = new NetWorld(CardTable);
         world.Run(1.5);
         var (host, client) = (world.Host, world.Client);
-        Assert.Equal(("Blue", "Red"), (host.Net.LocalPlayer!.Team, client.Net.LocalPlayer!.Team));
+        Assert.Equal(("Blue", "Red"), (host.Network.LocalPlayer!.Team, client.Network.LocalPlayer!.Team));
         Entity On(Game game, string name) => game.Scene.Entities.Single(e => e.Name == name);
 
         // The deck's cards stay on the host: the player's machine knows only how many there are.

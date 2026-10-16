@@ -39,8 +39,8 @@ internal sealed class MessageSystem : GameSystem
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
 
         // On the host, everyone else's machine hears it too (their HUD counts it, their sound players play).
-        if (Game.Net.IsHost && !_netMessage)
-            Game.Net.Relay(message, data, route);
+        if (Game.Network.IsHost && !_netMessage)
+            Game.NetworkSystem.Relay(message, data, route);
         var heard = _messages.Send(message, data, Game.Scene, route);
 
         // Each kind that hears it is picked out first (what hearing it does can change the scene), into lists kept for the

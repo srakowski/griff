@@ -14,10 +14,10 @@ internal sealed class ViewSystem : GameSystem
     public static (Vector2 Center, float HalfHeight, float Aspect)? ViewOf(IInput input) =>
         input is RemoteInput { HasView: true } remote ? remote.View : null;
 
+    public (Vector2 Center, float HalfHeight, float Aspect) HudViewOf(IInput input) => ViewOf(input) ?? HudView();
+
     public (Vector2 Center, float HalfHeight, float Aspect) HudView()
     {
-        if (Game.ActingFor?.Remote is { HasView: true } input)
-            return input.View;
         var camera = Views.FindCamera(Game.Scene);
         var size = camera?.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize;
         var center = camera is null ? Vector2.Zero : new Vector2(camera.Transform.WorldPosition.X, camera.Transform.WorldPosition.Y);

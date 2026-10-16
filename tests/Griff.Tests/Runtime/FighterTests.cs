@@ -547,7 +547,7 @@ public sealed class FighterTests
         }
 
         var world = new NetWorld(Networked);
-        var mine = world.Client.Net.LocalPlayer!.Avatar!;
+        var mine = world.Client.Network.LocalPlayer!.Avatar!;
         var onHost = world.Host.Scene.Find(mine.Id)!;
         var moves = new List<string>();
         FighterOf(onHost).MoveStarted += m => moves.Add(m.Name);

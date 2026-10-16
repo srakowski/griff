@@ -29,7 +29,6 @@ public sealed partial class Game
         _input = input;
         _services = new GameServices(this);
         Scene = scene;
-        Net = new NetSession(this);
         Debug = new DebugDraw(Time);
         BuildFrame();
         _network.ListenForCommands();
@@ -126,16 +125,13 @@ public sealed partial class Game
     public bool IsQuitting { get; private set; }
 
     /// <summary>
-    /// This machine's controls. (While the host of a network game runs another player's tools for them, theirs; see
-    /// <see cref="InputOf"/> for whoever plays a particular entity.)
+    /// This machine's controls, always: what runs for another player on the host of a network game is handed theirs (see
+    /// <see cref="IPlayerTools"/>, and <see cref="InputOf"/> for whoever plays a particular entity).
     /// </summary>
-    public IInput Input => _actingInput ?? _input;
+    public IInput Input => _input;
 
     [NotState("the host's")]
     private readonly IInput _input;
-
-    /// <summary>This machine's own controls, even while the host runs another player's tools for them (see <see cref="Input"/>).</summary>
-    public IInput LocalInput => _input;
 
     public Time Time { get; } = new();
 
@@ -251,7 +247,7 @@ public sealed partial class Game
 
         foreach (var behavior in Scene.AllNow<Behavior>())
             behavior.RunDestroy();
-        Net.Leave("The game closed.");
+        _network.Leave("The game closed.");
         _settings.SaveSettings();
         SystemsSceneEnding();
         _atmosphere.StopSoundSources();

@@ -544,7 +544,7 @@ internal sealed partial class StrategySystem
             return;
 
         // On a player's machine, the host puts it up.
-        if (Game.Net.IsClient)
+        if (Game.Network.IsClient)
         {
             if (!Rts.PlaceOk)
             {
@@ -552,7 +552,7 @@ internal sealed partial class StrategySystem
                 return;
             }
 
-            Game.Net.SendCommand(StrategyCommand, new object?[] { "place", building, Rts.PlaceAt }.Concat(MySelected(commander)).ToArray());
+            Game.Network.SendCommand(StrategyCommand, new object?[] { "place", building, Rts.PlaceAt }.Concat(MySelected(commander)).ToArray());
             Ordered(Rts.PlaceAt, MoveColor);
             if (!keepPlacing)
                 Rts.Placing = null;

@@ -137,7 +137,7 @@ public sealed class LocalPlayers
     /// </summary>
     public IInput Input(int player, int playing)
     {
-        if (_game.LocalInput is not InputState machine || player is < 1 or > Max)
+        if (_game.Input is not InputState machine || player is < 1 or > Max)
             return player == 1 ? _game.Input : _game.NoControls;
         if (playing <= 1)
             return player == 1 ? _game.Input : _game.NoControls;
@@ -160,7 +160,7 @@ public sealed class LocalPlayers
     {
         if (player is < 1 or > Max)
             return (KeySet.None, -1);
-        var machine = _game.LocalInput as InputState;
+        var machine = _game.Input as InputState;
         int Pad(int nth) => machine?.ConnectedGamepad(nth) ?? -1;
         var chosen = Chosen(player);
         switch (chosen)
@@ -212,7 +212,7 @@ public sealed class LocalPlayers
             KeySet.Right => "Right keys (arrows)",
             _ => null,
         };
-        var gamepad = pad >= 0 && _game.LocalInput is InputState machine ? $"Gamepad {Nth(machine, pad) + 1}" : null;
+        var gamepad = pad >= 0 && _game.Input is InputState machine ? $"Gamepad {Nth(machine, pad) + 1}" : null;
         return (keyboard, gamepad) switch
         {
             ({ } k, { } g) => $"{k} and {g}",

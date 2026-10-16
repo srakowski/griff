@@ -185,7 +185,7 @@ internal sealed class HudSystem : GameSystem
         if (!reached || was || string.IsNullOrWhiteSpace(counter.ReachMessage) || !Game.Runs(counter.Entity!))
             return;
         var message = counter.ReachMessage.Trim();
-        if (Game.Net.IsOnline && NetLocalAttribute.IsOn(counter.Entity!))
+        if (Game.Network.IsOnline && NetLocalAttribute.IsOn(counter.Entity!))
             Game.MessageSystem.SendFromNetwork(message, counter.Value, relay: false, TriggerSystem.ScopeOf(counter.Entity));
         else
             Game.Send(message, counter.Value, from: counter.Entity);

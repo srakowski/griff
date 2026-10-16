@@ -148,7 +148,7 @@ public static partial class WebExporter
                 }
                 else if (file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && HostsOrJoins().IsMatch(File.ReadAllText(file)))
                 {
-                    warnings.Add($"{relative} hosts or joins a network game, which isn't available in a browser: there, Net.Status says so.");
+                    warnings.Add($"{relative} hosts or joins a network game, which isn't available in a browser: there, Network.Status says so.");
                 }
             }
             catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or InvalidDataException or NotSupportedException or InvalidOperationException)
@@ -182,6 +182,6 @@ public static partial class WebExporter
     private static bool IsCompressedCopy(string path) =>
         path.EndsWith(".br", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".gz", StringComparison.OrdinalIgnoreCase);
 
-    [GeneratedRegex(@"\bNet\s*\.\s*(Host|HostServer|Join)\s*\(")]
+    [GeneratedRegex(@"\bNetwork\s*\.\s*(Host|HostServer|Join)\s*\(")]
     private static partial Regex HostsOrJoins();
 }

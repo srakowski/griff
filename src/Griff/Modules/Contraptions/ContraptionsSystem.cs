@@ -23,23 +23,17 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
     [NotState("a network game's players")]
     private readonly Dictionary<NetPlayer, string> _sent = [];
 
-    // This machine's own player's tools, or while the host runs another player's for them, that player's.
-    internal ContraptionsState Sandbox => Game.ActingFor is { } player ? PlayerState(player) : _local;
-
     internal ContraptionsState Local => _local;
 
+    // What's kept for another player whose tools the host runs for them.
     private ContraptionsState PlayerState(NetPlayer player)
     {
         if (!_players.TryGetValue(player, out var state))
-            _players[player] = state = new ContraptionsState(_local);
+            _players[player] = state = new ContraptionsState(_local, player);
         return state;
     }
 
     private Scene Scene => Game.Scene;
-
-    private IInput Input => Game.Input;
-
-    private NetSession Net => Game.Net;
 
     private Physics Physics => Game.Physics;
 
@@ -47,7 +41,15 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
 
     private static Vector2 CenterOf(Entity entity) => Game.CenterOf(entity);
 
-    private void SandboxNote(string text) => (Sandbox.Notice, Sandbox.NoticeLeft) = (text, 2.5f);
+    private static void SandboxNote(ContraptionsState sandbox, string text) => (sandbox.Notice, sandbox.NoticeLeft) = (text, 2.5f);
+
+    // A menu open on the player's screen: this machine's (another player's menus are on their machine, which holds back
+    // their keys meanwhile).
+    private bool PanelOpen(ContraptionsState sandbox) => sandbox.Player is null && Game.TopPanel is not null;
+
+    // The mouse is on the player's HUD, so a click there isn't meant for the world.
+    private bool OnHud(ContraptionsState sandbox, IInput input) =>
+        sandbox.Player is null ? Game.MouseOnHud : (sandbox.Hud is not null && sandbox.MouseOnHud) || Game.MouseOnUiOf(input);
 
     protected override void SceneChanged()
     {
@@ -59,24 +61,26 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
 
     protected override void Draw(FrameDrawing frame) => ContraptionsDrawing.Draw(this, frame);
 
-    public bool MouseOnHud => Sandbox.Hud is not null && Sandbox.MouseOnHud;
+    public bool MouseOnHud => _local.Hud is not null && _local.MouseOnHud;
 
-    public IReadOnlyList<HudButton> HudButtons => Sandbox.Buttons;
+    public IReadOnlyList<HudButton> HudButtons => _local.Buttons;
 
-    public string? Notice => Sandbox.NoticeLeft > 0 ? Sandbox.Notice : null;
+    public string? Notice => _local.NoticeLeft > 0 ? _local.Notice : null;
 
-    // The host runs another player's tools for them, then tells their machine what to show: a notice, ports to pick.
-    public void RunForPlayer(NetPlayer player)
+    // The host runs another player's tools for them with their controls, on their screen, then tells their machine what to
+    // show: a notice, ports to pick.
+    public void RunForPlayer(NetPlayer player, IInput input)
     {
-        RunToolsOf();
         var state = PlayerState(player);
+        LayOutHud(state, input);
+        RunToolsOf(state, input);
         var notice = state.NoticeLeft > 0 ? state.Notice : null;
         var picking = state.Picking;
         var key = $"{notice}|{picking?.Entity.Id}|{picking?.Outputs}|{(picking is { } k ? string.Join(",", k.Ports) : "")}";
         if (_sent.TryGetValue(player, out var sent) && sent == key)
             return;
         _sent[player] = key;
-        Net.SendCommandTo(player, UiCommand, new object?[] { notice, state.NoticeLeft, picking?.Entity, picking?.Outputs ?? false, picking?.Ports ?? Array.Empty<string>() });
+        Game.Network.SendCommandTo(player, UiCommand, new object?[] { notice, state.NoticeLeft, picking?.Entity, picking?.Outputs ?? false, picking?.Ports ?? Array.Empty<string>() });
     }
 
     // A player's machine heard what the host's run of its tools wants shown.
@@ -94,52 +98,55 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
     private const float MaxGrabSpeed = 40;
 
     /// <summary>The thing the Grab tool is holding, if any.</summary>
-    public Entity? Grabbed => Sandbox.Held?.Entity;
+    public Entity? Grabbed => _local.Held?.Entity;
 
     /// <summary>What the Weld, Rope or Wire tool's first click picked, waiting for the second.</summary>
-    public Entity? ToolFirst => Sandbox.First;
+    public Entity? ToolFirst => _local.First;
 
     /// <summary>The <see cref="SandboxTools"/> in use: the first in the scene with focus (see <see cref="SandboxTools.Controllable"/>).</summary>
-    public SandboxTools? Tools
-    {
-        get
-        {
-            foreach (var tools in Game.Mine<SandboxTools>(evenPaused: true))
-            {
-                if (tools.Controllable)
-                    return tools;
-            }
+    public SandboxTools? Tools => ToolsOf(null);
 
-            return null;
+    // The tools a player uses: this machine's player's (null), or another player's on the host.
+    private SandboxTools? ToolsOf(NetPlayer? player)
+    {
+        foreach (var tools in Game.Owned<SandboxTools>(player, evenPaused: true))
+        {
+            if (tools.Controllable)
+                return tools;
         }
+
+        return null;
     }
 
-    // The tools along the top, the spawn list and the ports to pick, for this frame's view; a click on one of their
+    // This machine's tools along the top, the spawn list and the ports to pick, for this frame's view.
+    public void LayOutHud() => LayOutHud(_local, Game.Input);
+
+    // The tools along the top, the spawn list and the ports to pick, for the player's view; a click on one of their
     // buttons.
-    public void LayOutHud()
+    private void LayOutHud(ContraptionsState sandbox, IInput input)
     {
-        Sandbox.Buttons.Clear();
-        var tools = Tools;
+        sandbox.Buttons.Clear();
+        var tools = ToolsOf(sandbox.Player);
         if (tools is null)
         {
-            Sandbox.Hud = null;
-            Sandbox.MouseOnHud = false;
+            sandbox.Hud = null;
+            sandbox.MouseOnHud = false;
             return;
         }
 
-        LayOutHud(tools);
+        LayOutHud(sandbox, input, tools);
     }
 
     // Its buttons' actions capture what they act on, so they're made here, only with a HUD to show.
-    private void LayOutHud(SandboxTools tools)
+    private void LayOutHud(ContraptionsState sandbox, IInput input, SandboxTools tools)
     {
-        var (center, size, aspect) = Game.HudView();
-        var hud = Sandbox.Hud = new ToolHud(center, new Vector2(size * (aspect > 0 ? aspect : 1), size));
+        var (center, size, aspect) = Game.HudViewOf(input);
+        var hud = sandbox.Hud = new ToolHud(center, new Vector2(size * (aspect > 0 ? aspect : 1), size));
         var list = tools.ToolList;
         for (var i = 0; i < list.Count; i++)
         {
             var index = i;
-            Sandbox.Buttons.Add(new HudButton(ToolHud.Tool, i, list[i].ToString(), hud.ToolButton(i, list.Count), () => PickTool(tools, index)));
+            sandbox.Buttons.Add(new HudButton(ToolHud.Tool, i, list[i].ToString(), hud.ToolButton(i, list.Count), () => PickTool(sandbox, tools, index)));
         }
 
         if (tools.Current == SandboxTool.Spawn)
@@ -148,61 +155,61 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
             for (var i = 0; i < props.Count; i++)
             {
                 var index = i;
-                Sandbox.Buttons.Add(new HudButton(ToolHud.Prop, i, props[i], hud.PropButton(i, props.Count), () => tools.SelectedProp = index));
+                sandbox.Buttons.Add(new HudButton(ToolHud.Prop, i, props[i], hud.PropButton(i, props.Count), () => tools.SelectedProp = index));
             }
         }
 
-        if (Sandbox.Picking is { } picking)
+        if (sandbox.Picking is { } picking)
         {
             var at = CenterOf(picking.Entity);
             for (var i = 0; i < picking.Ports.Count; i++)
             {
                 var port = picking.Ports[i];
-                Sandbox.Buttons.Add(new HudButton(ToolHud.Port, i, port, hud.PortRow(at, i), () => PickPort(picking.Entity, port, picking.Outputs)));
+                sandbox.Buttons.Add(new HudButton(ToolHud.Port, i, port, hud.PortRow(at, i), () => PickPort(sandbox, picking.Entity, port, picking.Outputs)));
             }
         }
 
-        var mouse = Input.MouseWorld;
-        Sandbox.MouseOnHud = Input.IsMouseInView && Sandbox.Buttons.Any(b => b.Rect.Contains(mouse));
+        var mouse = input.MouseWorld;
+        sandbox.MouseOnHud = input.IsMouseInView && sandbox.Buttons.Any(b => b.Rect.Contains(mouse));
         // On a player's machine the host does what the button does.
-        if (!Game.PanelOpenHere && !Game.PausedThisFrame && !Net.IsClient && Input.WasPressed(MouseButton.Left) && Sandbox.MouseOnHud)
-            Sandbox.Buttons.FirstOrDefault(b => b.Rect.Contains(mouse))?.Press();
+        if (!PanelOpen(sandbox) && !Game.PausedThisFrame && !Game.Network.IsClient && input.WasPressed(MouseButton.Left) && sandbox.MouseOnHud)
+            sandbox.Buttons.FirstOrDefault(b => b.Rect.Contains(mouse))?.Press();
     }
 
-    private void PickTool(SandboxTools tools, int index)
+    private static void PickTool(ContraptionsState sandbox, SandboxTools tools, int index)
     {
         if (tools.Selected != index)
-            CancelTool();
+            CancelTool(sandbox);
         tools.Selected = index;
     }
 
     // Lets go of what's held and forgets a first click.
-    private void CancelTool()
+    private static void CancelTool(ContraptionsState sandbox)
     {
-        Sandbox.Held = null;
-        Sandbox.First = null;
-        Sandbox.FirstPort = null;
-        Sandbox.Picking = null;
+        sandbox.Held = null;
+        sandbox.First = null;
+        sandbox.FirstPort = null;
+        sandbox.Picking = null;
     }
 
     internal void RunTools()
     {
-        Sandbox.NoticeLeft = Math.Max(0, Sandbox.NoticeLeft - Time.UnscaledDelta);
-        RunToolsOf();
+        _local.NoticeLeft = Math.Max(0, _local.NoticeLeft - Time.UnscaledDelta);
+        RunToolsOf(_local, Game.Input);
     }
 
-    // This player's tools, or on the host another player's (see RunForPlayer).
-    private void RunToolsOf()
+    // A player's tools, with their controls: this machine's player's, or on the host another player's (see RunForPlayer).
+    private void RunToolsOf(ContraptionsState sandbox, IInput input)
     {
-        var tools = Tools;
-        if (Sandbox.Held?.Entity?.Scene != Scene)
-            Sandbox.Held = null;
-        if (Sandbox.First is { } first && first.Scene != Scene)
-            CancelTool();
-        if (tools is null || Time.Delta <= 0 || Game.PausedThisFrame || Game.PanelOpenHere || Net.IsClient || tools.Entity!.IsPaused)
+        var tools = ToolsOf(sandbox.Player);
+        if (sandbox.Held?.Entity?.Scene != Scene)
+            sandbox.Held = null;
+        if (sandbox.First is { } first && first.Scene != Scene)
+            CancelTool(sandbox);
+        if (tools is null || Time.Delta <= 0 || Game.PausedThisFrame || PanelOpen(sandbox) || Game.Network.IsClient || tools.Entity!.IsPaused)
         {
             if (tools is null)
-                CancelTool();
+                CancelTool(sandbox);
             return;
         }
 
@@ -215,77 +222,77 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
         // Number keys and the wheel pick tools, unless they're the hotbar's.
         for (var i = 0; i < Math.Min(9, list.Count); i++)
         {
-            if (!KeyClaims.Claims(user, Key.D1 + i) && Input.WasPressed(Key.D1 + i))
-                PickTool(tools, i);
+            if (!KeyClaims.Claims(user, Key.D1 + i) && input.WasPressed(Key.D1 + i))
+                PickTool(sandbox, tools, i);
         }
 
-        if (Input.Scroll != 0 && !KeyClaims.ClaimsWheel(user) && Sandbox.Held is null)
-            PickTool(tools, ((tools.Selected - Math.Sign(Input.Scroll)) % list.Count + list.Count) % list.Count);
+        if (input.Scroll != 0 && !KeyClaims.ClaimsWheel(user) && sandbox.Held is null)
+            PickTool(sandbox, tools, ((tools.Selected - Math.Sign(input.Scroll)) % list.Count + list.Count) % list.Count);
 
         tools.Selected = Math.Clamp(tools.Selected, 0, list.Count - 1);
-        if (Input.WasPressed(tools.UndoKey))
-            Undo();
+        if (input.WasPressed(tools.UndoKey))
+            Undo(sandbox);
 
-        var mouse = Input.MouseWorld;
-        var free = Input.IsMouseInView && !Game.MouseOnHud && (tools.Reach <= 0 || Vector2.Distance(CenterOf(user), mouse) <= tools.Reach);
-        var click = free && Input.WasPressed(MouseButton.Left);
-        var rightClick = Input.IsMouseInView && !Game.MouseOnHud && Input.WasPressed(MouseButton.Right);
+        var mouse = input.MouseWorld;
+        var free = input.IsMouseInView && !OnHud(sandbox, input) && (tools.Reach <= 0 || Vector2.Distance(CenterOf(user), mouse) <= tools.Reach);
+        var click = free && input.WasPressed(MouseButton.Left);
+        var rightClick = input.IsMouseInView && !OnHud(sandbox, input) && input.WasPressed(MouseButton.Right);
         switch (tools.Current)
         {
             case SandboxTool.Grab:
-                RunGrab(tools, click, rightClick);
+                RunGrab(sandbox, input, tools, click, rightClick);
                 break;
             case SandboxTool.Spawn when click && tools.CurrentProp is { } prop:
-                SpawnProp(tools, prop, mouse, scope);
+                SpawnProp(sandbox, tools, prop, mouse, scope);
                 break;
             case SandboxTool.Weld or SandboxTool.Rope:
                 if (rightClick)
-                    CancelTool();
+                    CancelTool(sandbox);
                 else if (click && ThingAt(mouse, user, scope) is { } thing)
-                    Join(tools, thing, mouse);
+                    Join(sandbox, tools, thing, mouse);
                 break;
             case SandboxTool.Hinge:
                 if (rightClick)
-                    CancelTool();
+                    CancelTool(sandbox);
                 else if (click)
-                    HingeClick(tools, ThingAt(mouse, user, scope), mouse);
+                    HingeClick(sandbox, tools, ThingAt(mouse, user, scope), mouse);
                 break;
             case SandboxTool.Wire:
                 if (rightClick)
-                    CancelTool();
+                    CancelTool(sandbox);
                 else if (click && ThingAt(mouse, user, scope) is { } part)
-                    WireClick(part);
+                    WireClick(sandbox, part);
                 break;
             case SandboxTool.Remove when click && ThingAt(mouse, user, scope) is { } doomed && Removable(doomed):
-                RemoveThing(doomed);
-                SandboxNote($"Removed {doomed.Name}");
+                RemoveThing(sandbox, doomed);
+                SandboxNote(sandbox, $"Removed {doomed.Name}");
                 ToolSound(tools);
                 break;
         }
     }
 
-    private void RunGrab(SandboxTools tools, bool click, bool rightClick)
+    private void RunGrab(ContraptionsState sandbox, IInput input, SandboxTools tools, bool click, bool rightClick)
     {
-        var mouse = Input.MouseWorld;
-        if (Sandbox.Held is { } held)
+        var mouse = input.MouseWorld;
+        if (sandbox.Held is { } held)
         {
             if (rightClick)
             {
                 // Frozen where it is, in the air or not.
                 foreach (var body in GroupOf(held))
                     (body.Frozen, body.Velocity) = (body == held, Vector2.Zero);
-                Sandbox.Held = null;
-                SandboxNote($"Froze {held.Entity!.Name}");
+                sandbox.Held = null;
+                SandboxNote(sandbox, $"Froze {held.Entity!.Name}");
                 return;
             }
 
-            if (!Input.IsDown(MouseButton.Left))
+            if (!input.IsDown(MouseButton.Left))
             {
-                Sandbox.Held = null; // Let go: it keeps going the way it was pulled.
+                sandbox.Held = null; // Let go: it keeps going the way it was pulled.
                 return;
             }
 
-            var pull = (mouse - Sandbox.HeldAt - CenterOf(held.Entity!)) * tools.GrabStrength;
+            var pull = (mouse - sandbox.HeldAt - CenterOf(held.Entity!)) * tools.GrabStrength;
             if (pull.Length() > MaxGrabSpeed)
                 pull = Vector2.Normalize(pull) * MaxGrabSpeed;
             foreach (var body in GroupOf(held))
@@ -299,27 +306,27 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
                 body.Frozen = false;
             if (rightClick)
             {
-                SandboxNote($"Unfroze {grabbed.Entity!.Name}");
+                SandboxNote(sandbox, $"Unfroze {grabbed.Entity!.Name}");
                 return;
             }
 
-            Sandbox.Held = grabbed;
-            Sandbox.HeldAt = mouse - CenterOf(grabbed.Entity!);
+            sandbox.Held = grabbed;
+            sandbox.HeldAt = mouse - CenterOf(grabbed.Entity!);
         }
     }
 
-    private void SpawnProp(SandboxTools tools, string prop, Vector2 at, Scope scope)
+    private void SpawnProp(ContraptionsState sandbox, SandboxTools tools, string prop, Vector2 at, Scope scope)
     {
         // Within an area, only there; within a group that has none, into it.
         if (scope.Area is not null && !scope.Covers(at))
         {
-            SandboxNote("Can't put that there");
+            SandboxNote(sandbox, "Can't put that there");
             return;
         }
 
         if (Game.TryLoadPrefab(prop, tools, "its prop") is not { } entity)
         {
-            SandboxNote($"No prefab called {prop}");
+            SandboxNote(sandbox, $"No prefab called {prop}");
             return;
         }
 
@@ -331,7 +338,7 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
         entity.Name = UniqueName(entity.Name);
         Game.Claim(entity, tools.Entity!);
         Game.Spawn(entity, into);
-        Sandbox.Made.Add(entity);
+        sandbox.Made.Add(entity);
         ToolSound(tools);
     }
 
@@ -348,12 +355,12 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
         }
     }
 
-    private void Join(SandboxTools tools, Entity thing, Vector2 mouse)
+    private void Join(ContraptionsState sandbox, SandboxTools tools, Entity thing, Vector2 mouse)
     {
         var at = mouse - CenterOf(thing);
-        if (Sandbox.First is not { } first || first == thing)
+        if (sandbox.First is not { } first || first == thing)
         {
-            (Sandbox.First, Sandbox.FirstAt) = (thing, at);
+            (sandbox.First, sandbox.FirstAt) = (thing, at);
             return;
         }
 
@@ -364,116 +371,118 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
             var (host, other) = first.GetComponent<Body>() is not null ? (first, thing) : (thing, first);
             if (host.GetComponent<Body>() is null)
             {
-                SandboxNote("Neither of those moves");
-                Sandbox.First = null;
+                SandboxNote(sandbox, "Neither of those moves");
+                sandbox.First = null;
                 return;
             }
 
             var weld = host.AddComponent<Weld>();
             (weld.To, weld.Other) = (other.Name, other);
             made = weld;
-            SandboxNote($"Welded {host.Name} to {other.Name}");
+            SandboxNote(sandbox, $"Welded {host.Name} to {other.Name}");
         }
         else
         {
             var rope = first.AddComponent<Rope>();
-            var (from, to) = (CenterOf(first) + Sandbox.FirstAt, CenterOf(thing) + at);
+            var (from, to) = (CenterOf(first) + sandbox.FirstAt, CenterOf(thing) + at);
             rope.TieTo(thing);
             rope.Anchor = Matrix4x4.Invert(first.Transform.WorldMatrix, out var ownFirst) ? Vector2.Transform(from, ownFirst) : Vector2.Zero;
             rope.OtherAnchor = Matrix4x4.Invert(thing.Transform.WorldMatrix, out var ownThing) ? Vector2.Transform(to, ownThing) : Vector2.Zero;
             rope.Length = Math.Max(0.1f, Vector2.Distance(from, to));
             made = rope;
-            SandboxNote($"Tied {first.Name} to {thing.Name}");
+            SandboxNote(sandbox, $"Tied {first.Name} to {thing.Name}");
         }
 
-        Sandbox.Made.Add(made);
-        Sandbox.First = null;
+        sandbox.Made.Add(made);
+        sandbox.First = null;
         ToolSound(tools);
     }
 
     // The first click picks what turns and where (it needs a body), the second what it's hinged to: anything, or nothing
     // there to pin it to the world. What turns is made to rotate.
-    private void HingeClick(SandboxTools tools, Entity? thing, Vector2 mouse)
+    private void HingeClick(ContraptionsState sandbox, SandboxTools tools, Entity? thing, Vector2 mouse)
     {
-        if (Sandbox.First is not { } first)
+        if (sandbox.First is not { } first)
         {
             if (thing?.GetComponent<Body>() is null)
             {
-                SandboxNote(thing is null ? "Click something that moves, where it should turn" : $"{thing.Name} doesn't move");
+                SandboxNote(sandbox, thing is null ? "Click something that moves, where it should turn" : $"{thing.Name} doesn't move");
                 return;
             }
 
-            (Sandbox.First, Sandbox.FirstAt) = (thing, mouse);
+            (sandbox.First, sandbox.FirstAt) = (thing, mouse);
             return;
         }
 
         if (thing == first)
             return;
         var hinge = first.AddComponent<HingeJoint>();
-        hinge.Anchor = Matrix4x4.Invert(first.Transform.WorldMatrix, out var toOwn) ? Vector2.Transform(Sandbox.FirstAt, toOwn) : Vector2.Zero;
+        hinge.Anchor = Matrix4x4.Invert(first.Transform.WorldMatrix, out var toOwn) ? Vector2.Transform(sandbox.FirstAt, toOwn) : Vector2.Zero;
         hinge.HingeTo(thing);
         first.GetComponent<Body>()!.Rotates = true;
-        Sandbox.Made.Add(hinge);
-        SandboxNote(thing is null ? $"Pinned {first.Name}" : $"Hinged {first.Name} to {thing.Name}");
-        Sandbox.First = null;
+        sandbox.Made.Add(hinge);
+        SandboxNote(sandbox, thing is null ? $"Pinned {first.Name}" : $"Hinged {first.Name} to {thing.Name}");
+        sandbox.First = null;
         ToolSound(tools);
     }
 
     // The first click picks an output, the second an input; a list pops up when there's more than one to choose from.
-    private void WireClick(Entity part)
+    private void WireClick(ContraptionsState sandbox, Entity part)
     {
-        var outputs = Sandbox.First is null;
+        var outputs = sandbox.First is null;
         var ports = outputs ? WirePorts.Outputs(part) : WirePorts.Inputs(part);
         if (ports.Count == 0)
         {
-            SandboxNote($"{part.Name} has nothing to wire from");
+            SandboxNote(sandbox, $"{part.Name} has nothing to wire from");
             return;
         }
 
-        if (!outputs && part == Sandbox.First)
+        if (!outputs && part == sandbox.First)
             return;
         if (ports.Count == 1)
-            PickPort(part, ports[0], outputs);
+            PickPort(sandbox, part, ports[0], outputs);
         else
-            Sandbox.Picking = (part, ports, outputs);
+            sandbox.Picking = (part, ports, outputs);
     }
 
-    private void PickPort(Entity part, string port, bool output)
+    private void PickPort(ContraptionsState sandbox, Entity part, string port, bool output)
     {
-        Sandbox.Picking = null;
+        sandbox.Picking = null;
         if (output)
         {
-            (Sandbox.First, Sandbox.FirstPort) = (part, port);
+            (sandbox.First, sandbox.FirstPort) = (part, port);
             return;
         }
 
-        if (Sandbox.First is not { } source || part == source)
+        if (sandbox.First is not { } source || part == source)
             return;
         var wire = part.AddComponent<Wire>();
-        (wire.Input, wire.From, wire.Output, wire.Source) = (port, source.Name, Sandbox.FirstPort, source);
-        Sandbox.Made.Add(wire);
-        SandboxNote($"Wired {source.Name} {Sandbox.FirstPort} to {part.Name} {port}");
-        (Sandbox.First, Sandbox.FirstPort) = (null, null);
+        (wire.Input, wire.From, wire.Output, wire.Source) = (port, source.Name, sandbox.FirstPort, source);
+        sandbox.Made.Add(wire);
+        SandboxNote(sandbox, $"Wired {source.Name} {sandbox.FirstPort} to {part.Name} {port}");
+        (sandbox.First, sandbox.FirstPort) = (null, null);
         if (Tools is { } tools)
             ToolSound(tools);
     }
 
     /// <summary>Undoes the last prop, weld, rope or wire the tools made; returns whether there was one.</summary>
-    public bool Undo()
+    public bool Undo() => Undo(_local);
+
+    private bool Undo(ContraptionsState sandbox)
     {
-        while (Sandbox.Made.Count > 0)
+        while (sandbox.Made.Count > 0)
         {
-            var last = Sandbox.Made[^1];
-            Sandbox.Made.RemoveAt(Sandbox.Made.Count - 1);
+            var last = sandbox.Made[^1];
+            sandbox.Made.RemoveAt(sandbox.Made.Count - 1);
             switch (last)
             {
                 case Entity entity when entity.Scene == Scene:
-                    RemoveThing(entity);
-                    SandboxNote($"Undid {entity.Name}");
+                    RemoveThing(sandbox, entity);
+                    SandboxNote(sandbox, $"Undid {entity.Name}");
                     return true;
                 case Component component when component.Entity is { } owner && owner.Scene == Scene:
                     owner.RemoveComponent(component);
-                    SandboxNote($"Undid the {(component is HingeJoint ? "hinge" : component.GetType().Name.ToLowerInvariant())}");
+                    SandboxNote(sandbox, $"Undid the {(component is HingeJoint ? "hinge" : component.GetType().Name.ToLowerInvariant())}");
                     return true;
             }
         }
@@ -482,7 +491,7 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
     }
 
     // Gone, along with the welds, ropes and wires that led to it.
-    private void RemoveThing(Entity entity)
+    private void RemoveThing(ContraptionsState sandbox, Entity entity)
     {
         foreach (var other in Scene.Entities.ToList())
         {
@@ -501,10 +510,10 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
             }
         }
 
-        if (Sandbox.Held?.Entity == entity)
-            Sandbox.Held = null;
-        if (Sandbox.First == entity)
-            CancelTool();
+        if (sandbox.Held?.Entity == entity)
+            sandbox.Held = null;
+        if (sandbox.First == entity)
+            CancelTool(sandbox);
         Game.Destroy(entity);
     }
 
@@ -537,7 +546,7 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
         var welds = Game.Active<Weld>();
         if (welds.Count == 0)
         {
-            Sandbox.Groups.Clear();
+            _local.Groups.Clear();
             _welded.Clear();
             Physics.Groups = [];
             return;
@@ -556,7 +565,7 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
             return;
         _welded.Clear();
         _welded.AddRange(links);
-        Sandbox.Groups.Clear();
+        _local.Groups.Clear();
         Physics.Groups = _groups = GroupWelds(links);
     }
 
@@ -615,14 +624,14 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
             var group = new BodyGroup(bodies, members.Any(anchored.Contains));
             groups.Add(group);
             foreach (var body in bodies)
-                Sandbox.Groups[body] = group;
+                _local.Groups[body] = group;
         }
 
         return groups;
     }
 
     // A body and everything welded to it.
-    private List<Body> GroupOf(Body body) => Sandbox.Groups.TryGetValue(body, out var group) ? group.Bodies : [body];
+    private List<Body> GroupOf(Body body) => _local.Groups.TryGetValue(body, out var group) ? group.Bodies : [body];
 }
 
 /// <summary>A weld as grouping sees it: its entity, what it's welded to, their bodies, and whether that's there.</summary>
@@ -635,12 +644,17 @@ internal sealed class ContraptionsState
     {
     }
 
-    /// <summary>One player's own HUD and tools in a network game, sharing the world's welds and wiring.</summary>
-    public ContraptionsState(ContraptionsState world)
+    /// <summary>Another player's own HUD and tools in a network game (the host runs their tools), sharing the world's welds and wiring.</summary>
+    public ContraptionsState(ContraptionsState world, NetPlayer player)
     {
         Groups = world.Groups;
         Applied = world.Applied;
+        Player = player;
     }
+
+    /// <summary>The other player whose tools these are, or null for this machine's own.</summary>
+    [field: NotState("a network game's player")]
+    public NetPlayer? Player { get; }
 
     public ToolHud? Hud { get; set; }
 

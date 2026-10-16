@@ -142,7 +142,7 @@ public sealed class GameSetup
     /// <summary>
     /// Something the host of a network game can tell one player's machine (what its run of that player's tools wants shown
     /// there), by a name unique to the module: <paramref name="run"/> is called on that machine with what the host sent.
-    /// The host sends it with <c>Game.Net.SendCommandTo</c>.
+    /// The host sends it with <c>Game.Network.SendCommandTo</c>.
     /// </summary>
     public void OnHostCommand(string name, Action<object?> run) => Game.NetworkSystem.OnHostCommand(name, run);
 

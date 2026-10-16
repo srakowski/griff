@@ -25,8 +25,8 @@ internal sealed class LobbySystem : GameSystem
         {
             if (tag.Entity!.GetComponent<Text>() is not { } text)
                 continue;
-            var player = Game.Net.IsOnline ? Game.Net.OwnerOf(tag.Entity) : null;
-            var shown = player is null ? Game.Net.IsOnline ? "" : tag.Offline ?? "" : tag.ShowScore ? $"{player.Name}  {player.Score}" : player.Name;
+            var player = Game.Network.IsOnline ? Game.Network.OwnerOf(tag.Entity) : null;
+            var shown = player is null ? Game.Network.IsOnline ? "" : tag.Offline ?? "" : tag.ShowScore ? $"{player.Name}  {player.Score}" : player.Name;
             if (text.Value != shown)
                 text.Value = shown;
             if (tag.UseColor && player is not null && text.Color != player.Color with { A = text.Color.A })
@@ -55,7 +55,7 @@ internal sealed class LobbySystem : GameSystem
                 field.Loaded = true;
                 field.Value = field.Use switch
                 {
-                    TextFieldUse.PlayerName => string.IsNullOrEmpty(field.Value) ? Game.Net.PlayerName : field.Value,
+                    TextFieldUse.PlayerName => string.IsNullOrEmpty(field.Value) ? Game.Network.PlayerName : field.Value,
                     TextFieldUse.JoinAddress => Game.SaveData.GetString(NetSession.AddressSaveKey) ?? field.Value,
                     _ => field.Value,
                 };
@@ -91,7 +91,7 @@ internal sealed class LobbySystem : GameSystem
         switch (field.Use)
         {
             case TextFieldUse.PlayerName:
-                Game.Net.PlayerName = field.Value ?? "";
+                Game.Network.PlayerName = field.Value ?? "";
                 break;
             case TextFieldUse.JoinAddress when string.IsNullOrWhiteSpace(field.Value):
                 Game.SaveData.Delete(NetSession.AddressSaveKey);
@@ -134,14 +134,14 @@ internal sealed class LobbySystem : GameSystem
         if (!string.IsNullOrWhiteSpace(board.Title))
             lines.AppendLine(board.Title.Trim());
 
-        if (!Game.Net.IsOnline)
+        if (!Game.Network.IsOnline)
         {
             if (!string.IsNullOrWhiteSpace(board.Offline))
                 lines.AppendLine(board.Offline.Trim());
         }
         else
         {
-            var players = board.ShowScore ? Game.Net.Players.OrderByDescending(p => p.Score).ThenBy(p => p.Id) : Game.Net.Players.OrderBy(p => p.Id);
+            var players = board.ShowScore ? Game.Network.Players.OrderByDescending(p => p.Score).ThenBy(p => p.Id) : Game.Network.Players.OrderBy(p => p.Id);
             foreach (var player in players)
             {
                 var line = new StringBuilder(player.Name);
@@ -159,8 +159,8 @@ internal sealed class LobbySystem : GameSystem
             }
         }
 
-        if (board.ShowStatus && !string.IsNullOrWhiteSpace(Game.Net.Status))
-            lines.AppendLine(Game.Net.Status);
+        if (board.ShowStatus && !string.IsNullOrWhiteSpace(Game.Network.Status))
+            lines.AppendLine(Game.Network.Status);
         return lines.ToString().TrimEnd();
     }
 }

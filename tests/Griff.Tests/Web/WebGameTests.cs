@@ -72,22 +72,22 @@ public sealed class WebGameTests : IDisposable
     public void WhereNetworkPlayIsUnavailable_HostingAndJoining_SaySo()
     {
         var game = new Game(new Scene(), new InputState());
-        game.Net.Unavailable = NetSession.BrowserUnavailable;
+        game.Network.Unavailable = NetSession.BrowserUnavailable;
         var ended = new List<string>();
-        game.Net.Ended += ended.Add;
+        game.Network.Ended += ended.Add;
 
-        Assert.False(game.Net.Host());
-        Assert.Equal(NetSession.BrowserUnavailable, game.Net.Status);
-        Assert.False(game.Net.HostServer());
-        game.Net.Join("192.168.1.5");
+        Assert.False(game.Network.Host());
+        Assert.Equal(NetSession.BrowserUnavailable, game.Network.Status);
+        Assert.False(game.Network.HostServer());
+        game.Network.Join("192.168.1.5");
 
-        Assert.Equal(NetSession.BrowserUnavailable, game.Net.Status);
+        Assert.Equal(NetSession.BrowserUnavailable, game.Network.Status);
         Assert.Equal([NetSession.BrowserUnavailable], ended);
-        Assert.False(game.Net.IsOnline);
-        Assert.False(game.Net.IsConnecting);
+        Assert.False(game.Network.IsOnline);
+        Assert.False(game.Network.IsConnecting);
         Assert.Contains("browser", NetSession.BrowserUnavailable, StringComparison.Ordinal);
         // Not in a browser, it can.
-        Assert.Null(new Game(new Scene(), new InputState()).Net.Unavailable);
+        Assert.Null(new Game(new Scene(), new InputState()).Network.Unavailable);
     }
 
     [Fact]
@@ -101,13 +101,13 @@ public sealed class WebGameTests : IDisposable
         scene.Add(host);
         var input = new InputState();
         var game = new Game(scene, input) { SceneName = "Main", SceneLoader = _ => new Scene() };
-        game.Net.Unavailable = NetSession.BrowserUnavailable;
+        game.Network.Unavailable = NetSession.BrowserUnavailable;
 
         input.SetKey(Key.Enter, true);
         game.Advance(1 / 60.0);
         game.Advance(1 / 60.0);
 
-        Assert.Equal(NetSession.BrowserUnavailable, game.Net.Status);
+        Assert.Equal(NetSession.BrowserUnavailable, game.Network.Status);
         Assert.Equal("Main", game.SceneName);
     }
 

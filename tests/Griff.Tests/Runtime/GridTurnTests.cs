@@ -328,8 +328,8 @@ public class GridTurnTests
         var host = world.Host;
         var order = host.Scene.Entities.First(e => e.Name == "Turns").GetComponent<TurnOrder>()!;
         var slime = host.Scene.Entities.First(e => e.Name == "Slime");
-        var clientMe = host.Net.Players.First(p => !p.IsLocal);
-        var theirs = host.Scene.Entities.First(e => e.Name == "Player" && host.Net.OwnerOf(e) == clientMe);
+        var clientMe = host.Network.Players.First(p => !p.IsLocal);
+        var theirs = host.Scene.Entities.First(e => e.Name == "Player" && host.Network.OwnerOf(e) == clientMe);
         Assert.Equal("Player", order.Current);
         Assert.Equal((12, 1), Cell(slime));
 

@@ -235,7 +235,7 @@ internal sealed partial class TacticsSystem : GameSystem
     }
 
     private void SendOrder(TacticsUnit unit, TacticsOrder order, (int X, int Y)? cell = null, Entity? target = null) =>
-        Game.Net.SendCommand(TacticsCommand, new object?[] { unit.Entity, (int)order, cell?.X, cell?.Y, target });
+        Game.Network.SendCommand(TacticsCommand, new object?[] { unit.Entity, (int)order, cell?.X, cell?.Y, target });
 
     // Whether a player may command a unit: not one the computer plays, and online with teams named as sides, only their
     // team's.
@@ -246,7 +246,7 @@ internal sealed partial class TacticsSystem : GameSystem
         var side = Game.TeamOf(taker);
         if (order.IsComputer(side))
             return false;
-        return !(Game.Net.IsOnline && player is { Team.Length: > 0 } && order.TeamList.Any(s => Teams.Same(s, player.Team)) &&
+        return !(Game.Network.IsOnline && player is { Team.Length: > 0 } && order.TeamList.Any(s => Teams.Same(s, player.Team)) &&
                  !Teams.Same(side, player.Team));
     }
 
@@ -361,7 +361,7 @@ internal sealed partial class TacticsSystem : GameSystem
         var view = Tactics;
         var input = Input;
         if (controls.Selected is { } picked && (picked.Scene != Scene || !picked.IsActive ||
-                                                picked.GetComponent<TacticsUnit>() is not { CanAct: true } still || !MayCommand(still, Game.Net.LocalPlayer)))
+                                                picked.GetComponent<TacticsUnit>() is not { CanAct: true } still || !MayCommand(still, Game.Network.LocalPlayer)))
             controls.Selected = null;
         var selected = controls.Selected?.GetComponent<TacticsUnit>();
         var m = (selected ?? units[0]).Entity!.GetComponent<GridMovement>()!;
@@ -393,7 +393,7 @@ internal sealed partial class TacticsSystem : GameSystem
             if (!pressed)
                 view.HeldFor -= Game.CursorRepeatEvery;
             var from = controls.Cursor ?? (selected is not null ? CellOf(m, grid) : ((int X, int Y)?)null) ??
-                units.Where(u => u.CanAct && MayCommand(u, Game.Net.LocalPlayer)).Select(u => ((int X, int Y)?)CellOf(u.Entity!, grid)).FirstOrDefault();
+                units.Where(u => u.CanAct && MayCommand(u, Game.Network.LocalPlayer)).Select(u => ((int X, int Y)?)CellOf(u.Entity!, grid)).FirstOrDefault();
             controls.Cursor = from is { } f ? Clamp(controls.Cursor is null ? f : grid.Step(f, way)) : null;
         }
 
@@ -411,7 +411,7 @@ internal sealed partial class TacticsSystem : GameSystem
     private void Confirm(TacticsControls controls, IReadOnlyList<TacticsUnit> units, GridCells grid, (int X, int Y) cell)
     {
         var at = units.FirstOrDefault(u => CellOf(u.Entity!, grid) == cell);
-        bool Pickable(TacticsUnit? u) => u is { CanAct: true, IsWalking: false } && MayCommand(u, Game.Net.LocalPlayer);
+        bool Pickable(TacticsUnit? u) => u is { CanAct: true, IsWalking: false } && MayCommand(u, Game.Network.LocalPlayer);
         var selected = controls.Selected?.GetComponent<TacticsUnit>();
         if (selected is null)
         {

@@ -311,14 +311,14 @@ internal sealed class FallingBlocksSystem : GameSystem
     private bool ReadFallingKeys(FallingBoard board)
     {
         // Without focus it ignores everyone's keys (another part of the scene has them).
-        if (Game.PausedThisFrame || Game.Net.IsClient || !board.Controllable)
+        if (Game.PausedThisFrame || Game.Network.IsClient || !board.Controllable)
             return false;
         var soft = false;
         if (Game.TopPanel is null)
-            soft |= ReadFallingKeys(board, Game.Net.LocalPlayer?.Id ?? 0, Game.LocalInput);
-        if (Game.Net.IsHost)
+            soft |= ReadFallingKeys(board, Game.Network.LocalPlayer?.Id ?? 0, Game.Input);
+        if (Game.Network.IsHost)
         {
-            foreach (var player in Game.Net.Players.Where(p => !p.IsLocal && p.Input is not null).ToList())
+            foreach (var player in Game.Network.RemotePlayers)
                 soft |= ReadFallingKeys(board, player.Id, player.Input!);
         }
 

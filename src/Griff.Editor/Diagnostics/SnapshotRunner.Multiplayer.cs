@@ -25,7 +25,7 @@ internal static partial class SnapshotRunner
         await Task.Delay(1500);
         var host = play.Game!;
         var guest = play.PlayerGame(2)!;
-        checks.Add($"two players: {(host.Net.Players.Count == 2 && guest.Net.Players.Count == 2 ? "ok" : "FAILED")} ({host.Net.Players.Count} on the host, {guest.Net.Players.Count} on the guest)");
+        checks.Add($"two players: {(host.Network.Players.Count == 2 && guest.Network.Players.Count == 2 ? "ok" : "FAILED")} ({host.Network.Players.Count} on the host, {guest.Network.Players.Count} on the guest)");
 
         void Capture(string name, int player)
         {
@@ -43,7 +43,7 @@ internal static partial class SnapshotRunner
         // The guest walks right and fires at the host; the host fires back.
         var guestKeys = (InputState)guest.Input;
         var hostKeys = (InputState)host.Input;
-        var guestAvatar = guest.Net.LocalPlayer!.Avatar!;
+        var guestAvatar = guest.Network.LocalPlayer!.Avatar!;
         var start = guestAvatar.Transform.Position;
         guestKeys.SetKey(Key.A, true);
         await Task.Delay(700);
@@ -52,16 +52,16 @@ internal static partial class SnapshotRunner
         await Task.Delay(300);
         checks.Add($"the guest moves on both screens: {(Vector3.Distance(start, guestAvatar.Transform.Position) > 2 && Vector3.Distance(hostCopy.Transform.Position, guestAvatar.Transform.Position) < 0.3f ? "ok" : "FAILED")}");
 
-        var hostAvatar = host.Net.LocalPlayer!.Avatar!;
+        var hostAvatar = host.Network.LocalPlayer!.Avatar!;
         var hostStart = hostAvatar.Transform.Position;
         hostKeys.SetKey(Key.S, true);
         await Task.Delay(700);
         hostKeys.SetKey(Key.S, false);
         await Task.Delay(400);
-        var seenHost = guest.Net.Players.First(p => p.IsHost).Avatar;
+        var seenHost = guest.Network.Players.First(p => p.IsHost).Avatar;
         checks.Add($"the host moves on both screens: {(seenHost is not null && Vector3.Distance(hostStart, hostAvatar.Transform.Position) > 2 && Vector3.Distance(seenHost.Transform.Position, hostAvatar.Transform.Position) < 0.3f ? "ok" : "FAILED")} " +
                    $"(host {hostStart} -> {hostAvatar.Transform.Position}, seen {seenHost?.Transform.Position}, seen id {seenHost?.Id == hostAvatar.Id}, " +
-                   $"guest scene has {guest.Scene.Entities.Count(e => e.Name == "Player")} players, traffic {guest.Net.Traffic})");
+                   $"guest scene has {guest.Scene.Entities.Count(e => e.Name == "Player")} players, traffic {guest.Network.Session?.Traffic})");
         guestKeys.MouseWorld = new Vector2(hostAvatar.Transform.Position.X, hostAvatar.Transform.Position.Y);
         guestKeys.IsMouseInView = true;
         guestKeys.SetMouseButton(MouseButton.Left, true);
@@ -78,7 +78,7 @@ internal static partial class SnapshotRunner
         await Task.Delay(5000);
         Capture("multiplayer-slimes.png", 2);
         checks.Add($"slimes out: {host.FindAll("Slime").Count} on the host, {guest.FindAll("Slime").Count} on the guest");
-        checks.Add($"scores: {string.Join(", ", host.Net.Players.Select(p => $"{p.Name} {p.Score}"))}");
+        checks.Add($"scores: {string.Join(", ", host.Network.Players.Select(p => $"{p.Name} {p.Score}"))}");
 
         play.Stop();
         File.WriteAllLines(Path.Combine(outputDir, "checks.txt"), checks);

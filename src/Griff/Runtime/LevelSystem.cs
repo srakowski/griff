@@ -150,7 +150,7 @@ internal sealed class LevelSystem : GameSystem, IVolleys, IDialogues, IFlags
             return;
 
         // In a network game there's a "Player" for everyone: go after whoever is nearest.
-        if (chase.TargetEntity?.Scene != Game.Scene || (Game.Net.IsOnline && !string.IsNullOrWhiteSpace(chase.Target)))
+        if (chase.TargetEntity?.Scene != Game.Scene || (Game.Network.IsOnline && !string.IsNullOrWhiteSpace(chase.Target)))
             chase.TargetEntity = string.IsNullOrWhiteSpace(chase.Target) ? null : Game.Nearest(chase.Target.Trim(), Game.Flat(entity.Transform.WorldPosition));
         var target = chase.TargetEntity;
 
@@ -460,7 +460,7 @@ internal sealed class LevelSystem : GameSystem, IVolleys, IDialogues, IFlags
         _arrivedByDoor.Add(user);
 
         // Another player's trip through a door doesn't fade this screen.
-        if (Game.Net.IsOnline && !Game.Net.IsMine(user))
+        if (Game.Network.IsOnline && !Game.Network.IsMine(user))
         {
             PlaceAt(user, Game.Flat(target.Transform.WorldPosition));
             return;
@@ -532,7 +532,7 @@ internal sealed class LevelSystem : GameSystem, IVolleys, IDialogues, IFlags
             var available = !(dialogue.Once && dialogue.IsDone) && dialogue.Lines.Count > 0;
             // In a network game each player reads for themselves, on their own machine.
             var touching = available && !dialogue.Entity!.IsPaused &&
-                           TouchersOf(dialogue.Entity!).Any(t => dialogue.AcceptsLayer(t.Layer) && Game.Net.IsMine(t.By) && !t.By.IsPaused);
+                           TouchersOf(dialogue.Entity!).Any(t => dialogue.AcceptsLayer(t.Layer) && Game.Network.IsMine(t.By) && !t.By.IsPaused);
             if (touching)
                 touched.Add(dialogue);
             ShowPrompt(dialogue.Entity!, dialogue.Prompt, touching && dialogue.Start == DialogueStart.Interact);
@@ -541,7 +541,7 @@ internal sealed class LevelSystem : GameSystem, IVolleys, IDialogues, IFlags
                 continue;
             var starts = dialogue.Start == DialogueStart.Touch
                 ? !_dialoguesTouched.Contains(dialogue)
-                : Game.Input.WasPressed("Interact") && TouchersOf(dialogue.Entity!).Any(t => dialogue.AcceptsLayer(t.Layer) && Game.Net.IsMine(t.By) && Game.HasFocus(t.By));
+                : Game.Input.WasPressed("Interact") && TouchersOf(dialogue.Entity!).Any(t => dialogue.AcceptsLayer(t.Layer) && Game.Network.IsMine(t.By) && Game.HasFocus(t.By));
             if (starts)
                 StartDialogue(dialogue);
         }

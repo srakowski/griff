@@ -53,9 +53,9 @@ What players get:
 **Network play isn't available in a browser.** Browsers can't use the UDP connections Griff's multiplayer plays over.
 The export warns of each scene, prefab or script that hosts or joins (in the Output panel, and when it asks to play it),
 and in the browser the game says so as a scene set up for network play starts, and again if someone hosts or joins:
-`Net.Status` (which a lobby shows) is "Network play isn't available in the browser version of this game...", hosting
-returns false and joining ends at once (`Net.Ended`). The rest of the game plays alone: a menu's Practice still works.
-`NetSession.Unavailable` says why where it's set (in a browser, always).
+`Network.Status` (which a lobby shows) is "Network play isn't available in the browser version of this game...", hosting
+returns false and joining ends at once (`Network.Ended`). The rest of the game plays alone: a menu's Practice still works.
+`Network.Unavailable` says why where it's set (in a browser, always).
 
 ### From the command line
 

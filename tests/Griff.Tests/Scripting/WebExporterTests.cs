@@ -177,7 +177,7 @@ public sealed class WebExporterTests : IDisposable
         join.AddComponent<Button>().Action = ButtonAction.JoinGame;
         File.WriteAllText(Path.Combine(project.AssetsPath, "Join.prefab"), serializer.SavePrefabToString(join));
         File.WriteAllText(Path.Combine(project.AssetsPath, "Starter.cs"),
-            "public class Starter : Behavior { protected override void Start() => Game.Net.Host(); }");
+            "public class Starter : Behavior { protected override void Start() => Game.Network.Host(); }");
 
         var result = WebExporter.Export(project, _player, _output);
 

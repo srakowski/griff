@@ -585,7 +585,7 @@ public sealed class AdventureItemTests
         var world = new Griff.Tests.Networking.NetWorld(NetRoom);
         world.Run(0.5);
         var client = world.Client;
-        var mine = client.Net.LocalPlayer!.Avatar!;
+        var mine = client.Network.LocalPlayer!.Avatar!;
         var keys = Griff.Tests.Networking.NetWorld.Keys(client);
         Entity OnHost() => world.Host.Scene.Find(mine.Id)!;
 

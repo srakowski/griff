@@ -139,7 +139,7 @@ internal static class NetCodec
 
     private static Color ReadColor(ref NetReader r) => new(r.Float(), r.Float(), r.Float(), r.Float());
 
-    // ----- Message data: what Game.Net.Send can carry -----
+    // ----- Message data: what Game.Network.Send can carry -----
 
     private enum DataKind : byte
     {

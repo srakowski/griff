@@ -15,14 +15,14 @@ internal sealed class ClockSystem : GameSystem
     {
         Crowds.ThrowIfRunning("stop time");
         // A network game is shared: one player's big hit can't freeze everyone's.
-        if (seconds > 0 && !Game.Net.IsOnline)
+        if (seconds > 0 && !Game.Network.IsOnline)
             Game.Time.Freeze(seconds);
     }
 
     public void SlowMotion(float scale = 0.3f, float seconds = 0.6f)
     {
         Crowds.ThrowIfRunning("slow time");
-        if (seconds > 0 && float.IsFinite(scale) && !Game.Net.IsOnline)
+        if (seconds > 0 && float.IsFinite(scale) && !Game.Network.IsOnline)
             Game.Time.SlowDown(Math.Clamp(scale, 0, 1), seconds);
     }
 

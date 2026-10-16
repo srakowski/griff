@@ -295,20 +295,20 @@ internal sealed class MenuSystem : GameSystem
                 break;
             case ButtonAction.HostGame:
                 // Already hosting (say, playing with players in the editor): just go there, taking everyone along.
-                if ((Game.Net.IsHost || Game.Net.Host()) && !string.IsNullOrWhiteSpace(button.Scene))
+                if ((Game.Network.IsHost || Game.Network.Host()) && !string.IsNullOrWhiteSpace(button.Scene))
                     Game.LoadScene(button.Scene.Trim(), button.Fade);
                 break;
             case ButtonAction.JoinGame:
-                if (!Game.Net.IsClient)
-                    Game.Net.Join(Game.SaveData.GetString(NetSession.AddressSaveKey));
+                if (!Game.Network.IsClient)
+                    Game.Network.Join(Game.SaveData.GetString(NetSession.AddressSaveKey));
                 break;
             case ButtonAction.LeaveGame:
-                Game.Net.Leave();
+                Game.Network.Leave();
                 if (!string.IsNullOrWhiteSpace(button.Scene))
                     Game.LoadScene(button.Scene.Trim(), button.Fade);
                 break;
             case ButtonAction.EndTurn:
-                Game.Net.SendCommand(TurnSystem.EndTurnCommand, Game.TurnSystem.OrderForButton(button)?.Entity);
+                Game.Network.SendCommand(TurnSystem.EndTurnCommand, Game.TurnSystem.OrderForButton(button)?.Entity);
                 break;
             case ButtonAction.Do:
                 ClickDo(button);
@@ -677,7 +677,7 @@ internal sealed class MenuSystem : GameSystem
         var shared = 0;
         for (var i = 0; i < _doTargets.Count; i++)
         {
-            if (Game.Net.IsOnline && NetSchema.IsLocal(_doTargets[i]))
+            if (Game.Network.IsOnline && NetSchema.IsLocal(_doTargets[i]))
                 Game.DoOn(_doTargets[i], action, button.With, number: null);
             else
                 _doTargets[shared++] = _doTargets[i];
@@ -694,7 +694,7 @@ internal sealed class MenuSystem : GameSystem
         for (var i = 0; i < shared; i++)
             args[2 + i] = _doTargets[i];
         _doTargets.Clear();
-        Game.Net.SendCommand(ButtonDoCommand, args);
+        Game.Network.SendCommand(ButtonDoCommand, args);
     }
 
     // Where the game is run: the action on each target that's still here.

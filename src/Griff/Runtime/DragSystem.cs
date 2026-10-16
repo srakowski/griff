@@ -42,7 +42,7 @@ internal sealed class DragSystem : GameSystem
         public float Elapsed { get; set; }
     }
 
-    public Entity? Held => _holdings.GetValueOrDefault(Game.Net.LocalPlayer?.Id ?? 0)?.Thing.Entity;
+    public Entity? Held => _holdings.GetValueOrDefault(Game.Network.LocalPlayer?.Id ?? 0)?.Thing.Entity;
 
     // After scripts and before physics, so a held thing with a body is carried this frame and nothing falls from the hand.
     internal void RunDragging()
@@ -65,13 +65,13 @@ internal sealed class DragSystem : GameSystem
         if (draggables.Count == 0 && targets.Count == 0 && grabbers.Count == 0 && _holdings.Count == 0)
             return;
 
-        if (!Game.Net.IsClient && !Game.PausedThisFrame)
+        if (!Game.Network.IsClient && !Game.PausedThisFrame)
         {
             if (Game.TopPanel is null)
-                Drag(Game.Net.LocalPlayer?.Id ?? 0, Game.LocalInput, draggables, targets);
-            if (Game.Net.IsHost)
+                Drag(Game.Network.LocalPlayer?.Id ?? 0, Game.Input, draggables, targets);
+            if (Game.Network.IsHost)
             {
-                foreach (var player in Game.Net.Players.Where(p => !p.IsLocal && p.Input is not null).ToList())
+                foreach (var player in Game.Network.RemotePlayers)
                     Drag(player.Id, player.Input!, draggables, targets);
             }
 

@@ -272,7 +272,7 @@ internal sealed class SlingshotSystem : GameSystem
         var side = TurnTaker.Of(entity)?.Team?.Trim() ?? "";
         if (side.Length > 0 && Game.TurnOrderOf(entity) is { } order && order.IsComputer(side))
             return false;
-        if (Game.Net.IsOnline && player is { Team.Length: > 0 } && side.Length > 0 && !Teams.Same(side, player.Team))
+        if (Game.Network.IsOnline && player is { Team.Length: > 0 } && side.Length > 0 && !Teams.Same(side, player.Team))
             return false;
         return !now || !Game.Waiting(entity);
     }
@@ -304,7 +304,7 @@ internal sealed class SlingshotSystem : GameSystem
     private void Control(ComponentList<Slingshot> slingshots)
     {
         var input = Game.Input;
-        var me = Game.Net.LocalPlayer;
+        var me = Game.Network.LocalPlayer;
         if (_held is { } held && (held.Entity?.Scene != Scene || !Usable(held, me)))
             _held = null;
 
@@ -385,7 +385,7 @@ internal sealed class SlingshotSystem : GameSystem
     // This player's pull, to the game: straight on where it's run, else sent to the host when it has changed.
     private void Send(Slingshot slingshot, Vector2 pull)
     {
-        if (!Game.Net.IsClient)
+        if (!Game.Network.IsClient)
         {
             if (slingshot.Pull != pull)
                 Pulled(slingshot, pull);
@@ -396,7 +396,7 @@ internal sealed class SlingshotSystem : GameSystem
         if (Vector2.Distance(pull, _sent) < SendStep)
             return;
         _sent = pull;
-        Game.Net.SendCommand(Command, new object?[] { PullCommand, slingshot.Entity, pull.X, pull.Y });
+        Game.Network.SendCommand(Command, new object?[] { PullCommand, slingshot.Entity, pull.X, pull.Y });
     }
 
     // This player lets go: launching at the pull they had, or letting it back.
@@ -404,7 +404,7 @@ internal sealed class SlingshotSystem : GameSystem
     {
         var pull = launch ? _pull : Vector2.Zero;
         _held = null;
-        if (!Game.Net.IsClient)
+        if (!Game.Network.IsClient)
         {
             if (launch)
                 Fire(slingshot, pull);
@@ -413,7 +413,7 @@ internal sealed class SlingshotSystem : GameSystem
             return;
         }
 
-        Game.Net.SendCommand(Command, new object?[] { launch ? LaunchCommand : PullCommand, slingshot.Entity, pull.X, pull.Y });
+        Game.Network.SendCommand(Command, new object?[] { launch ? LaunchCommand : PullCommand, slingshot.Entity, pull.X, pull.Y });
     }
 
     // A pull no further than its Max Pull, and not so low the shot in the pouch would go below its foot (into the ground).

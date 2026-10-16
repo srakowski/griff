@@ -5,7 +5,7 @@ namespace Griff.Scenes;
 
 /// <summary>
 /// Makes the scene a multiplayer game. Put it on any entity (a "Game" entity is tidy). Host one with a Host Game button or
-/// <c>Game.Net.Host()</c>, and others join with Join Game or <c>Game.Net.Join("192.168.1.5")</c>; in the editor, Play with
+/// <c>Game.Network.Host()</c>, and others join with Join Game or <c>Game.Network.Join("192.168.1.5")</c>; in the editor, Play with
 /// Players starts several at once. The host runs the game; everyone sees the same world.
 /// <para>
 /// Each player gets their own copy of the <see cref="Player"/> entity, at a <see cref="PlayerSpawn"/>, moved by their own
@@ -134,6 +134,21 @@ public sealed class Networked : Component
     /// hits counts for them, and their team.
     /// </summary>
     public int Owner { get; set; }
+
+    /// <summary>
+    /// The number of the player <paramref name="entity"/> belongs to: the <see cref="Owner"/> of the nearest of it and its
+    /// parents that has one, or 0 if none does.
+    /// </summary>
+    public static int OwnerIdOf(Entity? entity)
+    {
+        for (var e = entity; e is not null; e = e.Parent)
+        {
+            if (e.GetComponent<Networked>() is { Owner: > 0 } networked)
+                return networked.Owner;
+        }
+
+        return 0;
+    }
 }
 
 /// <summary>A place players appear when they join, and when the scene starts. Give it a team for team games.</summary>

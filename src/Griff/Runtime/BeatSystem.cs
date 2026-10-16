@@ -59,13 +59,13 @@ internal sealed class BeatSystem : GameSystem, IBeats
             clock.LastLanded = beat;
             (clock.LandedFrom, clock.LandedTo) = (Math.Max(0, first), beat);
             clock.RaiseBeat((int)beat);
-            if (!Game.Net.IsClient && !string.IsNullOrWhiteSpace(clock.BeatMessage))
+            if (!Game.Network.IsClient && !string.IsNullOrWhiteSpace(clock.BeatMessage))
                 Game.Send(clock.BeatMessage.Trim(), Boxed((int)beat), from: clock.Entity);
             var perBar = Math.Max(1, clock.BeatsPerBar);
             if (beat % perBar != 0)
                 continue;
             clock.RaiseBar((int)(beat / perBar));
-            if (!Game.Net.IsClient && !string.IsNullOrWhiteSpace(clock.BarMessage))
+            if (!Game.Network.IsClient && !string.IsNullOrWhiteSpace(clock.BarMessage))
                 Game.Send(clock.BarMessage.Trim(), Boxed((int)(beat / perBar)), from: clock.Entity);
         }
 

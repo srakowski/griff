@@ -95,7 +95,7 @@ internal sealed class MinigameSystem : GameSystem, IMinigames
     {
         if (Game.SceneLoader is null)
             throw new InvalidOperationException("This game can't load scenes (no scene loader is set).");
-        if (Game.Net.IsOnline)
+        if (Game.Network.IsOnline)
         {
             Game.Warn("Minigames can't be played during a network game.");
             return false;

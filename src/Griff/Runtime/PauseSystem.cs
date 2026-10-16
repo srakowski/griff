@@ -54,7 +54,7 @@ internal sealed class PauseSystem : GameSystem
         }
 
         // A network game is shared, so a player's menu can't stop any of it (as with the whole game).
-        if (!Game.Net.IsOnline)
+        if (!Game.Network.IsOnline)
         {
             for (var i = 0; i < Game.PanelSystem.OpenCount; i++)
             {

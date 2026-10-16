@@ -723,10 +723,10 @@ public sealed class FixedStepNetworkTests
     {
         var network = new MemoryNetwork();
         var host = new Game(Arena(), new InputState()) { SceneName = "Arena" };
-        host.Net.Host(network.Open(7777));
+        host.Network.Host(network.Open(7777));
         var clientKeys = new InputState();
         var client = new Game(Arena(), clientKeys) { SceneName = "Arena" };
-        client.Net.Join(network.Open(), new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 7777));
+        client.Network.Join(network.Open(), new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 7777));
 
         // Both machines' screens show frames at their own rates, as real time goes by.
         var (now, hostAt, clientAt) = (0.0, 0.0, 0.0);
@@ -749,7 +749,7 @@ public sealed class FixedStepNetworkTests
         }
 
         Run(0.5);
-        var mine = client.Net.LocalPlayer!.Avatar!;
+        var mine = client.Network.LocalPlayer!.Avatar!;
         var hostCopy = host.Scene.Find(mine.Id)!;
         var start = mine.Transform.Position.X;
 

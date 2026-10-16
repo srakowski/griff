@@ -178,7 +178,7 @@ internal sealed class GridSystem : GameSystem
             HitWithBump(bump, victim);
             Game.UseAction(entity);
             if (!Game.Runs(entity) && Game.TurnSystem.StepsByTurns(entity))
-                Game.Net.SendCommand(TurnSystem.GridStepCommand, null);
+                Game.Network.SendCommand(TurnSystem.GridStepCommand, null);
             return;
         }
 
@@ -211,7 +211,7 @@ internal sealed class GridSystem : GameSystem
         Game.UseAction(entity);
         // A player's own machine moves their character: the host, running the turns, hears of the step.
         if (!Game.Runs(entity) && Game.TurnSystem.StepsByTurns(entity))
-            Game.Net.SendCommand(TurnSystem.GridStepCommand, null);
+            Game.Network.SendCommand(TurnSystem.GridStepCommand, null);
     }
 
     // What moves a grid mover itself (see IGridDriver), looked at without allocating: this runs for every mover each frame.
@@ -301,7 +301,7 @@ internal sealed class GridSystem : GameSystem
     {
         if (!Game.Runs(victim))
         {
-            Game.Net.SendCommand(BumpCommand, new object?[] { victim });
+            Game.Network.SendCommand(BumpCommand, new object?[] { victim });
             return;
         }
 
@@ -321,7 +321,7 @@ internal sealed class GridSystem : GameSystem
         if (player is null || args is not object?[] { Length: 1 } a || a[0] is not Entity victim || victim.Scene != Game.Scene)
             return;
         var attacker = Game.Scene.Entities.Where(e => e.IsActive)
-            .FirstOrDefault(e => e.GetComponent<BumpAttack>() is not null && NetSession.OwnerIdOf(e) == player.Id);
+            .FirstOrDefault(e => e.GetComponent<BumpAttack>() is not null && Networked.OwnerIdOf(e) == player.Id);
         if (attacker?.GetComponent<BumpAttack>() is { } bump && bump.Hurts(victim.GetComponent<Collider>()?.Layer) && Game.CanHurt(attacker, victim))
             HitWithBump(bump, victim);
     }
@@ -361,7 +361,7 @@ internal sealed class GridSystem : GameSystem
         var direction = new Vector2(way.X, way.Y);
         if (!Game.Runs(row[0].Entity!))
         {
-            Game.Net.SendCommand(GridPushCommand, new object?[] { row[0].Entity, direction });
+            Game.Network.SendCommand(GridPushCommand, new object?[] { row[0].Entity, direction });
             return;
         }
 
@@ -384,7 +384,7 @@ internal sealed class GridSystem : GameSystem
             crate.Scene != Game.Scene)
             return;
         var pusher = Game.Scene.Entities.Where(e => e.IsActive)
-            .FirstOrDefault(e => e.GetComponent<GridMovement>() is not null && NetSession.OwnerIdOf(e) == player.Id);
+            .FirstOrDefault(e => e.GetComponent<GridMovement>() is not null && Networked.OwnerIdOf(e) == player.Id);
         (int X, int Y) way = (Math.Sign(direction.X), Math.Sign(direction.Y));
         if (pusher?.GetComponent<GridMovement>() is { } mover && (way.X == 0 || way.Y == 0 || GridCells.Of(mover.FindMap()).IsHex) &&
             CratesPushed(pusher, way, crate) is { } row)
@@ -426,7 +426,7 @@ internal sealed class GridSystem : GameSystem
         var here = Game.Flat(entity.Transform.WorldPosition);
 
         // In a network game there's a "Player" for everyone: go after whoever is nearest.
-        if (chase.TargetEntity?.Scene != Game.Scene || (Game.Net.IsOnline && !string.IsNullOrWhiteSpace(chase.Target)))
+        if (chase.TargetEntity?.Scene != Game.Scene || (Game.Network.IsOnline && !string.IsNullOrWhiteSpace(chase.Target)))
             chase.TargetEntity = string.IsNullOrWhiteSpace(chase.Target) ? null : Game.Nearest(chase.Target.Trim(), here);
         var target = chase.TargetEntity;
 

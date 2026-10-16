@@ -61,7 +61,7 @@ public sealed class MultiplayerGenreTests
     public void A_player_jumps_on_their_own_machine_at_once_and_the_host_sees_them_land()
     {
         var world = new NetWorld(Platformer);
-        var mine = world.Client.Net.LocalPlayer!.Avatar!;
+        var mine = world.Client.Network.LocalPlayer!.Avatar!;
         world.Run(0.5);
         var ground = mine.Transform.Position.Y;
 
@@ -89,7 +89,7 @@ public sealed class MultiplayerGenreTests
     public void Spikes_on_the_host_kill_a_player_and_they_respawn_where_they_started_on_their_own_machine()
     {
         var world = new NetWorld(Platformer);
-        var mine = world.Client.Net.LocalPlayer!.Avatar!;
+        var mine = world.Client.Network.LocalPlayer!.Avatar!;
         var home = mine.Transform.Position;
 
         // Walk into the spikes: their machine moves them, the host's spikes kill them.
@@ -111,7 +111,7 @@ public sealed class MultiplayerGenreTests
     public void The_host_can_still_push_a_player_around()
     {
         var world = new NetWorld(Platformer);
-        var mine = world.Client.Net.LocalPlayer!.Avatar!;
+        var mine = world.Client.Network.LocalPlayer!.Avatar!;
         var hostCopy = world.Host.Scene.Find(mine.Id)!;
         hostCopy.Transform.Position = new Vector3(-10, 3, 0);
         world.Run(0.4);
@@ -169,28 +169,28 @@ public sealed class MultiplayerGenreTests
     public void A_players_shot_runs_on_the_host_hurts_another_player_and_scores_for_them()
     {
         var world = new NetWorld(Arena(), setUp: g => g.PrefabLoader = _ => Bullet());
-        var hostAvatar = world.Host.Net.LocalPlayer!.Avatar!;
-        var guest = world.Host.Net.Players.Single(p => !p.IsLocal);
+        var hostAvatar = world.Host.Network.LocalPlayer!.Avatar!;
+        var guest = world.Host.Network.Players.Single(p => !p.IsLocal);
         Shoot(world, world.Client, world.Client.Scene.Find(hostAvatar.Id)!);
 
         Assert.True(hostAvatar.Scene is null || hostAvatar.GetComponent<Health>()!.IsDead);
         Assert.Equal(1, guest.Score);
-        Assert.Equal(1, world.Client.Net.LocalPlayer!.Score);
+        Assert.Equal(1, world.Client.Network.LocalPlayer!.Score);
         // Their own shots never hurt them.
-        Assert.False(world.Client.Net.LocalPlayer!.Avatar!.GetComponent<Health>()!.IsDead);
+        Assert.False(world.Client.Network.LocalPlayer!.Avatar!.GetComponent<Health>()!.IsDead);
     }
 
     [Fact]
     public void Teammates_cant_hurt_each_other()
     {
         var world = new NetWorld(Arena("Blue, Red"), players: 2, setUp: g => g.PrefabLoader = _ => Bullet());
-        var players = world.Host.Net.Players;
+        var players = world.Host.Network.Players;
         Assert.Equal(["Blue", "Red", "Blue"], players.Select(p => p.Team));
-        var hostAvatar = world.Host.Net.LocalPlayer!.Avatar!;
+        var hostAvatar = world.Host.Network.LocalPlayer!.Avatar!;
         var blueGuest = world.Clients[1];
 
         // Out of the line of fire.
-        world.Clients[0].Net.LocalPlayer!.Avatar!.Transform.Position = new Vector3(0, 6, 0);
+        world.Clients[0].Network.LocalPlayer!.Avatar!.Transform.Position = new Vector3(0, 6, 0);
         world.Run(0.3);
         Shoot(world, blueGuest, blueGuest.Scene.Find(hostAvatar.Id)!);
         Assert.False(hostAvatar.GetComponent<Health>()!.IsDead);
@@ -239,7 +239,7 @@ public sealed class MultiplayerGenreTests
     public void In_first_person_a_player_turns_on_their_own_machine_and_the_host_fires_where_they_look()
     {
         var world = new NetWorld(Corridor);
-        var mine = world.Client.Net.LocalPlayer!.Avatar!;
+        var mine = world.Client.Network.LocalPlayer!.Avatar!;
         var dummy = Named(world.Host, "Dummy")[0];
         var at = mine.Transform.Position;
         var angle = MathF.Atan2(5 - at.Y, 10 - at.X) * 180 / MathF.PI;
@@ -284,7 +284,7 @@ public sealed class MultiplayerGenreTests
     public void A_player_digs_with_their_mouse_and_the_block_goes_for_everyone()
     {
         var world = new NetWorld(Mine);
-        var mine = world.Client.Net.LocalPlayer!.Avatar!;
+        var mine = world.Client.Network.LocalPlayer!.Avatar!;
         world.Run(0.5);
         var x = (int)MathF.Floor(mine.Transform.Position.X);
         var keys = NetWorld.Keys(world.Client);
@@ -300,7 +300,7 @@ public sealed class MultiplayerGenreTests
         Assert.Equal(1, world.Host.Scene.Find(mine.Id)!.GetComponent<Inventory>()!.Count("Dirt"));
         Assert.Equal(1, mine.GetComponent<Inventory>()!.Count("Dirt"));
         // The host's own player didn't dig anything.
-        Assert.Equal(0, world.Host.Net.LocalPlayer!.Avatar!.GetComponent<Inventory>()!.Count("Dirt"));
+        Assert.Equal(0, world.Host.Network.LocalPlayer!.Avatar!.GetComponent<Inventory>()!.Count("Dirt"));
     }
 
     // ----- Strategy -----
@@ -347,7 +347,7 @@ public sealed class MultiplayerGenreTests
     {
         var world = new NetWorld(Battlefield);
         var client = world.Client;
-        Assert.Equal("Enemy", client.Net.LocalPlayer!.Team);
+        Assert.Equal("Enemy", client.Network.LocalPlayer!.Team);
         Assert.Equal("Enemy", Named(client, "Main Camera")[0].GetComponent<Commander>()!.Team);
 
         var theirs = Named(client, "Soldier").Single(e => e.GetComponent<Unit>()!.Team == "Enemy");
@@ -404,7 +404,7 @@ public sealed class MultiplayerGenreTests
     public void In_a_big_world_players_are_only_sent_what_is_near_them()
     {
         var world = new NetWorld(BigWorld);
-        var mine = world.Client.Net.LocalPlayer!.Avatar!;
+        var mine = world.Client.Network.LocalPlayer!.Avatar!;
         Assert.Empty(Named(world.Client, "Far Tree"));
         Assert.Single(Named(world.Client, "Score Keeper"));
 
@@ -428,16 +428,16 @@ public sealed class MultiplayerGenreTests
         }
 
         var world = new NetWorld(Remembering);
-        var mine = world.Client.Net.LocalPlayer!.Avatar!;
+        var mine = world.Client.Network.LocalPlayer!.Avatar!;
         mine.Transform.Position = new Vector3(42, 7, 0);
         world.Run(0.5);
-        world.Client.Net.Leave();
+        world.Client.Network.Leave();
         world.Run(0.5);
         Assert.Single(Named(world.Host, "Player"));
 
         var again = world.AddClient(Remembering, name: "Guest1");
         world.Run(0.8);
-        var back = again.Net.LocalPlayer!.Avatar!;
+        var back = again.Network.LocalPlayer!.Avatar!;
         Assert.Equal(new Vector3(42, 7, 0), back.Transform.Position);
     }
 
@@ -503,7 +503,7 @@ public sealed class MultiplayerGenreTests
         });
         world.Run(0.3);
         // Their character, as the host runs it (it has no movement of its own, so the host places it).
-        var theirs = world.Host.Scene.Find(world.Client.Net.LocalPlayer!.Avatar!.Id)!.GetComponent<Grabber>()!;
+        var theirs = world.Host.Scene.Find(world.Client.Network.LocalPlayer!.Avatar!.Id)!.GetComponent<Grabber>()!;
         var keys = NetWorld.Keys(world.Client);
         void Tap()
         {
@@ -516,7 +516,7 @@ public sealed class MultiplayerGenreTests
         theirs.Entity!.Transform.Position = new Vector3(3, 0, 0);
         Tap();
         Assert.Equal("King", theirs.Holding?.Name);
-        Assert.Null(world.Host.Net.LocalPlayer!.Avatar!.GetComponent<Grabber>()!.Holding);
+        Assert.Null(world.Host.Network.LocalPlayer!.Avatar!.GetComponent<Grabber>()!.Holding);
 
         theirs.Entity.Transform.Position = new Vector3(0, 4, 0);
         world.Run(0.1);
@@ -546,7 +546,7 @@ public sealed class MultiplayerGenreTests
         Assert.Equal("Level2", world.Client.SceneName);
         Assert.Single(Named(world.Client, "Level2"));
         Assert.Equal(2, Named(world.Client, "Player").Count);
-        Assert.NotNull(world.Client.Net.LocalPlayer!.Avatar);
+        Assert.NotNull(world.Client.Network.LocalPlayer!.Avatar);
     }
 
     [Fact]
@@ -555,8 +555,8 @@ public sealed class MultiplayerGenreTests
         var world = new NetWorld(BigWorld, players: 2);
         var heard = new List<string>();
         foreach (var game in new[] { world.Host, world.Clients[0], world.Clients[1] })
-            game.On("Chat", data => heard.Add($"{game.Net.LocalPlayer!.Name} heard {data} from {game.Net.Sender?.Name}"));
-        world.Clients[0].Net.Send("Chat", "gg");
+            game.On("Chat", data => heard.Add($"{game.Network.LocalPlayer!.Name} heard {data} from {game.Network.Sender?.Name}"));
+        world.Clients[0].Network.Send("Chat", "gg");
         world.Run(0.3);
         Assert.Equal(3, heard.Count);
         Assert.All(heard, h => Assert.EndsWith("heard gg from Guest1", h));
@@ -573,9 +573,9 @@ public sealed class MultiplayerGenreTests
     public void A_dedicated_server_runs_the_game_without_playing_in_it()
     {
         var world = new NetWorld(BigWorld, players: 2, dedicated: true);
-        Assert.Equal(NetRole.Server, world.Host.Net.Role);
-        Assert.Null(world.Host.Net.LocalPlayer);
-        Assert.Equal(["Guest1", "Guest2"], world.Host.Net.Players.Select(p => p.Name));
+        Assert.Equal(NetRole.Server, world.Host.Network.Role);
+        Assert.Null(world.Host.Network.LocalPlayer);
+        Assert.Equal(["Guest1", "Guest2"], world.Host.Network.Players.Select(p => p.Name));
         Assert.Equal(2, Named(world.Host, "Player").Count);
         Assert.Equal(2, Named(world.Clients[1], "Player").Count);
     }
@@ -585,9 +585,9 @@ public sealed class MultiplayerGenreTests
     {
         var world = new NetWorld(BigWorld);
         var bad = new NetConditions { Latency = 0.08, Jitter = 0.04, Loss = 0.2 };
-        world.Host.Net.FakeLag = bad;
-        world.Client.Net.FakeLag = bad;
-        var mine = world.Client.Net.LocalPlayer!.Avatar!;
+        world.Host.Network.FakeLag = bad;
+        world.Client.Network.FakeLag = bad;
+        var mine = world.Client.Network.LocalPlayer!.Avatar!;
         NetWorld.Keys(world.Client).SetKey(Key.D, true);
         world.Run(1);
         NetWorld.Keys(world.Client).SetKey(Key.D, false);
@@ -614,10 +614,10 @@ public sealed class MultiplayerGenreTests
         var world = new NetWorld(Small);
         var late = world.AddClient(Small);
         string? why = null;
-        late.Net.Ended += reason => why = reason;
+        late.Network.Ended += reason => why = reason;
         world.Run(0.5);
-        Assert.Equal(NetRole.Offline, late.Net.Role);
+        Assert.Equal(NetRole.Offline, late.Network.Role);
         Assert.Contains("full", why);
-        Assert.Contains("full", late.Net.Status);
+        Assert.Contains("full", late.Network.Status);
     }
 }

@@ -24,23 +24,21 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
     [NotState("a network game's players")]
     private readonly Dictionary<NetPlayer, string?> _sent = [];
 
-    // This machine's own player's HUD, or while the host runs another player's tools for them, that player's.
-    internal BlockWorldsState Sandbox => Game.ActingFor is { } player ? PlayerState(player) : _local;
-
     internal BlockWorldsState Local => _local;
 
+    // What's kept for another player whose hotbar and crafting the host runs for them.
     private BlockWorldsState PlayerState(NetPlayer player)
     {
         if (!_players.TryGetValue(player, out var state))
-            _players[player] = state = new BlockWorldsState(_local);
+            _players[player] = state = new BlockWorldsState(_local, player);
         return state;
     }
 
+    // What's kept for whoever has the entity: on the host of a network game, another player's own for their character.
+    private BlockWorldsState StateOf(Entity entity) =>
+        Game.Network.IsHost && Game.Network.OwnerOf(entity) is { IsLocal: false } player ? PlayerState(player) : _local;
+
     private Scene Scene => Game.Scene;
-
-    private IInput Input => Game.Input;
-
-    private NetSession Net => Game.Net;
 
     private Physics Physics => Game.Physics;
 
@@ -57,22 +55,24 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
 
     protected override void Draw(FrameDrawing frame) => BlockWorldsDrawing.Draw(this, frame);
 
-    public bool MouseOnHud => Sandbox.Hud is not null && Sandbox.MouseOnHud;
+    public bool MouseOnHud => _local.Hud is not null && _local.MouseOnHud;
 
-    public IReadOnlyList<HudButton> HudButtons => Sandbox.Buttons;
+    public IReadOnlyList<HudButton> HudButtons => _local.Buttons;
 
-    public string? Notice => Sandbox.NoticeLeft > 0 ? Sandbox.Notice : null;
+    public string? Notice => _local.NoticeLeft > 0 ? _local.Notice : null;
 
-    // The host runs another player's hotbar, crafting and digging for them, then tells their machine what to show.
-    public void RunForPlayer(NetPlayer player)
+    // The host runs another player's hotbar, crafting and digging for them with their controls, on their screen, then
+    // tells their machine what to show.
+    public void RunForPlayer(NetPlayer player, IInput input)
     {
-        RunBlockPlayers();
         var state = PlayerState(player);
+        LayOutHud(state, input);
+        RunBlockPlayers(state, input);
         var notice = state.NoticeLeft > 0 ? state.Notice : null;
         if (_sent.TryGetValue(player, out var sent) && sent == notice)
             return;
         _sent[player] = notice;
-        Game.Net.SendCommandTo(player, UiCommand, new object?[] { notice, state.NoticeLeft });
+        Game.Network.SendCommandTo(player, UiCommand, new object?[] { notice, state.NoticeLeft });
     }
 
     // A player's machine heard what the host's run of its hotbar and crafting wants shown.
@@ -82,30 +82,41 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
             (_local.Notice, _local.NoticeLeft) = (notice, left);
     }
 
+    // A menu open on the player's screen: this machine's (another player's menus are on their machine, which holds back
+    // their keys meanwhile).
+    private bool PanelOpen(BlockWorldsState state) => state.Player is null && Game.TopPanel is not null;
+
+    // The mouse is on the player's HUD, so a click there isn't meant for the world.
+    private bool OnHud(BlockWorldsState state, IInput input) =>
+        state.Player is null ? Game.MouseOnHud : (state.Hud is not null && state.MouseOnHud) || Game.MouseOnUiOf(input);
+
     // ----- The HUD -----
 
-    // The hotbar along the bottom and the crafting list over it, for this frame's view; a click on one of their buttons.
-    public void LayOutHud()
+    // This machine's hotbar and crafting list, for this frame's view.
+    public void LayOutHud() => LayOutHud(_local, Game.Input);
+
+    // The hotbar along the bottom and the crafting list over it, for the player's view; a click on one of their buttons.
+    private void LayOutHud(BlockWorldsState state, IInput input)
     {
-        Sandbox.Buttons.Clear();
+        state.Buttons.Clear();
         // Shown even while the player is paused (see Entity.IsPaused); its buttons do nothing meanwhile.
-        var hotbar = Game.FirstInSight(Game.Mine<Hotbar>(evenPaused: true));
-        var crafting = Game.FirstInSight(Game.Mine<Crafting>(evenPaused: true));
+        var hotbar = Game.FirstInSight(Game.Owned<Hotbar>(state.Player, evenPaused: true));
+        var crafting = Game.FirstInSight(Game.Owned<Crafting>(state.Player, evenPaused: true));
         if (hotbar is null && crafting is null)
         {
-            Sandbox.Hud = null;
-            Sandbox.MouseOnHud = false;
+            state.Hud = null;
+            state.MouseOnHud = false;
             return;
         }
 
-        LayOutHud(hotbar, crafting);
+        LayOutHud(state, input, hotbar, crafting);
     }
 
     // Its buttons' actions capture what they act on, so they're made here, only with a HUD to show.
-    private void LayOutHud(Hotbar? hotbar, Crafting? crafting)
+    private void LayOutHud(BlockWorldsState state, IInput input, Hotbar? hotbar, Crafting? crafting)
     {
-        var (center, size, aspect) = Game.HudView();
-        var hud = Sandbox.Hud = new BlockHud(center, new Vector2(size * (aspect > 0 ? aspect : 1), size));
+        var (center, size, aspect) = Game.HudViewOf(input);
+        var hud = state.Hud = new BlockHud(center, new Vector2(size * (aspect > 0 ? aspect : 1), size));
         var areas = new List<HudRect>();
 
         if (hotbar is not null)
@@ -116,7 +127,7 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
             {
                 var index = i;
                 var item = i < hotbar.Shown.Count ? hotbar.Shown[i].Item : null;
-                Sandbox.Buttons.Add(new HudButton(BlockHud.Slot, i, item ?? $"Slot {i + 1}", hud.HotbarSlot(i, slots), () => hotbar.Selected = index));
+                state.Buttons.Add(new HudButton(BlockHud.Slot, i, item ?? $"Slot {i + 1}", hud.HotbarSlot(i, slots), () => hotbar.Selected = index));
             }
         }
 
@@ -127,17 +138,17 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
             for (var i = 0; i < recipes.Count; i++)
             {
                 var recipe = recipes[i];
-                Sandbox.Buttons.Add(new HudButton(BlockHud.Recipe, i, recipe.Item, hud.RecipeRow(i, recipes.Count, hotbar is not null),
+                state.Buttons.Add(new HudButton(BlockHud.Recipe, i, recipe.Item, hud.RecipeRow(i, recipes.Count, hotbar is not null),
                     () => Craft(crafting.Entity!, recipe)));
             }
         }
 
-        var mouse = Input.MouseWorld;
-        Sandbox.MouseOnHud = Input.IsMouseInView && (areas.Any(a => a.Contains(mouse)) || Sandbox.Buttons.Any(b => b.Rect.Contains(mouse)));
+        var mouse = input.MouseWorld;
+        state.MouseOnHud = input.IsMouseInView && (areas.Any(a => a.Contains(mouse)) || state.Buttons.Any(b => b.Rect.Contains(mouse)));
         // On a player's machine the host does what the button does.
-        if (!Game.PanelOpenHere && !Game.PausedThisFrame && !Game.Net.IsClient && Input.WasPressed(MouseButton.Left) && Sandbox.MouseOnHud &&
+        if (!PanelOpen(state) && !Game.PausedThisFrame && !Game.Network.IsClient && input.WasPressed(MouseButton.Left) && state.MouseOnHud &&
             !(hotbar ?? (Component?)crafting)!.Entity!.IsPaused)
-            Sandbox.Buttons.FirstOrDefault(b => b.Rect.Contains(mouse))?.Press();
+            state.Buttons.FirstOrDefault(b => b.Rect.Contains(mouse))?.Press();
     }
 
     // How often falling blocks drop a cell, in seconds; how long between saves of a changed world.
@@ -150,7 +161,7 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
     {
         foreach (var generator in Game.Present<WorldGenerator>())
         {
-            if (!Sandbox.Started.Add(generator) || generator.Entity!.GetComponent<Tilemap>() is not { } map)
+            if (!_local.Started.Add(generator) || generator.Entity!.GetComponent<Tilemap>() is not { } map)
                 continue;
             var blocks = map.Entity!.GetComponent<Blocks>();
             if (LoadWorld(blocks, map))
@@ -249,11 +260,11 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
 
     internal void RunBlocks()
     {
-        Sandbox.NoticeLeft = Math.Max(0, Sandbox.NoticeLeft - Time.UnscaledDelta);
+        _local.NoticeLeft = Math.Max(0, _local.NoticeLeft - Time.UnscaledDelta);
         if (Time.Delta <= 0 || Game.PausedThisFrame)
             return;
 
-        RunBlockPlayers();
+        RunBlockPlayers(_local, Game.Input);
         DarkenUnderground();
         foreach (var blocks in Game.Active<Blocks>())
         {
@@ -264,44 +275,44 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
         }
     }
 
-    // A player's hotbar, crafting and digging: on the host (for each player in turn, in a network game). A player's own
-    // machine works out just what its HUD shows.
-    private void RunBlockPlayers()
+    // A player's hotbar, crafting and digging, with their controls: on the host (for each player in a network game, see
+    // RunForPlayer). A player's own machine works out just what its HUD shows.
+    private void RunBlockPlayers(BlockWorldsState state, IInput input)
     {
         if (Time.Delta <= 0 || Game.PausedThisFrame)
             return;
-        var acts = !Net.IsClient;
-        foreach (var hotbar in Game.Mine<Hotbar>())
-            RunHotbar(hotbar, acts);
+        var acts = !Game.Network.IsClient;
+        foreach (var hotbar in Game.Owned<Hotbar>(state.Player))
+            RunHotbar(hotbar, acts, state, input);
         if (!acts)
         {
-            foreach (var builder in Game.Mine<BlockBuilder>())
-                AimOnly(builder);
+            foreach (var builder in Game.Owned<BlockBuilder>(state.Player))
+                AimOnly(builder, state, input);
             return;
         }
 
-        foreach (var crafting in Game.Mine<Crafting>())
+        foreach (var crafting in Game.Owned<Crafting>(state.Player))
         {
-            if (!Game.PanelOpenHere && Game.HasFocus(crafting.Entity!) && Input.WasPressed(crafting.Key))
+            if (!PanelOpen(state) && Game.HasFocus(crafting.Entity!) && input.WasPressed(crafting.Key))
                 crafting.IsOpen = !crafting.IsOpen;
         }
 
-        foreach (var builder in Game.Mine<BlockBuilder>())
+        foreach (var builder in Game.Owned<BlockBuilder>(state.Player))
         {
             // Without focus it points at nothing and digs nothing (another part of the scene has the mouse).
             if (Game.HasFocus(builder.Entity!))
-                RunBuilder(builder);
+                RunBuilder(builder, state, input);
             else
                 (builder.Target, builder.PlaceAt, builder.Progress, builder.Cracks) = (null, null, 0, 0);
         }
     }
 
     // What a builder points at, for its outline on this player's screen; the host does the digging.
-    private void AimOnly(BlockBuilder builder)
+    private void AimOnly(BlockBuilder builder, BlockWorldsState state, IInput input)
     {
         if (builder.Map is null || builder.Map.Entity?.Scene != Scene)
             builder.Map = WorldFor(builder);
-        (builder.Target, builder.PlaceAt) = builder.Map is null || Game.PanelOpenHere ? (null, null) : Aim(builder, builder.Map);
+        (builder.Target, builder.PlaceAt) = builder.Map is null || PanelOpen(state) ? (null, null) : Aim(builder, builder.Map, input);
     }
 
     // Below the surface the camera's light fades towards the world's Underground color.
@@ -338,7 +349,7 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
     }
 
     // Each item keeps its slot until it runs out; new ones take the first empty slot. Number keys and the wheel pick.
-    private void RunHotbar(Hotbar hotbar, bool acts)
+    private void RunHotbar(Hotbar hotbar, bool acts, BlockWorldsState state, IInput input)
     {
         var slots = Math.Clamp(hotbar.Slots, 1, 10);
         var contents = hotbar.Entity!.GetComponent<Inventory>()?.Contents ?? [];
@@ -362,16 +373,16 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
 
         hotbar.Shown = items.Select(i => (i, i is null ? 0 : contents.First(c => c.Name.Equals(i, StringComparison.OrdinalIgnoreCase)).Count)).ToList();
 
-        if (acts && !Game.PanelOpenHere && Game.HasFocus(hotbar.Entity))
+        if (acts && !PanelOpen(state) && Game.HasFocus(hotbar.Entity))
         {
             for (var i = 0; i < slots; i++)
             {
-                if (Input.WasPressed(i == 9 ? Key.D0 : Key.D1 + i))
+                if (input.WasPressed(i == 9 ? Key.D0 : Key.D1 + i))
                     hotbar.Selected = i;
             }
 
-            if (Input.Scroll != 0)
-                hotbar.Selected -= Math.Sign(Input.Scroll);
+            if (input.Scroll != 0)
+                hotbar.Selected -= Math.Sign(input.Scroll);
         }
 
         hotbar.Selected = ((hotbar.Selected % slots) + slots) % slots;
@@ -379,7 +390,7 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
             builder.Item = hotbar.SelectedItem;
     }
 
-    private void RunBuilder(BlockBuilder builder)
+    private void RunBuilder(BlockBuilder builder, BlockWorldsState state, IInput input)
     {
         var entity = builder.Entity!;
         builder.PlaceCooldown -= Time.Delta;
@@ -387,7 +398,7 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
             builder.Map = WorldFor(builder);
         var map = builder.Map;
         var before = builder.Target;
-        (builder.Target, builder.PlaceAt) = map is null || Game.PanelOpenHere ? (null, null) : Aim(builder, map);
+        (builder.Target, builder.PlaceAt) = map is null || PanelOpen(state) ? (null, null) : Aim(builder, map, input);
         if (builder.Target != before)
         {
             builder.Progress = 0;
@@ -397,10 +408,10 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
         if (map is null)
             return;
         var blocks = map.Entity!.GetComponent<Blocks>();
-        var onHud = Game.MouseOnHud && !Game.LooksThrough(entity);
+        var onHud = OnHud(state, input) && !Game.LooksThrough(entity);
 
         // Digging: hold the button on a block until it breaks.
-        if (builder.CanMine && !onHud && builder.Target is { } target && Input.IsDown(MouseButton.Left) &&
+        if (builder.CanMine && !onHud && builder.Target is { } target && input.IsDown(MouseButton.Left) &&
             blocks?.IsUnbreakable(map.GetTile(target.X, target.Y)) != true)
         {
             var tile = map.GetTile(target.X, target.Y);
@@ -425,7 +436,7 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
         }
 
         // Building: the right button puts down the item in hand, again every so often while it's held.
-        if (builder.CanBuild && !onHud && builder.PlaceAt is { } at && Input.IsDown(MouseButton.Right) && builder.PlaceCooldown <= 0 &&
+        if (builder.CanBuild && !onHud && builder.PlaceAt is { } at && input.IsDown(MouseButton.Right) && builder.PlaceCooldown <= 0 &&
             !string.IsNullOrWhiteSpace(builder.Item))
         {
             var tile = blocks?.TileOf(builder.Item) ?? -1;
@@ -455,7 +466,7 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
     }
 
     // The block pointed at and the empty cell a block would go in: under the mouse, or straight ahead in first person.
-    private ((int X, int Y)? Target, (int X, int Y)? PlaceAt) Aim(BlockBuilder builder, Tilemap map)
+    private ((int X, int Y)? Target, (int X, int Y)? PlaceAt) Aim(BlockBuilder builder, Tilemap map, IInput input)
     {
         var entity = builder.Entity!;
         if (!Matrix4x4.Invert(map.Entity!.Transform.WorldMatrix, out var toLocal))
@@ -481,9 +492,9 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
             return (null, null);
         }
 
-        if (!Input.IsMouseInView)
+        if (!input.IsMouseInView)
             return (null, null);
-        var mouse = Input.MouseWorld;
+        var mouse = input.MouseWorld;
         var aimed = map.CellAt(Vector2.Transform(mouse, toLocal));
         if (Vector2.Distance(CellWorld(map, aimed.X, aimed.Y), origin) > reach)
             return (null, null);
@@ -559,7 +570,7 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
         foreach (var (item, count) in recipe.Needs)
             inventory.Take(item, count);
         inventory.Add(recipe.Item, recipe.Count);
-        SandboxNote(recipe.Count == 1 ? $"Made a {recipe.Item}" : $"Made {recipe.Count} {recipe.Item}");
+        SandboxNote(StateOf(crafter), recipe.Count == 1 ? $"Made a {recipe.Item}" : $"Made {recipe.Count} {recipe.Item}");
         if (crafter.GetComponent<Crafting>()?.Sound is { } sound && !string.IsNullOrWhiteSpace(sound))
             Game.PlayShared(sound.Trim());
         return true;
@@ -600,7 +611,7 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
         return false;
     }
 
-    private void SandboxNote(string text) => (Sandbox.Notice, Sandbox.NoticeLeft) = (text, 2.5f);
+    private static void SandboxNote(BlockWorldsState state, string text) => (state.Notice, state.NoticeLeft) = (text, 2.5f);
 
     /// <summary>The world position of the middle of a map's cell.</summary>
     internal static Vector2 CellWorld(Tilemap map, int x, int y) => Vector2.Transform(map.CellCenter(x, y), map.Entity!.Transform.WorldMatrix);
@@ -617,8 +628,12 @@ internal sealed class BlockWorldsState
     {
     }
 
-    /// <summary>One player's own HUD in a network game, sharing the worlds started.</summary>
-    public BlockWorldsState(BlockWorldsState world) => Started = world.Started;
+    /// <summary>Another player's own HUD in a network game (the host runs their tools), sharing the worlds started.</summary>
+    public BlockWorldsState(BlockWorldsState world, NetPlayer player) => (Started, Player) = (world.Started, player);
+
+    /// <summary>The other player whose HUD this is, or null for this machine's own.</summary>
+    [field: NotState("a network game's player")]
+    public NetPlayer? Player { get; }
 
     public HashSet<WorldGenerator> Started { get; } = [];
 

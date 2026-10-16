@@ -22,7 +22,7 @@ internal sealed partial class ContraptionsSystem
         var gates = Game.Active<WireGate>();
         if (wires.Count > 0 || gates.Count > 0)
             PassSignals(wires, gates);
-        if (Sandbox.Applied.Count > 0)
+        if (_local.Applied.Count > 0)
             ForgetGoneInputs();
         RunWireOutputs();
     }
@@ -36,14 +36,14 @@ internal sealed partial class ContraptionsSystem
     private void ForgetGoneInputs()
     {
         _goneInputs.Clear();
-        foreach (var key in Sandbox.Applied.Keys)
+        foreach (var key in _local.Applied.Keys)
         {
             if (key.Entity.Scene != Scene)
                 _goneInputs.Add(key);
         }
 
         foreach (var key in _goneInputs)
-            Sandbox.Applied.Remove(key);
+            _local.Applied.Remove(key);
         _goneInputs.Clear();
     }
 
@@ -196,9 +196,9 @@ internal sealed partial class ContraptionsSystem
                 return;
         }
 
-        if (Sandbox.Applied.TryGetValue((entity, port), out var last) && last == value)
+        if (_local.Applied.TryGetValue((entity, port), out var last) && last == value)
             return;
-        Sandbox.Applied[(entity, port)] = value;
+        _local.Applied[(entity, port)] = value;
         switch (port)
         {
             case "On" when entity.GetComponent<Switch>() is { } @switch:
@@ -243,7 +243,7 @@ internal sealed partial class ContraptionsSystem
             var requested = button.PressRequested;
             button.PressRequested = false;
             var pressing = requested || players.Any(p => p.Input.WasPressed("Interact") && (p.Mouse.Contains(entity) || touchers.Any(t => Game.InputOf(t) == p.Input)))
-                           || (!Net.IsOnline && touchers.Count > 0 && Input.WasPressed("Interact"));
+                           || (!Game.Network.IsOnline && touchers.Count > 0 && Game.Input.WasPressed("Interact"));
             if (pressing)
             {
                 if (button.Toggle)

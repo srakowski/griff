@@ -182,11 +182,11 @@ public partial class App : Application, IDisposable
     private static void StartNetwork(Game game, Options options)
     {
         if (!string.IsNullOrWhiteSpace(options.Name))
-            game.Net.PlayerName = options.Name;
+            game.Network.PlayerName = options.Name;
         if (options.Host is { } port)
-            game.Net.Host(port);
+            game.Network.Host(port);
         else if (options.Join is { } address)
-            game.Net.Join(address);
+            game.Network.Join(address);
     }
 
     // A dedicated server: the start scene, run and hosted with no window, until the process is ended.
@@ -205,16 +205,16 @@ public partial class App : Application, IDisposable
         };
         game.UseProjectSettings(loaded.Project);
         game.Problems.Reported += p => Console.Error.WriteLine(p.Message);
-        if (!game.Net.HostServer(port))
+        if (!game.Network.HostServer(port))
         {
-            Console.Error.WriteLine(game.Net.Status);
+            Console.Error.WriteLine(game.Network.Status);
             Shutdown(1);
             return;
         }
 
-        Console.WriteLine($"{loaded.Project.Name}: {game.Net.Status}. Close this window (or press Ctrl+C) to stop.");
-        game.Net.PlayerJoined += p => Console.WriteLine($"{p.Name} joined ({game.Net.Players.Count} playing)");
-        game.Net.PlayerLeft += p => Console.WriteLine($"{p.Name} left");
+        Console.WriteLine($"{loaded.Project.Name}: {game.Network.Status}. Close this window (or press Ctrl+C) to stop.");
+        game.Network.PlayerJoined += p => Console.WriteLine($"{p.Name} joined ({game.Network.Players.Count} playing)");
+        game.Network.PlayerLeft += p => Console.WriteLine($"{p.Name} left");
         var clock = Stopwatch.StartNew();
         // The game takes its fixed steps as real time passes, however unevenly the timer fires.
         var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(1000.0 / 120) };

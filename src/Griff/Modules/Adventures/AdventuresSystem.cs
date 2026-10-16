@@ -530,7 +530,7 @@ internal sealed partial class AdventuresSystem : GameSystem, IHudLayout, IMouseO
     }
 
     // Played on this machine: offline, everyone's; online, this player's own (or nobody's in particular).
-    private bool IsMine(Entity entity) => !Game.Net.IsOnline || NetSession.OwnerIdOf(entity) is var owner && (owner == 0 || owner == Game.Net.LocalPlayer?.Id);
+    private bool IsMine(Entity entity) => !Game.Network.IsOnline || Networked.OwnerIdOf(entity) is var owner && (owner == 0 || owner == Game.Network.LocalPlayer?.Id);
 
     // The draws of this frame's labels, what's said broken into lines and the name shown by the pointer, kept from frame to
     // frame so drawing them makes no garbage while they stay the same.

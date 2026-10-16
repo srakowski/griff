@@ -56,8 +56,8 @@ internal sealed class TurnSystem : GameSystem
             foreach (var order in orders)
             {
                 if (!string.IsNullOrWhiteSpace(order.EndAction) && !order.Entity!.IsPaused && Game.Input.WasPressed(order.EndAction.Trim()) &&
-                    MayEndTurn(order, Game.Net.LocalPlayer))
-                    Game.Net.SendCommand(EndTurnCommand, order.Entity);
+                    MayEndTurn(order, Game.Network.LocalPlayer))
+                    Game.Network.SendCommand(EndTurnCommand, order.Entity);
             }
         }
 
@@ -65,7 +65,7 @@ internal sealed class TurnSystem : GameSystem
         {
             if (button.Action != ButtonAction.EndTurn)
                 continue;
-            var may = OrderForButton(button) is { } order && MayEndTurn(order, Game.Net.LocalPlayer);
+            var may = OrderForButton(button) is { } order && MayEndTurn(order, Game.Network.LocalPlayer);
             if (button.Interactable != may)
                 button.Interactable = may;
         }
@@ -112,7 +112,7 @@ internal sealed class TurnSystem : GameSystem
             if (!scope.IsWholeScene && scope.Covers(button.Entity))
                 return order;
             first ??= order;
-            if (may is null && MayEndTurn(order, Game.Net.LocalPlayer))
+            if (may is null && MayEndTurn(order, Game.Network.LocalPlayer))
                 may = order;
         }
 
@@ -363,7 +363,7 @@ internal sealed class TurnSystem : GameSystem
         for (var i = 0; i < entities.Length; i++)
         {
             var e = entities[i];
-            if (e.IsActive && e.GetComponent<GridMovement>() is not null && NetSession.OwnerIdOf(e) == player.Id && TurnTaker.Of(e) is { } taker &&
+            if (e.IsActive && e.GetComponent<GridMovement>() is not null && Networked.OwnerIdOf(e) == player.Id && TurnTaker.Of(e) is { } taker &&
                 OrderOf(taker) is { } order && Acts(order, taker))
             {
                 UseAction(e);
@@ -413,14 +413,14 @@ internal sealed class TurnSystem : GameSystem
 
     public string TeamOf(TurnTaker taker)
     {
-        if (Game.Net.IsOnline && Game.Net.PlayerById(NetSession.OwnerIdOf(taker.Entity)) is { Team.Length: > 0 } player)
+        if (Game.Network.IsOnline && Game.Network.PlayerById(Networked.OwnerIdOf(taker.Entity)) is { Team.Length: > 0 } player)
             return player.Team;
         return (string.IsNullOrWhiteSpace(taker.Team) ? Teams.Of(taker.Entity) : taker.Team).Trim();
     }
 
     public string TeamOf(Entity? entity)
     {
-        if (entity is not null && Game.Net.IsOnline && Game.Net.PlayerById(NetSession.OwnerIdOf(entity)) is { Team.Length: > 0 } player)
+        if (entity is not null && Game.Network.IsOnline && Game.Network.PlayerById(Networked.OwnerIdOf(entity)) is { Team.Length: > 0 } player)
             return player.Team;
         return Teams.Of(entity);
     }
@@ -450,12 +450,12 @@ internal sealed class TurnSystem : GameSystem
     {
         if (order.Round <= 0 || order.IsBetweenTurns || order.IsComputer(order.Current))
             return false;
-        if (!Game.Net.IsOnline)
+        if (!Game.Network.IsOnline)
             return true;
         var owned = false;
         foreach (var taker in order.Takers)
         {
-            var owner = NetSession.OwnerIdOf(taker.Entity);
+            var owner = Networked.OwnerIdOf(taker.Entity);
             if (owner == 0 || !Teams.Same(TeamOf(taker), order.Current))
                 continue;
             if (player is not null && owner == player.Id)

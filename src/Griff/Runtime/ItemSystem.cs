@@ -174,7 +174,7 @@ internal sealed class ItemSystem : GameSystem
     {
         item = item.Trim();
         var inventories = Game.Scene.AllNow<Inventory>();
-        var inventory = Game.Net.IsOnline ? inventories.FirstOrDefault(i => Game.Net.IsMine(i.Entity) && NetSession.OwnerIdOf(i.Entity) != 0) : null;
+        var inventory = Game.Network.IsOnline ? inventories.FirstOrDefault(i => Game.Network.IsMine(i.Entity) && Networked.OwnerIdOf(i.Entity) != 0) : null;
         if (inventory is null)
         {
             foreach (var each in inventories)

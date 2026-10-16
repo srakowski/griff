@@ -138,7 +138,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         {
             _slowConnection = value;
             foreach (var game in AllGames())
-                game.Net.FakeLag = value ? SlowConditions : new NetConditions();
+                game.Network.FakeLag = value ? SlowConditions : new NetConditions();
             OnPropertyChanged();
         }
     }
@@ -455,7 +455,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
             _runner.Game.SaveData = new SaveData(SaveData.EditorPath(project.RootPath));
             _runner.Game.Title = project.Name;
             _runner.Game.Components = _projectSession.Components;
-            _runner.Game.Net.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
+            _runner.Game.Network.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
             _runner.Game.UseProjectSettings(project);
             if (_tables is null)
                 _tables = _runner.Game.Tables;
@@ -639,8 +639,8 @@ public sealed class PlayMode : ObservableObject, IDisposable
             return;
         _network = new MemoryNetwork();
         var host = _runner.Game;
-        host.Net.PlayerName = "Player 1";
-        host.Net.Host(_network.Open(NetSession.DefaultPort));
+        host.Network.PlayerName = "Player 1";
+        host.Network.Host(_network.Open(NetSession.DefaultPort));
         for (var number = 2; number <= Math.Min(players, 8); number++)
             OpenPlayer(project, number, players);
         _status.Show($"Playing with {players} players: click a window to play as that player");
@@ -680,12 +680,12 @@ public sealed class PlayMode : ObservableObject, IDisposable
         game.Title = project.Name;
         game.Components = _projectSession.Components;
         game.SceneName = _sceneName;
-        game.Net.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
-        game.Net.PlayerName = $"Player {number}";
+        game.Network.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
+        game.Network.PlayerName = $"Player {number}";
         game.ShowHitboxes = _showHitboxes;
         game.UseProjectSettings(project);
         game.Problems.Reported += OnGameProblem;
-        game.Net.Join(_network!.Open(), new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, NetSession.DefaultPort));
+        game.Network.Join(_network!.Open(), new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, NetSession.DefaultPort));
         runner.Faulted += OnFaulted;
         runner.Start();
 

@@ -13,11 +13,16 @@ public sealed partial class Game
     public static (Vector2 Center, float HalfHeight, float Aspect)? ViewOf(IInput input) =>
         ViewSystem.ViewOf(input);
 
-    /// <summary>
-    /// The view a HUD is laid out for: this machine's camera, or the screen of the player the host is acting for.
-    /// </summary>
+    /// <summary>The view a HUD is laid out for on this machine's screen: its camera's.</summary>
     public (Vector2 Center, float HalfHeight, float Aspect) HudView() =>
         _views.HudView();
+
+    /// <summary>
+    /// The view a HUD is laid out for on the screen of the player whose <paramref name="input"/> this is: theirs, if the
+    /// host has been told it (a player on another machine), or this machine's (see <see cref="HudView"/>).
+    /// </summary>
+    public (Vector2 Center, float HalfHeight, float Aspect) HudViewOf(IInput input) =>
+        _views.HudViewOf(input);
 
     /// <summary>
     /// True if the game is seen through <paramref name="entity"/>'s eyes on its player's screen (see

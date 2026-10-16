@@ -365,7 +365,7 @@ public class GridPushingTests
 
         var world = new NetWorld(Arena);
         var client = world.Client;
-        var mine = client.Net.LocalPlayer!.Avatar!;
+        var mine = client.Network.LocalPlayer!.Avatar!;
         var cell = mine.GetComponent<GridMovement>()!.Cell;
         var hostCrate = world.Host.Scene.Entities.First(e => e.Name == "Crate");
         hostCrate.Transform.Position = new Vector3(cell.X + 1.5f, -cell.Y - 0.5f, 0);

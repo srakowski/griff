@@ -193,10 +193,10 @@ public abstract class GameSystem : IKeepsState
 
     internal string? ShownNotice => IsRemoved ? null : _notice?.Notice;
 
-    internal void RunForOtherPlayer(NetPlayer player)
+    internal void RunForOtherPlayer(NetPlayer player, IInput input)
     {
         if (!IsRemoved)
-            _tools?.RunForPlayer(player);
+            _tools?.RunForPlayer(player, input);
     }
 
     internal void RunGridStepStarting(GridMovement mover)
@@ -245,8 +245,8 @@ public interface ISeesThroughEyes
 public interface IHudLayout
 {
     /// <summary>
-    /// Called early in each frame's Simulate phase (and on the host of a network game, again for each other player, as
-    /// them: see <see cref="IPlayerTools"/>) to lay out what the system shows on the screen for the view as it is now,
+    /// Called early in each frame's Simulate phase to lay out what the system shows on this machine's screen for the view
+    /// as it is now (the host lays out another player's for them in <see cref="IPlayerTools.RunForPlayer"/>),
     /// with its <see cref="HudButtons"/>, so whether the mouse is on it is known before anything acts on a click. Draw what
     /// it lays out through <see cref="FrameDrawing.PinToView"/>, so it keeps still on the screen as the camera is drawn
     /// moving between steps.
@@ -278,12 +278,12 @@ public interface INoticeSource
 public interface IPlayerTools
 {
     /// <summary>
-    /// On the host of a network game, runs the system's controls that are one player's own for <paramref name="player"/>,
-    /// as them: <see cref="Game.Input"/> is their keys and mouse, the view is their screen, and what the system keeps for
-    /// a player should be theirs (see <see cref="Game.ActingFor"/>). Called once a frame for each other player with a
-    /// character, after the system's <see cref="IHudLayout.LayOutHud"/> for them.
+    /// On the host of a network game, runs the system's controls that are one player's own for <paramref name="player"/>
+    /// with <paramref name="input"/>, their keys and mouse (with the view they see, see <see cref="Game.HudViewOf"/>): it
+    /// lays out their HUD for their screen and runs their tools on what the system keeps for them, while
+    /// <see cref="Game.Input"/> stays this machine's own. Called once a frame for each other player with a character.
     /// </summary>
-    void RunForPlayer(NetPlayer player);
+    void RunForPlayer(NetPlayer player, IInput input);
 }
 
 /// <summary>A system that hears of a grid mover setting off.</summary>

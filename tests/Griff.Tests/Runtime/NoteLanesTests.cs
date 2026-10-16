@@ -43,12 +43,12 @@ public class NoteLanesTests
         Assert.Equal(["Easy", "Hard"], RhythmChart.Difficulties(chart));
 
         lanes.Play("Easy");
-        Tick(game, game.LocalInput);
+        Tick(game, game.Input);
         Assert.Equal(2, lanes.Notes);
         Assert.Equal("Easy", lanes.Difficulty);
 
         lanes.Play("Expert");
-        Tick(game, game.LocalInput);
+        Tick(game, game.Input);
         Assert.Contains(warnings, w => w.Contains("no difficulty called \"Expert\"") && w.Contains("Easy, Hard"));
     }
 
@@ -441,9 +441,9 @@ public class NoteLanesTests
         Assert.Equal(0, hostLanes.Perfects);
 
         world.Run(0.3);
-        var guest = host.Net.Players.Single(p => !p.IsHost);
+        var guest = host.Network.Players.Single(p => !p.IsHost);
         Assert.Equal(300, guest.Score);
-        Assert.Equal(0, host.Net.Players.Single(p => p.IsHost).Score);
+        Assert.Equal(0, host.Network.Players.Single(p => p.IsHost).Score);
         Assert.Contains("host heard Hit 300", heard);
         Assert.Contains("client heard Hit 300", heard);
     }

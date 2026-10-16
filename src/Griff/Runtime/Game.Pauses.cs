@@ -69,6 +69,8 @@ public sealed partial class Game
         if (_levels.Talking is { PauseGame: true } talking && GroupNamed(talking.Entity, talking.Pauses) is { } talked)
             AddGroup(groups, talked);
 
+        // A minigame pauses the rest of the scene while it's played, if it says so.
+        PauseForMinigames(groups);
         Scene.SetPaused(groups);
         groups.Clear();
     }

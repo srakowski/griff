@@ -476,7 +476,7 @@ public sealed class Bar : Component, IDrawable
         {
             // In a network game, this player's own character comes first.
             if (_tracked?.Scene != scene || _tracked.Name != Track || (scene.PreferNamed is { } prefer && !prefer(_tracked)))
-                _tracked = (scene.FindNamed(Track) is { } named && named.GetComponent<Health>() is not null ? named : null)
+                _tracked = (scene.FindNamed(Track, near: Entity) is { } named && named.GetComponent<Health>() is not null ? named : null)
                            ?? scene.Entities.FirstOrDefault(e => e.Name == Track && e.GetComponent<Health>() is not null) ?? _tracked;
             if (_tracked?.GetComponent<Health>() is { } health)
                 (Value, Max) = _tracked.Scene == scene ? (health.Current, health.Max) : (0, health.Max);

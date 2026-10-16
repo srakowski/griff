@@ -142,14 +142,19 @@ public readonly struct Scope
             return inside;
         if (owner.Scene is not { } scene)
             return null;
+        // One in the same part of the scene (a minigame being played, or outside them) first.
+        Entity? elsewhere = null;
         var entities = scene.EntitiesNow;
         for (var i = 0; i < entities.Length; i++)
         {
-            if (name.SequenceEqual(entities[i].Name))
+            if (!name.SequenceEqual(entities[i].Name))
+                continue;
+            if (Scene.SamePart(entities[i], owner))
                 return entities[i];
+            elsewhere ??= entities[i];
         }
 
-        return null;
+        return elsewhere;
 
         static Entity? Inside(Entity entity, ReadOnlySpan<char> name)
         {

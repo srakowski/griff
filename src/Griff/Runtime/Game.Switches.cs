@@ -40,7 +40,7 @@ public sealed partial class Game
                     ShowPrompt(@switch.Entity!, @switch.Prompt, works && users.Count > 0 && _levels.Talking is null);
 
                     // Not with the press that just started a conversation beside it.
-                    if (works && users.Count > 0 && _levels.Talking is null && !PausedThisFrame && users.Any(u => !u.IsPaused && InputOf(u).WasPressed("Interact")))
+                    if (works && users.Count > 0 && _levels.Talking is null && !PausedThisFrame && users.Any(u => !u.IsPaused && HasFocus(u) && InputOf(u).WasPressed("Interact")))
                     {
                         if (@switch.IsOn)
                             @switch.IsOn = false;
@@ -200,14 +200,27 @@ public sealed partial class Game
         Give(collector, pickup.Item.Trim(), pickup.Amount);
     }
 
-    // The first inventory in the scene, the player's in practice, even while they're away respawning, or else the first
-    // thing holding that item (a team's faction, a card hand's mana; see Items). In a network game, this machine's
-    // player's own.
-    private int ItemCount(string item)
+    // The first inventory in the scene (in the same part of it as `near`: a minigame being played, or outside them), the
+    // player's in practice, even while they're away respawning, or else the first thing holding that item (a team's
+    // faction, a card hand's mana; see Items). In a network game, this machine's player's own.
+    private int ItemCount(string item, Entity? near = null)
     {
         item = item.Trim();
         var inventories = Scene.AllNow<Inventory>();
-        var inventory = (Net.IsOnline ? inventories.FirstOrDefault(i => Net.IsMine(i.Entity) && NetSession.OwnerIdOf(i.Entity) != 0) : null) ?? inventories.FirstOrDefault();
+        var inventory = Net.IsOnline ? inventories.FirstOrDefault(i => Net.IsMine(i.Entity) && NetSession.OwnerIdOf(i.Entity) != 0) : null;
+        if (inventory is null)
+        {
+            foreach (var each in inventories)
+            {
+                if (Scene.SamePart(each.Entity!, near))
+                {
+                    inventory = each;
+                    break;
+                }
+            }
+        }
+
+        inventory ??= inventories.FirstOrDefault();
         if (inventory is not null)
             return inventory.Count(item);
         foreach (var holder in Scene.AllNow<IHoldsItems>())

@@ -149,6 +149,9 @@ public sealed class Switch : Component
         {
             var inside = owner.SelfAndDescendants().Where(e => e.Name == name).ToList();
             var found = inside.Count > 0 || owner.Scene is null ? inside : owner.Scene.Entities.Where(e => e.Name == name).ToList();
+            // Those in the same part of the scene as the owner (a minigame being played, or outside them), if any are.
+            if (found.Count > 1 && found.Any(e => Scene.SamePart(e, owner)))
+                found = [.. found.Where(e => Scene.SamePart(e, owner))];
             foreach (var entity in found)
                 yield return entity;
         }
@@ -180,7 +183,7 @@ public sealed class Switch : Component
 /// </remarks>
 [Category("Gameplay")]
 [ComponentName("Griff.Inventory")]
-public sealed class Inventory : Component, IHoldsItems
+public sealed class Inventory : Component, IHoldsItems, ICarried
 {
     // Names in the order first added, so the Inspector's list doesn't shuffle.
     private readonly List<(string Name, int Count)> _items = [];
@@ -283,6 +286,23 @@ public sealed class Inventory : Component, IHoldsItems
 
     // The Version last kept in the save data.
     internal int SavedVersion { get; set; } = -1;
+
+    // Its rows one per line in the save data.
+    void ICarried.Load(ICarryStore data, string key)
+    {
+        if (data.GetString(key) is { } saved)
+            Items = saved.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        SavedVersion = Version;
+    }
+
+    bool ICarried.Save(ICarryStore data, string key, bool always)
+    {
+        if (!always && SavedVersion == Version)
+            return false;
+        SavedVersion = Version;
+        data.Set(key, string.Join('\n', Items));
+        return true;
+    }
 
     /// <summary>How many of <paramref name="item"/> it holds (names ignore case). Read as "Count:Key".</summary>
     [Output(Example = "Key")]

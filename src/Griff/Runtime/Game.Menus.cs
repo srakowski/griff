@@ -60,7 +60,8 @@ public sealed partial class Game
         if (UpdateRebinding())
             return;
 
-        var top = TopPanel;
+        // A panel left open behind the minigame that has the screen takes no notice.
+        var top = TopPanel is { Entity: { } open } panel && !IsBehindMinigame(open) ? panel : null;
         var allButtons = OnTop(_menus.AllButtons, Scene.ActiveNow<Button>(), top);
         foreach (var button in allButtons)
         {
@@ -163,12 +164,14 @@ public sealed partial class Game
     }
 
     // Those on the top panel (all of them without one), into a list kept for it.
-    private static List<T> OnTop<T>(List<T> into, ComponentList<T> all, Panel? top) where T : Component
+    private List<T> OnTop<T>(List<T> into, ComponentList<T> all, Panel? top) where T : Component
     {
         into.Clear();
+        var shown = Minigame;
         foreach (var control in all)
         {
-            if (top is null || Inside(control.Entity!, top))
+            // Not those behind the minigame that has the screen.
+            if ((top is null || Inside(control.Entity!, top)) && !MinigameRoot.IsBehind(control.Entity!, shown))
                 into.Add(control);
         }
 
@@ -245,11 +248,17 @@ public sealed partial class Game
             case ButtonAction.NewGame when string.IsNullOrWhiteSpace(button.Scene):
                 throw new InvalidOperationException($"The button \"{button.Entity!.Name}\" starts a new game, but its Scene isn't set.");
             case ButtonAction.NewGame:
-                SaveData.ClearProgress();
-                LoadScene(button.Scene!, button.Fade);
+                NewGame(button.Scene!, button.Fade);
+                break;
+            // In a minigame, Restart starts it over and Quit leaves it (as lost), rather than the whole game.
+            case ButtonAction.RestartScene when MinigameRoot.Of(button.Entity) is { } minigame:
+                RestartMinigame(minigame);
                 break;
             case ButtonAction.RestartScene:
                 ReloadScene(button.Fade);
+                break;
+            case ButtonAction.Quit when MinigameRoot.Of(button.Entity) is { } minigame:
+                LoseMinigame(minigame);
                 break;
             case ButtonAction.Quit:
                 Quit();

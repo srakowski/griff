@@ -15,7 +15,6 @@ public sealed partial class Game : IGameContext
     private readonly List<GameTimer> _timers = new(16);
     private readonly List<Tween> _tweens = new(16);
     private readonly List<Coroutine> _coroutines = [];
-    private readonly List<Entity> _kept = [];
     private readonly MessageBoard _messages = new();
     private readonly HashSet<(Entity Source, Entity Target)> _touches = [];
 
@@ -170,7 +169,20 @@ public sealed partial class Game : IGameContext
     /// <paramref name="fade"/> seconds while the game keeps running, then fading back in just as long once it's switched.
     /// Fades use real time, so they work from a paused menu. Loading again mid-fade just changes where it's headed.
     /// </summary>
-    public void LoadScene(string nameOrPath, float fade, Color? color = null)
+    public void LoadScene(string nameOrPath, float fade, Color? color = null) => LoadScene(nameOrPath, fade, color, arriveAt: null);
+
+    /// <summary>
+    /// Like <see cref="LoadScene(string, float, Color?)"/>, with the players arriving at the entity called
+    /// <paramref name="arriveAt"/> in the next scene (a door there, the way back), as a door's Arrive At does: the
+    /// characters the players move stand where it is, and don't go straight back through a door there. A scene that
+    /// remembers how it was left (see <see cref="RememberScene"/>) comes back so.
+    /// </summary>
+    /// <example><code>Game.LoadScene("Cave", fade: 0.4f, arriveAt: "Cave Mouth");</code></example>
+    public void LoadScene(string nameOrPath, float fade, Color? color, string? arriveAt) =>
+        LoadScene(nameOrPath, fade, color, arriveAt, traveller: null, fresh: false);
+
+    // Where a door sends whoever used it: they arrive at the spot, even if no player moves them.
+    internal void LoadScene(string nameOrPath, float fade, Color? color, string? arriveAt, Entity? traveller, bool fresh)
     {
         Crowds.ThrowIfRunning("change scenes");
         if (SceneLoader is null)
@@ -179,6 +191,9 @@ public sealed partial class Game : IGameContext
         // On a player's machine, going to another scene (a menu's Quit to Title) leaves the host's game.
         if (Net.IsClient || Net.IsConnecting)
             Net.Leave();
+
+        _arriving = string.IsNullOrWhiteSpace(arriveAt) ? null : (arriveAt.Trim(), traveller?.Name);
+        (_freshScene, _startingOver) = (fresh, false);
 
         if (fade > 0)
         {
@@ -195,24 +210,32 @@ public sealed partial class Game : IGameContext
         _pendingScene = nameOrPath;
     }
 
-    /// <summary>Starts the current scene over from its saved state at the end of this frame, e.g. after the player dies.</summary>
+    /// <summary>
+    /// Starts the current scene over from its saved state at the end of this frame, e.g. after the player dies. A scene
+    /// that remembers how it was left (see <see cref="RememberScene"/>) forgets it, and starts as its file has it.
+    /// </summary>
     public void ReloadScene() => ReloadScene(0);
 
     /// <summary>Like <see cref="ReloadScene()"/>, fading out and back in as <see cref="LoadScene(string, float, Color?)"/> does.</summary>
     public void ReloadScene(float fade, Color? color = null) =>
         LoadScene(SceneName ?? throw new InvalidOperationException("This game doesn't know its scene's name, so it can't reload it."),
-            fade, color);
+            fade, color, arriveAt: null, traveller: null, fresh: true);
+
+    // The scene being gone to starts as its file has it, even if it's remembered (a restart).
+    private bool _freshScene;
 
     /// <summary>
     /// Carries <paramref name="entity"/> (and its children) into the next scenes <see cref="LoadScene"/> switches to, still
-    /// running: music players, a score kept across levels. It becomes a top-level entity there. If the next scene has the
-    /// very same entity (say, back on the scene it came from), the kept one replaces it, so there's never two.
+    /// running: music players, a score kept across levels. It gets a <see cref="Scenes.KeepBetweenScenes"/> (if it hasn't
+    /// one), which does it: it becomes a top-level entity there, in place of the very same entity there (say, back on the
+    /// scene it came from) or one of the same name, so there's never two.
     /// </summary>
     public void KeepBetweenScenes(Entity entity)
     {
+        ArgumentNullException.ThrowIfNull(entity);
         Crowds.ThrowIfRunning("keep entities between scenes");
-        if (!_kept.Contains(entity))
-            _kept.Add(entity);
+        if (entity.GetComponent<Scenes.KeepBetweenScenes>() is null)
+            entity.AddComponent<Scenes.KeepBetweenScenes>();
     }
 
     /// <summary>Asks the host to close the game; in the editor, play mode stops.</summary>
@@ -475,10 +498,12 @@ public sealed partial class Game : IGameContext
 
     /// <summary>
     /// Adds <paramref name="entity"/> to the scene. Its behaviors start on the next frame; its <see cref="TableValues"/>
-    /// set their values straight away.
+    /// set their values straight away. One spawned with no parent where a minigame is being played (see
+    /// <see cref="PlayMinigame"/>), such as a bullet or a falling piece, goes into the minigame, staying where it is.
     /// </summary>
     public Entity Spawn(Entity entity, Entity? parent = null)
     {
+        parent ??= MinigameAt(entity);
         Scene.Add(entity, parent);
         ApplyTables(entity);
         return entity;
@@ -757,16 +782,39 @@ public sealed partial class Game : IGameContext
     // comes `loaded`; otherwise it's loaded by name.
     private void SwitchScene(string name, Scene? loaded = null)
     {
+        // Minigames being played end with the scene, giving the input back first (so a remembered scene has it); what the
+        // scene carries is saved as it is, and the scene remembered as it's left if it says so (not when it's starting over,
+        // nor for a saved game being loaded, which brings its own).
+        foreach (var root in Scene.AllNow<MinigameRoot>())
+        {
+            if (!root.Ended)
+            {
+                GiveFocusBack(root.FocusBefore);
+                root.Ended = true;
+            }
+        }
+
+        _endingMinigames.Clear();
+        var target = SceneNameOf(name);
+        var restarting = loaded is null && _freshScene;
+        if (!_startingOver || loaded is not null)
+            FlushCarried();
+        _startingOver = false;
+        if (restarting)
+            _remembered.Remove(target);
+        if (loaded is null && !restarting)
+            RememberLeaving();
+        _freshScene = false;
+
         SystemsSceneEnding();
 
-        var next = loaded ?? SceneLoader!(name);
+        var next = loaded ?? (restarting ? null : Recalled(name)) ?? SceneLoader!(name);
 
         // Nothing glides into the new scene: after this step it's drawn as it is.
         next.Step = next.FirstStep = Scene.Step;
 
-        // Kept entities move across still running; a kept child goes along with a kept ancestor.
-        _kept.RemoveAll(e => e.Scene != Scene);
-        var moving = _kept.Where(e => !_kept.Any(other => other != e && e.IsSelfOrDescendantOf(other))).ToList();
+        // Kept entities (see KeepBetweenScenes) move across still running; a kept child goes along with a kept ancestor.
+        var moving = KeptEntities();
         var staying = moving.SelectMany(e => e.SelfAndDescendants()).ToHashSet();
 
         foreach (var behavior in Scene.Entities.Where(e => !staying.Contains(e)).SelectMany(e => e.GetComponents<Behavior>()))
@@ -777,13 +825,7 @@ public sealed partial class Game : IGameContext
         foreach (var entity in moving)
         {
             Scene.Remove(entity);
-            foreach (var e in entity.SelfAndDescendants())
-            {
-                if (next.Find(e.Id) is { } twin && twin.Scene == next)
-                    next.Remove(twin);
-            }
-
-            next.Add(entity);
+            Arrive(entity, next);
         }
 
         Scene = next;
@@ -791,7 +833,13 @@ public sealed partial class Game : IGameContext
             SceneName = SceneNameOf(name);
         _messages.Prune(next);
         _controlsSeen.RemoveWhere(c => c.Entity?.Scene != next);
+        if (loaded is not null)
+            _arriving = null;
+        var arrived = PlaceArrivals();
         SystemsSceneChanged();
+        if (arrived is not null)
+            _levels.ArrivedByDoor.UnionWith(arrived);
+        LoadCarried(null);
         Physics.Groups = [];
         StopSoundSources();
         _focus = null;
@@ -830,6 +878,8 @@ public sealed partial class Game : IGameContext
             return;
 
         var camera = Rendering.SceneRenderer.FindCamera(Scene);
+        // What's behind the minigame that has the screen isn't seen, so it isn't pinned to its camera either.
+        var shown = Minigame;
         var component = camera?.GetComponent<Camera>();
         var center = camera is null ? Vector2.Zero : new Vector2(camera.Transform.WorldPosition.X, camera.Transform.WorldPosition.Y);
         center += component?.ShakeOffset ?? Vector2.Zero;
@@ -839,7 +889,7 @@ public sealed partial class Game : IGameContext
         foreach (var anchor in anchors)
         {
             // An entity's first anchor places it.
-            if (anchor.Entity!.GetComponent<ScreenAnchor>() != anchor)
+            if (anchor.Entity!.GetComponent<ScreenAnchor>() != anchor || MinigameRoot.IsBehind(anchor.Entity, shown))
                 continue;
             var transform = anchor.Entity!.Transform;
             var world = center + ScreenAnchor.Direction(anchor.Anchor) * half + anchor.Offset;
@@ -1022,7 +1072,7 @@ public sealed partial class Game : IGameContext
             var transform = counter.Entity!.Transform;
             var key = counter.SaveBestAs?.Trim();
             if (!string.IsNullOrWhiteSpace(counter.Item))
-                counter.Change(ItemCount(counter.Item) - counter.Value);
+                counter.Change(ItemCount(counter.Item, counter.Entity) - counter.Value);
             if (counter.CountsFromSource)
                 CountFromSource(counter);
             if (!string.IsNullOrWhiteSpace(counter.Output))

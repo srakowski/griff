@@ -47,6 +47,7 @@ public sealed partial class FieldEditorAuditTests
         Counter.Format: Format
         Counter.SaveBestAs: Names:Saved
         Counter.NewBestMessage: Names:Message
+        Counter.SaveAs: Names:Saved
         Counter.MultiplyBy: Entity
         Counter.Item: Names:Item
         Counter.Track: Entity

@@ -88,8 +88,8 @@ internal sealed class BlockWorldsSystem : GameSystem
     {
         Sandbox.Buttons.Clear();
         // Shown even while the player is paused (see Entity.IsPaused); its buttons do nothing meanwhile.
-        var hotbar = Game.Mine<Hotbar>(evenPaused: true).FirstOrDefault();
-        var crafting = Game.Mine<Crafting>(evenPaused: true).FirstOrDefault();
+        var hotbar = Game.FirstInSight(Game.Mine<Hotbar>(evenPaused: true));
+        var crafting = Game.FirstInSight(Game.Mine<Crafting>(evenPaused: true));
         if (hotbar is null && crafting is null)
         {
             Sandbox.Hud = null;

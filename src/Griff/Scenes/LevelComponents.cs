@@ -590,7 +590,8 @@ public sealed class Checkpoint : Component
 /// <summary>
 /// Takes whoever uses it somewhere else, with no code: a level's exit to the next <see cref="Scene"/>, or a door or
 /// teleporter to the <see cref="Target"/> entity in this one. It's used on touch, or with the Interact action while
-/// touching it when <see cref="NeedsInteract"/> is on. Needs a collider, usually a trigger.
+/// touching it when <see cref="NeedsInteract"/> is on. Needs a collider, usually a trigger. Going to another scene, the
+/// players arrive at the entity its <see cref="ArriveAt"/> names there (the door back), so doors join rooms both ways.
 /// </summary>
 [Category("Level")]
 [Requires(typeof(Collider), Note = "usually a trigger")]
@@ -600,6 +601,15 @@ public sealed class Door : Component
     /// <summary>The scene to go to, e.g. "Level2". Empty stays in this scene and goes to <see cref="Target"/>.</summary>
     [Names(NameKind.Scene)]
     public string? Scene { get; set; }
+
+    /// <summary>
+    /// Where whoever goes through arrives in the <see cref="Scene"/>: the name of an entity there, e.g. "West Door" (the
+    /// door back, which they don't go straight back through), standing where it is; the players' other characters arrive
+    /// there too. Empty starts them where the scene has them.
+    /// </summary>
+    [ShownWhen(nameof(Scene))]
+    [InScene(nameof(Scene))]
+    public string? ArriveAt { get; set; }
 
     /// <summary>The name of an entity in this scene to go to, e.g. "CaveExit", when there's no <see cref="Scene"/>.</summary>
     [EntityName(Unless = nameof(Scene))]

@@ -11,7 +11,7 @@ namespace Griff.Scenes;
 [Category("Combat")]
 [WorksWith(typeof(Bar), Note = "a health bar (on another entity)")]
 [ComponentName("Griff.Health")]
-public sealed class Health : Component
+public sealed class Health : Component, ICarried
 {
     private float _max = 3;
     private float _invincibleLeft;
@@ -78,6 +78,49 @@ public sealed class Health : Component
 
     /// <summary>Plays when it dies, from where it is: an explosion, a last cry.</summary>
     public string? DeathSound { get; set; }
+
+    /// <summary>
+    /// Keeps its hit points (and its Max) in the game's save data under this name, e.g. "Hearts", so a health saved as the
+    /// same name in the next scene starts with them (the player walking into the next level hurt) and so does the next
+    /// run. Saved at zero (it died) it starts full. Empty keeps nothing.
+    /// </summary>
+    [Group("Saving")]
+    [Names(NameKind.Saved, Defines = true)]
+    public string? SaveAs { get; set; }
+
+    /// <summary>Set by the game once it has taken its hit points from the save data, so a rewind doesn't do it again. Leave it be.</summary>
+    public bool Loaded { get; set; }
+
+    public override bool Uses(string property) => property != nameof(Loaded);
+
+    // What it last kept in the save data.
+    private (float Current, float Max) _saved = (float.NaN, float.NaN);
+
+    void ICarried.Load(ICarryStore data, string key)
+    {
+        if (data.Has(key))
+        {
+            if (data.Has(key + MaxKey))
+                _max = Math.Max(0, data.GetFloat(key + MaxKey, _max));
+            var current = Math.Min(data.GetFloat(key, Current), _max);
+            Current = current > 0 ? current : _max;
+        }
+
+        _saved = (Current, _max);
+    }
+
+    bool ICarried.Save(ICarryStore data, string key, bool always)
+    {
+        if (!always && _saved == (Current, _max))
+            return false;
+        _saved = (Current, _max);
+        data.Set(key, Current);
+        data.Set(key + MaxKey, _max);
+        return true;
+    }
+
+    // Its Max is kept under its Save As and this.
+    private const string MaxKey = ".Max";
 
     public bool IsDead => Current <= 0;
 
@@ -397,7 +440,7 @@ public enum CounterReach
 [WorksWith(typeof(Text), Note = "shows the count")]
 [WorksWith(typeof(Trigger), Note = "doing something on its Reach Message")]
 [ComponentName("Griff.Counter")]
-public sealed class Counter : Component
+public sealed class Counter : Component, ICarried
 {
     /// <summary>The message that adds to it, e.g. "Score" for <c>Game.Send("Score", 10)</c>. Empty only counts <see cref="Add"/>.</summary>
     [Names(NameKind.Message, Hears = true)]
@@ -435,6 +478,36 @@ public sealed class Counter : Component
     /// </summary>
     [Names(NameKind.Message)]
     public string? NewBestMessage { get; set; }
+
+    /// <summary>
+    /// Keeps the count itself in the game's save data under this name, e.g. "Coins", so a counter saved as the same name
+    /// in the next scene (or a minigame) carries on from it, and so does the next run: coins or a score kept from level to
+    /// level. Empty keeps nothing.
+    /// </summary>
+    [Names(NameKind.Saved, Defines = true)]
+    public string? SaveAs { get; set; }
+
+    /// <summary>Set by the game once it has taken its count from the save data, so a rewind doesn't do it again. Leave it be.</summary>
+    public bool Loaded { get; set; }
+
+    // The count it last kept in the save data.
+    private int? _saved;
+
+    void ICarried.Load(ICarryStore data, string key)
+    {
+        if (data.Has(key))
+            Value = data.GetInt(key, Value);
+        _saved = Value;
+    }
+
+    bool ICarried.Save(ICarryStore data, string key, bool always)
+    {
+        if (!always && _saved == Value)
+            return false;
+        _saved = Value;
+        data.Set(key, Value);
+        return true;
+    }
 
     /// <summary>
     /// Another counter, by name, whose count multiplies what each <see cref="Message"/> (and the Add action) adds to this
@@ -654,7 +727,7 @@ public sealed class Counter : Component
         nameof(Message) => string.IsNullOrWhiteSpace(Output),
         nameof(OnePerMessage) => !CountsOwn,
         nameof(NewBestMessage) => !string.IsNullOrWhiteSpace(SaveBestAs),
-        nameof(BestToBeat) => false,
+        nameof(BestToBeat) or nameof(Loaded) => false,
         _ => true,
     };
 

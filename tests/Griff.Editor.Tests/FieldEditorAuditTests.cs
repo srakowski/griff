@@ -16,7 +16,6 @@ public sealed partial class FieldEditorAuditTests
     /// <summary>The categories this audit covers.</summary>
     private static readonly string[] Categories = ["Basics", "Rendering", "Physics", "Movement", "Combat", "Level", "Audio"];
 
-
     // What the Inspector gives a field, as the audit table says it.
     internal static string EditorOf(PropertyField field) => field.Kind switch
     {
@@ -96,6 +95,7 @@ public sealed partial class FieldEditorAuditTests
         Health.DeathMessage: Names:Message
         Health.HurtSound: Sound
         Health.DeathSound: Sound
+        Health.SaveAs: Names:Saved
         Shooter.Prefab: Names:Prefab
         Shooter.Target: Entity
         Shooter.Direction: Direction
@@ -113,6 +113,7 @@ public sealed partial class FieldEditorAuditTests
         Crumble.Sound: Sound
         Crumble.Effect: Names:Prefab
         Door.Scene: Names:Scene
+        Door.ArriveAt: InScene
         Door.Target: Entity
         Door.Layers: Names:Layer*
         Door.Sound: Sound
@@ -132,6 +133,15 @@ public sealed partial class FieldEditorAuditTests
         Goal.CoverMessage: Names:Message
         Goal.UncoverMessage: Names:Message
         Goal.AllCoveredMessage: Names:Message
+        Minigame.Scene: Names:Scene
+        Minigame.WonMessage: Names:Message
+        Minigame.LostMessage: Names:Message
+        MinigameRoot.Scene: Names:Scene
+        MinigameRoot.OpenedFrom: Text
+        MinigameRoot.WonMessage: Names:Message
+        MinigameRoot.LostMessage: Names:Message
+        MinigameRoot.FocusBefore: Lines
+        MinigameRoot.MusicBefore: Text
         MoveHistory.UndoAction: Names:Action
         MoveHistory.RestartAction: Names:Action
         MoveHistory.Within: Entity
@@ -141,6 +151,7 @@ public sealed partial class FieldEditorAuditTests
         MoveHistory.RestartMessage: Names:Message
         Pushable.Layers: Names:Layer*
         Pushable.Kind: Names:Kind
+        RememberScene.Forget: Entities
         Room.Music: Sound
         Room.Message: Names:Message
         Switch.Targets: Entities

@@ -86,20 +86,25 @@ public sealed partial class Game
         return new MessageRoute(from, null, false);
     }
 
-    // The entity a field on owner means by name: one inside it first, otherwise the first in the scene.
+    // The entity a field on owner means by name: one inside it first, otherwise the first in the scene (in the same part of
+    // it, a minigame being played or outside them, first).
     private static Entity? NamedFrom(Entity owner, ReadOnlySpan<char> name)
     {
         if (Inside(owner, name) is { } inside)
             return inside;
         if (owner.Scene is not { } scene)
             return null;
+        Entity? elsewhere = null;
         foreach (var entity in scene.EntitiesNow)
         {
-            if (name.SequenceEqual(entity.Name))
+            if (!name.SequenceEqual(entity.Name))
+                continue;
+            if (Scene.SamePart(entity, owner))
                 return entity;
+            elsewhere ??= entity;
         }
 
-        return null;
+        return elsewhere;
 
         static Entity? Inside(Entity entity, ReadOnlySpan<char> name)
         {
@@ -198,6 +203,15 @@ public sealed partial class Game
             var before = into.Count;
             AddInside(owner, name, into);
             if (into.Count > before || owner.Scene is not { } scene)
+                continue;
+            // Those in the same part of the scene (a minigame being played, or outside them), or else any.
+            foreach (var entity in scene.EntitiesNow)
+            {
+                if (name.SequenceEqual(entity.Name) && Scene.SamePart(entity, owner) && !into.Contains(entity))
+                    into.Add(entity);
+            }
+
+            if (into.Count > before)
                 continue;
             foreach (var entity in scene.EntitiesNow)
             {

@@ -220,7 +220,7 @@ public sealed partial class Game
             return;
         foreach (var panel in Scene.AllNow<Panel>())
         {
-            if (string.IsNullOrWhiteSpace(panel.OpenOn) || panel.Entity!.IsEnabled)
+            if (string.IsNullOrWhiteSpace(panel.OpenOn) || panel.Entity!.IsEnabled || IsBehindMinigame(panel.Entity))
                 continue;
             if ((panel.Entity.Parent is null || panel.Entity.Parent.IsActive) && Input.WasPressed(panel.OpenOn) && FlagHolds(panel.NeedsFlag))
             {

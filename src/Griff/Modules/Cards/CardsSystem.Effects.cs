@@ -229,7 +229,7 @@ internal sealed partial class CardsSystem
     internal Entity? HeroOf(Hand hand)
     {
         if (!string.IsNullOrWhiteSpace(hand.Hero))
-            return Scene.FindNamed(hand.Hero.Trim()) is { IsActive: true } named ? named : null;
+            return Scene.FindNamed(hand.Hero.Trim(), near: hand.Entity) is { IsActive: true } named ? named : null;
         if (hand.Entity!.GetComponent<Health>() is not null)
             return hand.Entity;
         var side = hand.Team;

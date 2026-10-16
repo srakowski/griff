@@ -312,6 +312,7 @@ public sealed partial class Game
         Step(FramePhase.Begin, "Debug Drawing", Debug.BeginFrame);
         Step(FramePhase.Begin, "Network", () => Net.BeginFrame(Time.UnscaledDelta));
         Step(FramePhase.Begin, "Tables", ApplyTables);
+        Step(FramePhase.Begin, "Carried Values", RunCarried);
         Step(FramePhase.Begin, "Script Start", StartScripts);
 
         Step(FramePhase.Logic, "Menus", UpdateMenus);

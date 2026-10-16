@@ -180,7 +180,7 @@ The genre components' lists are rows too, each row a few cells: a box, a picker 
 | | Inventory Bar **Descriptions**, **Icons**, **Combinations** | an item and its line; an item and its picture, with the sheet's frames across and down and which; the two items, what they make (parts with how many) and the line said |
 | | Use With **Item**, Hotspot and Use With **Needs Flag**, **Look Flag**, **Use Flag**, **Flag** | items and flags picked; a flag a hotspot sets offers "not" to clear it |
 | | Hotspot **Look With**, **Use With**, Use With **With**, Card Effect **With** | a box to fit what the action takes: a number, a tick, a name (a flag for Set Flag), or a word that it takes nothing |
-| | Hotspot **Arrive At** | the next room's hotspots, then its other entities, from the scene **Goes To** names |
+| | Hotspot **Arrive At** (and a Door's, from its **Scene**) | the next room's hotspots, then its other entities, from the scene **Goes To** names |
 | | Hotspot and Walk Area **Points**, Hotspot **Stand At** | point rows (a walk area keeps three); a knob in the Scene view with Distance handles |
 | Blocks | Blocks **Items**, **Drops**, **Hardness**, World Generator **Ores** | an item and its tile; a tile and what it gives (or nothing); a tile (or range) and its seconds, or its share of the stone |
 | | **Unbreakable**, **Falling Tiles**, **Glowing Tiles** | tiles clicked off the tileset |

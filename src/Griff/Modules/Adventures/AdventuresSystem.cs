@@ -27,11 +27,8 @@ internal sealed partial class AdventuresSystem : GameSystem
         _named = default;
         ItemsSceneChanged();
         _roomSaved = false;
-        if (_arriving is { } place)
-        {
-            _arriving = null;
+        if (Game.ArrivedAt is { } place)
             ArriveIn(place);
-        }
     }
 
     // After the movements, so a click this frame sets off this frame; before the dialogues, so a talk a hotspot starts
@@ -406,15 +403,11 @@ internal sealed partial class AdventuresSystem : GameSystem
     // Seconds the screen fades out (and back in) going through a hotspot to another room.
     private const float ExitFade = 0.4f;
 
-    // Where the walkers arrive in the scene a hotspot is going to, until it's there.
-    private string? _arriving;
-
-    // Off to another room: the screen fades out, and the walker there arrives where the hotspot says.
+    // Off to another room: the screen fades out, and the walker there arrives where the hotspot says (as through a door).
     private void Leave(Walker walker, string scene, string? arriveAt)
     {
         walker.Stop();
-        _arriving = string.IsNullOrWhiteSpace(arriveAt) ? null : arriveAt.Trim();
-        Game.LoadScene(scene, ExitFade);
+        Game.LoadScene(scene, ExitFade, null, arriveAt, traveller: walker.Entity, fresh: false);
     }
 
     // Whether this scene's name has been kept for the walkers that save their room (once a scene, where the game is run).
@@ -434,10 +427,8 @@ internal sealed partial class AdventuresSystem : GameSystem
 
     // In the room gone to: the players' walkers stand at the hotspot they arrive at (or where the entity named is), facing
     // into the room.
-    private void ArriveIn(string place)
+    private void ArriveIn(Entity target)
     {
-        if (Game.Find(place) is not { } target)
-            return;
         var at = target.GetComponent<Hotspot>()?.StandPoint ?? Game.CenterOf(target);
         foreach (var walker in Game.Scene.ActiveNow<Walker>())
         {
@@ -652,7 +643,7 @@ internal sealed partial class AdventuresSystem : GameSystem
 
     // A walker's labels go in the view its clicks are read through.
     private static bool InView(Walker walker, FrameDrawing frame) =>
-        string.IsNullOrWhiteSpace(walker.Camera) ? frame.Viewport is null : frame.Camera?.Name == walker.Camera.Trim();
+        frame.Shows(walker.Entity!) && (string.IsNullOrWhiteSpace(walker.Camera) ? frame.Viewport is null : frame.Camera?.Name == walker.Camera.Trim());
 
     // Text with a dark copy behind it, so it reads over anything.
     private static void Label(List<SpriteDraw> draws, string text, Vector2 at, float size, Color color, Color shadow, float offset)

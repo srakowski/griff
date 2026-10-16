@@ -16,7 +16,7 @@ internal static class TacticsDrawing
         var game = frame.Game;
         if (frame.SeenThrough is not null)
             return;
-        if (view.Controls is not { } controls)
+        if (view.Controls is not { } controls || controls.Entity is { } owner && !frame.Shows(owner))
             return;
         var units = game.Scene.ActiveNow<TacticsUnit>();
         if (units.Count > 0)

@@ -86,7 +86,7 @@ public sealed class Follow : Component
         var scene = Entity?.Scene;
         // In a network game, this player's own character comes first, once it's there.
         if (scene is not null && (_target?.Scene != scene || (scene.PreferNamed is { } prefer && _target.Name == Target && !prefer(_target))))
-            TargetEntity = string.IsNullOrWhiteSpace(Target) ? null : scene.FindNamed(Target) ?? (_target?.Scene == scene ? _target : null);
+            TargetEntity = string.IsNullOrWhiteSpace(Target) ? null : scene.FindNamed(Target, near: Entity) ?? (_target?.Scene == scene ? _target : null);
         return _target;
     }
 

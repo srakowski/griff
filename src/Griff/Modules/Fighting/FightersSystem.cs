@@ -667,7 +667,7 @@ internal sealed class FightersSystem : GameSystem
     {
         var entity = f.Entity!;
         if (!string.IsNullOrWhiteSpace(f.Opponent))
-            return Game.Scene.FindNamed(f.Opponent.Trim(), activeOnly: true);
+            return Game.Scene.FindNamed(f.Opponent.Trim(), activeOnly: true, near: entity);
         var team = Game.TeamOf(entity);
         var at = entity.Transform.WorldPosition;
         Entity? nearest = null;

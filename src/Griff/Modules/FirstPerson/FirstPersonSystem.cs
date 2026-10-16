@@ -87,7 +87,7 @@ internal sealed class FirstPersonSystem : GameSystem
         if (string.IsNullOrEmpty(name))
             return view.Entity;
         // A viewer away respawning is still looked through, from where it fell. In a network game, through your own eyes.
-        return Scene.FindNamed(name, activeOnly: true) ?? Scene.FindNamed(name) ?? view.Entity;
+        return Scene.FindNamed(name, activeOnly: true, near: view.Entity) ?? Scene.FindNamed(name, near: view.Entity) ?? view.Entity;
     }
 
     internal void Run()

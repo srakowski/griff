@@ -102,7 +102,8 @@ internal static class StrategyDrawing
 
         foreach (var game in strategy.Games)
         {
-            if (!game.IsActive || shown.Contains(game))
+            // Not a game behind the minigame that has the screen.
+            if (!game.IsActive || shown.Contains(game) || game.Commander is { Entity: { } behind } && !frame.Shows(behind))
                 continue;
             if (game.Commander is not { } commander)
             {

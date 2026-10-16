@@ -92,6 +92,36 @@ public sealed class Trigger : Component
 
     // Seconds the screen fades out (and back in) as its Load Scene goes to another scene.
     private const float SceneFade = 0.4f;
+
+    /// <summary>
+    /// Plays the scene named <paramref name="scene"/> on top of this one as a minigame (e.g. "Arcade"), pausing the rest
+    /// until it's won or lost; then "Minigame Won" or "Minigame Lost" is sent from this entity, with the score. A
+    /// <see cref="Minigame"/> on this entity says how instead (and an empty scene plays its own).
+    /// </summary>
+    [Action]
+    private void PlayMinigame(IGameContext game, [Names(NameKind.Scene)] string? scene) => game.PlayMinigame(Entity!, scene);
+
+    /// <summary>
+    /// Wins the minigame this trigger is in, with <paramref name="score"/> (0 takes the minigame's own score: its first Score
+    /// output, or its first counter's count): it closes, and what opened it hears it was won.
+    /// </summary>
+    [Action]
+    private void WinMinigame(IGameContext game, int score = 0) => game.EndMinigame(Entity!, won: true, score: score == 0 ? null : score);
+
+    /// <summary>Loses the minigame this trigger is in, with <paramref name="score"/> (0 takes the minigame's own score).</summary>
+    [Action]
+    private void LoseMinigame(IGameContext game, int score = 0) => game.EndMinigame(Entity!, won: false, score: score == 0 ? null : score);
+
+    /// <summary>
+    /// Forgets how the scene named <paramref name="scene"/> was left (see <see cref="RememberScene"/>), so it starts as its
+    /// file has it next time: the dungeon filling up again once the boss is beaten.
+    /// </summary>
+    [Action]
+    private void ForgetScene(IGameContext game, [Names(NameKind.Scene)] string? scene)
+    {
+        if (!string.IsNullOrWhiteSpace(scene))
+            game.ForgetScene(scene.Trim());
+    }
 #pragma warning restore CA1822
 
     // Only show With for an action that takes a value (or one that can't be found yet, to fill in ahead of time).

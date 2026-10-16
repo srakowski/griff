@@ -145,9 +145,11 @@ public static partial class SceneRenderer
         var size = drawn?.Size ?? DefaultCameraSize;
         var view = new Box(ViewCenter(camera), new Vector2(size * aspect, size));
         var sprites = reuse.Sprites ?? [];
+        // A minigame with the screen (in a running game) is all that's drawn.
+        var only = game is not null ? MinigameRoot.Shown(scene) : null;
         // With viewports (in a running game), each view draws what's its own.
-        var showsViews = game is not null && viewport is null && scene.ActiveNow<Viewport>().Count > 0;
-        var filter = new ViewFilter(camera, main, viewport, game is not null && (showsViews || viewport is not null));
+        var showsViews = game is not null && viewport is null && AnyViewport(scene, only);
+        var filter = new ViewFilter(camera, main, viewport, game is not null && (showsViews || viewport is not null), only);
         // A picture of the game (for a saved game) leaves out the panels open over it: the save screen itself.
         Func<Entity, bool>? leaveOut = null;
         if (t_picture is { } pictured && pictured == game)
@@ -231,6 +233,18 @@ public static partial class SceneRenderer
         return built;
     }
 
+    // True if the scene has a viewport to draw: one in the minigame with the screen, if one has.
+    private static bool AnyViewport(Scene scene, Entity? only)
+    {
+        foreach (var viewport in scene.ActiveNow<Viewport>())
+        {
+            if (!MinigameRoot.IsBehind(viewport.Entity!, only))
+                return true;
+        }
+
+        return false;
+    }
+
     // Each viewport showing, lowest Order first, built as a frame of its own (the one it had last time, filled again), and a
     // border round each drawn over them all, under what's pinned to the screen.
     private static void BuildViews(Scene scene, float aspect, Runtime.Game game, BuildTimer? timer, RenderFrame built, List<SpriteDraw> sprites,
@@ -239,9 +253,10 @@ public static partial class SceneRenderer
         var scratch = t_scratch ??= new Scratch();
         var order = scratch.Viewports;
         order.Clear();
+        var only = MinigameRoot.Shown(scene);
         foreach (var viewport in scene.ActiveNow<Viewport>())
         {
-            if (!viewport.IsShowing)
+            if (!viewport.IsShowing || MinigameRoot.IsBehind(viewport.Entity!, only))
                 continue;
             var at = order.Count;
             while (at > 0 && order[at - 1].Order > viewport.Order)
@@ -1165,8 +1180,10 @@ public static partial class SceneRenderer
     // What an iris closes in on: the entity called Player, or else the first a player moves (see PlayerMovementAttribute).
     private static Vector2? IrisCenter(Scene scene)
     {
-        var player = scene.EntitiesNow.FirstOrDefault(e => e.Name == "Player" && e.IsActive)
-                     ?? scene.EntitiesNow.FirstOrDefault(e => e.IsActive && PlayerMovementAttribute.IsOn(e));
+        // In the minigame that has the screen, if one has.
+        var shown = MinigameRoot.Shown(scene);
+        var player = scene.EntitiesNow.FirstOrDefault(e => e.Name == "Player" && e.IsActive && !MinigameRoot.IsBehind(e, shown))
+                     ?? scene.EntitiesNow.FirstOrDefault(e => e.IsActive && PlayerMovementAttribute.IsOn(e) && !MinigameRoot.IsBehind(e, shown));
         if (player is null)
             return null;
         var position = player.Transform.WorldPosition;
@@ -1208,21 +1225,35 @@ public static partial class SceneRenderer
         }
     }
 
-    /// <summary>The first enabled entity with a Camera, in hierarchy order.</summary>
     /// <summary>
     /// The scene's main camera, which fills the screen: the first active camera without a <see cref="Viewport"/> (a
-    /// viewport's camera draws into its own part of the screen), or with every camera in one, the first.
+    /// viewport's camera draws into its own part of the screen), or with every camera in one, the first. While a minigame
+    /// has the screen (see <see cref="MinigameRoot.Shown"/>), the first such camera in it.
     /// </summary>
     public static Entity? FindCamera(Scene scene)
     {
         var cameras = scene.ActiveNow<Camera>();
-        foreach (var camera in cameras)
-        {
-            if ((camera.Entity!.Roles & ComponentRoles.Viewport) == 0)
-                return camera.Entity;
-        }
+        if (cameras.Count == 0)
+            return null;
+        if (MinigameRoot.Shown(scene) is { } shown && FirstCamera(cameras, shown) is { } inside)
+            return inside;
+        return FirstCamera(cameras, null);
 
-        return cameras.FirstOrDefault()?.Entity;
+        static Entity? FirstCamera(ComponentList<Camera> cameras, Entity? within)
+        {
+            Entity? first = null;
+            foreach (var camera in cameras)
+            {
+                var entity = camera.Entity!;
+                if (within is not null && !entity.IsSelfOrDescendantOf(within))
+                    continue;
+                if ((entity.Roles & ComponentRoles.Viewport) == 0)
+                    return entity;
+                first ??= entity;
+            }
+
+            return first;
+        }
     }
 
     /// <summary>

@@ -141,6 +141,12 @@ public sealed class FrameDrawing
     public bool ShowsInWorld(Entity entity) => _filter.Shows(entity) && !IsOnScreen(entity);
 
     /// <summary>
+    /// True if this view draws <paramref name="entity"/> at all: not another view's own, nor behind the minigame that has the
+    /// screen (see <see cref="Game.Minigame"/>). A system drawing what belongs to an entity goes by this.
+    /// </summary>
+    public bool Shows(Entity entity) => _filter.Shows(entity);
+
+    /// <summary>
     /// Moves the draws of <paramref name="draws"/> from <paramref name="start"/> on, laid out in the world over a view
     /// centered at <paramref name="laidOutAt"/> and <paramref name="laidOutHalfHeight"/> high as the game stepped (a
     /// system's HUD), onto the view this frame is drawn with: the camera moves, zooms and shakes between steps, so a HUD

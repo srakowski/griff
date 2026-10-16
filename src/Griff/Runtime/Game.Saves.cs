@@ -62,7 +62,7 @@ public sealed partial class Game
     private Scene? _pictureOf;
 
     // A saved game waiting to be switched to at the end of the frame (after a fade, if any).
-    private (Scene Scene, string? Name, IReadOnlyList<string> Flags, string Slot)? _pendingLoad;
+    private (Scene Scene, string? Name, IReadOnlyList<string> Flags, string Slot, JsonObject? Header)? _pendingLoad;
 
     // The saved games as last read, by slot, with their screenshots' text (to notice one change), and the save data and
     // version they were read from.
@@ -158,6 +158,7 @@ public sealed partial class Game
             ["line"] = TalkingLine(),
             ["flags"] = new JsonArray([.. FlagNames().Where(HasFlag).Select(f => (JsonNode)f)]),
         };
+        SaveFlow(slot, header);
         SaveData.Set(SavedSceneKey + slot, Pack(scene));
         SaveData.Set(SavedGameKey + slot, header.ToJsonString());
         (_pictureFor, _pictureOf) = (slot, Scene);
@@ -194,7 +195,7 @@ public sealed partial class Game
         foreach (var warning in warnings)
             Warn($"Loading the game saved in \"{slot}\": {warning}");
         var header = ParseHeader(text);
-        var load = (scene, header?["scene"]?.GetValue<string>() ?? SceneName, (IReadOnlyList<string>)FlagsIn(header), slot);
+        var load = (scene, header?["scene"]?.GetValue<string>() ?? SceneName, (IReadOnlyList<string>)FlagsIn(header), slot, header);
         if (fade > 0)
         {
             FadeThrough(fade, () => _pendingLoad = load);
@@ -215,6 +216,7 @@ public sealed partial class Game
         slot = slot.Trim();
         var had = SaveData.Delete(SavedGameKey + slot);
         SaveData.Delete(SavedSceneKey + slot);
+        SaveData.Delete(SavedScenesKey + slot);
         return had;
     }
 
@@ -376,6 +378,7 @@ public sealed partial class Game
         _pendingScene = null;
         PutFlagsBack(load.Flags);
         SwitchScene(load.Name ?? SceneName ?? "", load.Scene);
+        LoadFlow(load.Slot, load.Header);
         GameLoaded?.Invoke(load.Slot);
         return true;
     }

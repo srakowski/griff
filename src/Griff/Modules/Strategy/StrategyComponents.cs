@@ -677,7 +677,7 @@ public sealed class Fighter : Component
 [WorksWith(typeof(FogOfWar), Note = "hides what the team can't see")]
 [ComponentName("Griff.Commander")]
 [NetLocal]
-public sealed class Commander : Component
+public sealed class Commander : Component, IWorldPlaced
 {
     /// <summary>The team the player commands: a <see cref="Faction"/>'s Team.</summary>
     [Names(NameKind.Kind, Scope = "Team")]
@@ -697,6 +697,9 @@ public sealed class Commander : Component
     /// </summary>
     [Area]
     public Box MapArea => new(MapCenter, Vector2.Abs(MapSize) / 2);
+
+    // Played as a minigame, its map moves with the rest of its scene.
+    void IWorldPlaced.Shift(Vector2 by) => MapCenter += by;
 
     /// <summary>How fast the camera pans, in world units per second.</summary>
     public float ScrollSpeed { get; set; } = 16;

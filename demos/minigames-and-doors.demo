@@ -1,0 +1,90 @@
+title: Moving between genres
+intro: A platformer level plays a match-3 board on top of itself as a minigame and hears how it went; a door joins the level to a cave both ways; and the level remembers how it was left.
+project: Platformer | Genre Trip
+
+chapter: A minigame scene | A board that's won on its first match
+menu: File > New Scene...
+prompt: Arcade
+create: Match Board
+set: MatchBoard.Seed = 152
+add: Trigger
+set: Trigger.Message = Match
+set: Trigger.Do = Win Minigame
+expectvalue: Board.Trigger.Do = Win Minigame
+explain: field:Trigger.Do | Win Minigame | A trigger in the minigame ends it. Here the board's first match wins it, with the board's score; Lose Minigame loses it.
+save
+
+chapter: Played from the level | A Minigame on the checkpoint flag
+scene: Main
+select: Checkpoint
+set: Checkpoint.Message = Reached
+add: Minigame
+pick: Minigame.Scene = Arcade
+explain: field:Minigame.PauseBelow | Pause Below | A Minigame plays another scene on top of this one. It takes the screen and the player's input, and pauses the rest of the level while it's played.
+add: Trigger
+set: Trigger.Message = Reached
+set: Trigger.Do = Play
+expectvalue: Checkpoint.Trigger.Do = Play
+explain: field:Trigger.Do | Play | Reaching the flag plays it.
+select: Score
+add: Trigger
+set: Trigger.Message = Minigame Won
+set: Trigger.Do = Add
+set: Trigger.UseMessageNumber = true
+explain: component:Trigger | Minigame Won | When it's won, the flag sends Minigame Won with the score, and this trigger adds it to the level's score.
+play
+hold: Right 1.4
+wait: 1
+expectvalue: Checkpoint.Minigame.Playing = true
+expectvalue: Player.PlatformerMovement.Controllable = false
+explain: game | The minigame has the screen | The match board was loaded into the level, beside it, and has the screen and the input. The level waits, paused.
+gameclick: Board + 3.5, -1.5
+wait: 0.3
+gameclick: Board + 4.5, -1.5
+wait: 2
+expectvalue: Checkpoint.Minigame.Won = true
+expectvalue: Checkpoint.Minigame.Playing = false
+expectvalue: Player.PlatformerMovement.Controllable = true
+explain: game | Back in the level | The first match won it. The board is gone, the player has the input again, and the score came back with the message.
+stop
+
+chapter: A door to a cave and back | Arrive At, and a level that remembers
+menu: File > New Scene...
+prompt: Cave
+agent: entity_create {"entities": [{"name": "Floor", "position": [0, -4.5], "components": {"Sprite": {"tint": "#4A4E5A", "size": [40, 1]}, "BoxCollider": {"size": [40, 1]}}}, {"name": "Cave Entrance", "position": [-6, -3.5]}, {"name": "Way Back", "position": [-3, -3.25], "components": {"Sprite": {"tint": "#8A5A3A", "size": [1, 1.5]}, "BoxCollider": {"isTrigger": true, "size": [1, 1.5]}, "Door": {"scene": "Main", "arriveAt": "Cave Door", "fade": 0.3}}}]}
+save
+scene: Main
+agent: entity_create {"entity": {"name": "Cave Door", "position": [2.5, -3.25], "components": {"Sprite": {"tint": "#8A5A3A", "size": [3, 1.5]}, "BoxCollider": {"isTrigger": true, "size": [3, 1.5]}, "Door": {"fade": 0.3, "needsInteract": true}}}}
+select: Cave Door
+pick: Door.Scene = Cave
+choose: Door.Arrive At:choice = Cave Entrance
+expectvalue: Cave Door.Door.ArriveAt = Cave Entrance
+explain: field:Door.Arrive At | Arrive At | A door to another scene says where you arrive there, picked from that scene's entities. The cave's own door arrives back here, at this one, so they join both ways.
+select: Player
+add: Keep Between Scenes
+explain: component:KeepBetweenScenes | Keep Between Scenes | The player goes along, with their hearts, into the cave and back.
+select: Level
+add: Remember Scene
+explain: component:RememberScene | Remember Scene | And the level remembers how it was left: coming back, it's as it was, not as the scene file has it.
+save
+play
+hold: Right 1.4
+wait: 1
+gameclick: Board + 3.5, -1.5
+wait: 0.3
+gameclick: Board + 4.5, -1.5
+wait: 2
+expectvalue: Checkpoint.Minigame.Wins = 1
+say: The minigame is won once more, and by the flag is the door to the cave. E goes through.
+tap: E
+wait: 1.2
+expectvalue: Player.Transform.Position.X = -6 ~ 0.3
+explain: game | In the cave | The player arrives at the cave's entrance, carried along.
+hold: Right 1
+wait: 1.5
+expectvalue: Player.Transform.Position.X = 3 ~ 3
+expectvalue: Checkpoint.Checkpoint.Active = true
+expectvalue: Checkpoint.Minigame.Playing = false
+expectvalue: Checkpoint.Minigame.Wins = 1
+explain: game | Back, as it was left | Back through the cave's door, they arrive at the level's. The level is as it was left: the flag was reached already, so the minigame doesn't start again, and it still counts its win.
+stop

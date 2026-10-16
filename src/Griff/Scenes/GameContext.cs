@@ -44,6 +44,18 @@ internal interface IGameContext
     /// <summary>Goes to another scene at the end of the frame, fading out and in over <paramref name="fade"/> seconds.</summary>
     void LoadScene(string scene, float fade);
 
+    /// <summary>Plays a minigame on top of the scene (<paramref name="scene"/>, or the one <paramref name="from"/>'s Minigame names), as <paramref name="from"/>'s Minigame says.</summary>
+    void PlayMinigame(Entity from, string? scene);
+
+    /// <summary>Ends the minigame <paramref name="inside"/> is in, won or lost, with a score (or its own without one).</summary>
+    void EndMinigame(Entity inside, bool won, int? score);
+
+    /// <summary>Starts the minigame <paramref name="inside"/> is in over.</summary>
+    void RestartMinigame(Entity inside);
+
+    /// <summary>Forgets how a scene was left (see <see cref="RememberScene"/>), so it starts as its file has it next time.</summary>
+    void ForgetScene(string scene);
+
     /// <summary>How late this machine's player hears the sound, in milliseconds (their setting, kept in the save data).</summary>
     float AudioOffset { get; set; }
 

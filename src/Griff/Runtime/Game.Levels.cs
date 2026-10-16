@@ -446,7 +446,7 @@ public sealed partial class Game
             // One trip at a time: not while a scene change or another door's fade is under way.
             if (ready.Count == 0 || _fadingOut is not null || _pendingScene is not null)
                 continue;
-            var user = door.NeedsInteract ? ready.FirstOrDefault(u => InputOf(u).WasPressed("Interact")) : ready[0];
+            var user = door.NeedsInteract ? ready.FirstOrDefault(u => HasFocus(u) && InputOf(u).WasPressed("Interact")) : ready[0];
             if (user is null)
                 continue;
             UseDoor(door, user);
@@ -466,7 +466,7 @@ public sealed partial class Game
 
         if (!string.IsNullOrWhiteSpace(door.Scene))
         {
-            LoadScene(door.Scene.Trim(), door.Fade);
+            LoadScene(door.Scene.Trim(), door.Fade, null, door.ArriveAt, traveller: user, fresh: false);
             return;
         }
 
@@ -556,7 +556,7 @@ public sealed partial class Game
                 continue;
             var starts = dialogue.Start == DialogueStart.Touch
                 ? !_levels.DialoguesTouched.Contains(dialogue)
-                : Input.WasPressed("Interact");
+                : Input.WasPressed("Interact") && TouchersOf(dialogue.Entity!).Any(t => dialogue.AcceptsLayer(t.Layer) && Net.IsMine(t.By) && HasFocus(t.By));
             if (starts)
                 StartDialogue(dialogue);
         }

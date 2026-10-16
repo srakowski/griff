@@ -183,7 +183,7 @@ public sealed class WalkArea : Component, IPointOutline, IDrawable
 [WorksWith(typeof(Dialogue), Note = "started when it's used, with Use Talks")]
 [WorksWith(typeof(UseWith), Note = "what each item used on it does")]
 [ComponentName("Griff.Hotspot")]
-public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStarter
+public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStarter, IArrivalSpot
 {
     private string? _points;
     private List<Vector2> _given = [];
@@ -370,6 +370,9 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStar
             return new Vector2(at.X, at.Y) + StandAt;
         }
     }
+
+    // Someone arriving at it (a door's or another hotspot's Arrive At) stands where the walker stands to use it.
+    Vector2 IArrivalSpot.ArrivalPoint => StandPoint;
 
     /// <summary>Walks the player's walker over and looks at it, as a right click on it does.</summary>
     [Action]

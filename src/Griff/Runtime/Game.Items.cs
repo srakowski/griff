@@ -42,8 +42,6 @@ public sealed partial class Game
         foreach (var inventory in Active<Inventory>())
         {
             var entity = inventory.Entity!;
-            if (Runs(entity))
-                KeepSaved(inventory);
             // Only copied when there's something to use, so an inventory that's just carried makes no garbage.
             List<string>? asked = inventory.UseRequests.Count == 0 ? null : [.. inventory.UseRequests];
             inventory.UseRequests.Clear();
@@ -68,26 +66,6 @@ public sealed partial class Game
             foreach (var item in asked)
                 UseItem(inventory, item);
         }
-    }
-
-    // An inventory with a Save As starts with what was saved (once: not again after a rewind), and saves what it holds
-    // whenever that changes, its rows one per line.
-    private void KeepSaved(Inventory inventory)
-    {
-        var key = inventory.SaveAs?.Trim();
-        if (!inventory.Loaded)
-        {
-            inventory.Loaded = true;
-            if (!string.IsNullOrEmpty(key) && SaveData.GetString(key) is { } saved)
-                inventory.Items = saved.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            inventory.SavedVersion = inventory.Version;
-            return;
-        }
-
-        if (string.IsNullOrEmpty(key) || inventory.SavedVersion == inventory.Version)
-            return;
-        inventory.SavedVersion = inventory.Version;
-        SaveData.Set(key, string.Join('\n', inventory.Items));
     }
 
     // Uses one up, unless there's none left or all it would do is heal someone who isn't hurt.

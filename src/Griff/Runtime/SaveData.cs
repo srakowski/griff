@@ -14,7 +14,7 @@ namespace Griff.Runtime;
 ///     Game.SaveData.Set("best", Score);
 /// </code>
 /// </example>
-public sealed class SaveData
+public sealed class SaveData : Scenes.ICarryStore
 {
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 
@@ -67,6 +67,11 @@ public sealed class SaveData
     public void Set(string key, bool value) => Put(key, JsonValue.Create(value));
 
     public void Set(string key, string? value) => Put(key, value is null ? null : JsonValue.Create(value));
+
+    // A value as it's kept (a copy), whatever it is, and one put back so: for a saved game keeping some as they were.
+    internal JsonNode? GetRaw(string key) => _values[key]?.DeepClone();
+
+    internal void SetRaw(string key, JsonNode? value) => Put(key, value?.DeepClone());
 
     /// <returns>False if there was no value called <paramref name="key"/>.</returns>
     public bool Delete(string key)

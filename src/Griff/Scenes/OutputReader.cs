@@ -49,7 +49,7 @@ internal sealed class OutputReader
                     break;
             }
         }
-        else if ((Inside(owner, track.AsSpan().Trim()) ?? Named(scene, track.AsSpan().Trim())) is { } named)
+        else if ((Inside(owner, track.AsSpan().Trim()) ?? Named(scene, track.AsSpan().Trim(), owner)) is { } named)
             Take(named, name);
 
         // Not found: look again next time (it may be spawned, renamed or given the component).
@@ -99,21 +99,29 @@ internal sealed class OutputReader
         return null;
     }
 
-    // As Scene.FindNamed finds it: this machine's player's own first in a network game.
-    private static Entity? Named(Scene scene, ReadOnlySpan<char> name)
+    // As Scene.FindNamed finds it: this machine's player's own first in a network game, and one in the same part of the scene
+    // as the owner (a minigame being played, or outside them) before any other.
+    private static Entity? Named(Scene scene, ReadOnlySpan<char> name, Entity owner)
     {
         Entity? first = null;
+        Entity? elsewhere = null;
         var entities = scene.EntitiesNow;
         for (var i = 0; i < entities.Length; i++)
         {
             var entity = entities[i];
             if (!name.SequenceEqual(entity.Name))
                 continue;
+            if (!Scene.SamePart(entity, owner))
+            {
+                elsewhere ??= entity;
+                continue;
+            }
+
             if (scene.PreferNamed is null || scene.PreferNamed(entity))
                 return entity;
             first ??= entity;
         }
 
-        return first;
+        return first ?? elsewhere;
     }
 }

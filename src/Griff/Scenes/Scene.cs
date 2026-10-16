@@ -146,14 +146,30 @@ public sealed class Scene
 
     /// <summary>
     /// The entity called <paramref name="name"/>. When several are (every player's character is "Player" in a network
-    /// game), the one this machine's player plays comes first, so a camera or health bar follows your own.
+    /// game), the one this machine's player plays comes first, so a camera or health bar follows your own. While a minigame
+    /// is played in the scene (see <see cref="MinigameRoot"/>), one in the same part of the scene as <paramref name="near"/>
+    /// comes first (the minigame it's in, or the rest of the scene), or without it, one in the minigame that has the screen.
     /// </summary>
-    public Entity? FindNamed(string name, bool activeOnly = false)
+    public Entity? FindNamed(string name, bool activeOnly = false, Entity? near = null)
+    {
+        if (ActiveNow<MinigameRoot>().Count > 0)
+        {
+            var world = near is not null ? MinigameRoot.Of(near) : MinigameRoot.Shown(this);
+            if (Find(name, activeOnly, world, worldOnly: true) is { } same)
+                return same;
+        }
+
+        return Find(name, activeOnly, null, worldOnly: false);
+    }
+
+    // The first called that (this player's own first), only in `world` (a minigame's root, or null for outside them) if it
+    // says so.
+    private Entity? Find(string name, bool activeOnly, Entity? world, bool worldOnly)
     {
         Entity? first = null;
         foreach (var entity in EntitiesNow)
         {
-            if (entity.Name != name || (activeOnly && !entity.IsActive))
+            if (entity.Name != name || (activeOnly && !entity.IsActive) || (worldOnly && MinigameRoot.Of(entity) != world))
                 continue;
             if (PreferNamed is null || PreferNamed(entity))
                 return entity;
@@ -162,6 +178,12 @@ public sealed class Scene
 
         return first;
     }
+
+    /// <summary>
+    /// True if <paramref name="entity"/> is in the same part of the scene as <paramref name="near"/>: the same minigame being
+    /// played in it (see <see cref="MinigameRoot"/>), or both outside them. Always true while no minigame is.
+    /// </summary>
+    public static bool SamePart(Entity entity, Entity? near) => near is null || MinigameRoot.Of(entity) == MinigameRoot.Of(near);
 
     /// <summary>Set in a network game: which of several entities with the same name <see cref="FindNamed"/> picks first.</summary>
     internal Func<Entity, bool>? PreferNamed { get; set; }

@@ -205,6 +205,11 @@ public sealed partial class FieldEditorAuditTests
         Toggle.SaveAs: Names:Saved
         Toggle.OnText: Text
         Toggle.OffText: Text
+        Tooltip.Value: OutputFormat
+        Tooltip.Into: Entity
+        Tooltip.Track: Entity
+        Tooltip.Output: Output
+        Tooltip.Font: Names:Font
         Thruster.Direction: Direction
         Wire.Input: Choice
         Wire.From: Entity

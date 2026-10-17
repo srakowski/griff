@@ -331,9 +331,13 @@ public sealed class OutputFormatAttribute(string output) : FieldEditorAttribute
     /// </summary>
     public string? Preview(Component component, string? template)
     {
-        if (component.Entity is not { } entity || ComponentModel.Of(component).Property(Output)?.GetValue(component) is not string { Length: > 0 } output)
+        var model = ComponentModel.Of(component);
+        if (component.Entity is not { } entity || model.Property(Output) is not { } property || property.GetValue(component) is not string { Length: > 0 } output)
             return null;
-        var track = ComponentModel.Of(component).Saved.FirstOrDefault(p => p.EntityName is not null)?.GetValue(component) as string;
+        // The entity it's read from: the one the property naming the output says (a tooltip names a Text to write into
+        // before it), or else the first one named.
+        var track = (property.GetCustomAttribute<OutputNameAttribute>()?.On is { } on ? model.Property(on)?.GetValue(component)
+            : model.Saved.FirstOrDefault(p => p.EntityName is not null)?.GetValue(component)) as string;
         var reader = new OutputReader();
         if (!reader.Find(entity, track, output) || reader.Output is not { } found)
             return null;

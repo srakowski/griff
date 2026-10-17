@@ -1,0 +1,45 @@
+title: Tooltips
+intro: Rest the mouse on anything, a sprite in the world or a button on the HUD, and it says something about itself: in a box by the cursor, or on a line of the HUD.
+project: Empty | Tooltips
+
+chapter: A box by the cursor | A Tooltip on a sprite
+create: Sprite
+rename: Deck
+set: Sprite.Size = 2, 3
+set: Sprite.Tint = #3A6EA5
+add: Tooltip
+explain: component:Tooltip | Tooltip | A Tooltip works on anything the mouse can rest on. This deck is just a sprite in the world: no button, no collider.
+set: Tooltip.Value = Deck: 3 crates due in 40 seconds
+explain: field:Tooltip.Value | Value | What it says. A script sets it to say anything, or, like a Text, it shows an output with Track and Output.
+explain: field:Tooltip.Delay | Delay | It shows after the mouse has rested on it this long: half a second, in real time, so it works under a pause menu too.
+play
+gamehover: Deck
+wait: 1
+expectvalue: Deck.Tooltip.IsShowing = true
+explain: game | By the cursor | The box sits by the cursor, pinned to the screen over everything, and turns to the other side of it near the screen's edge.
+gamehover: Deck + 4, 0
+wait: 0.5
+expectvalue: Deck.Tooltip.IsShowing = false
+say: Move off, and it goes. Only the topmost tooltip under the mouse shows, and what's on the screen comes before the world.
+stop
+
+chapter: On a line of the HUD | Into a named Text
+create: Text
+rename: Hover Info
+set: Text.Value = Hover a deck
+add: ScreenAnchor
+set: ScreenAnchor.Anchor = BottomLeft
+set: ScreenAnchor.Offset = 5, 1
+select: Deck
+pick: Tooltip.Into = Hover Info
+explain: field:Tooltip.Into | Into | Name a Text in Into, and the tooltip writes there instead of the box: an info line on the HUD.
+play
+gamehover: Deck
+wait: 1
+expectvalue: Hover Info.Text.Value = Deck: 3 crates due in 40 seconds
+explain: game | On the HUD | Rest on the deck, and the line says what the deck's tooltip says.
+gamehover: Deck + 4, 0
+wait: 0.5
+expectvalue: Hover Info.Text.Value = Hover a deck
+say: Move off, and the line says what it said before.
+stop

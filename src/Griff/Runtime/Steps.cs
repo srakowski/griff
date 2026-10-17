@@ -200,6 +200,9 @@ public static class Steps
     /// <summary>The "Counters" step of the Resolve phase.</summary>
     public static readonly StepId Counters = new(FramePhase.Resolve, "Counters");
 
+    /// <summary>The "Tooltips" step of the Resolve phase.</summary>
+    public static readonly StepId Tooltips = new(FramePhase.Resolve, "Tooltips");
+
     /// <summary>The "Text Outputs" step of the Resolve phase.</summary>
     public static readonly StepId TextOutputs = new(FramePhase.Resolve, "Text Outputs");
 

@@ -518,6 +518,7 @@ public sealed partial class Game
         Step(Steps.Bars, _hud.RunBars);
         Step(Steps.Stars, _hud.RunStars);
         Step(Steps.Counters, _hud.RunCounters);
+        Step(Steps.Tooltips, _hud.RunTooltips);
         Step(Steps.TextOutputs, _hud.ShowOutputs);
         Step(Steps.Fade, _scenes.AdvanceFade);
         Step(Steps.ScreenFlash, _effects.RunScreenFlash);

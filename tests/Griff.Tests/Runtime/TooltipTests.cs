@@ -365,6 +365,29 @@ public class TooltipTests
     }
 
     [Fact]
+    public void Tooltip_FillsInPrompts_AndFollowsRebinding()
+    {
+        var tip = AddDeck("Deck", Vector2.Zero, "Key: {Jump}\nBraces {stay}");
+        var game = CreateGame();
+        MouseAt(Vector2.Zero);
+        // Not filled in until it's hovered in the game.
+        Assert.Equal("Key: {Jump}\nBraces {stay}", tip.Shown);
+
+        Tick(game, 30);
+        Assert.True(tip.IsShowing);
+        Assert.Equal("Key: Space\nBraces {stay}", tip.Shown);
+
+        _input.Rebind("Jump", Key.J, GamepadButton.B);
+        Tick(game);
+        Assert.Equal("Key: J\nBraces {stay}", tip.Shown);
+
+        // On a gamepad, its button.
+        _input.SetGamepad([GamepadButton.X], Vector2.Zero);
+        Tick(game);
+        Assert.Equal("Key: B\nBraces {stay}", tip.Shown);
+    }
+
+    [Fact]
     public void Tooltip_WritingIntoAText_DrawsNoBox()
     {
         var info = new Entity("Hover Info");

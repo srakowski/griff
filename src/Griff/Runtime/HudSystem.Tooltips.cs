@@ -41,6 +41,7 @@ internal sealed partial class HudSystem
         if (hovered is not null)
         {
             ReadOutput(hovered);
+            FillPrompts(hovered);
             hovered.HoveredFor = !hovered.IsHovered ? (warm ? Math.Max(hovered.Delay, 0) : 0) : hovered.HoveredFor + Game.Time.UnscaledDelta;
             hovered.IsHovered = true;
         }
@@ -108,6 +109,21 @@ internal sealed partial class HudSystem
             return;
         tip.ReadFrom = (tip.Value, number, name, outOf);
         tip.SetReadout(Readout.Fill(tip.Value, number, name, outOf, found ? reader.Output!.ValueType : typeof(string)));
+    }
+
+    // "Key: {OpenWork}" shows the key that does it on the device in use, as a Text's prompts do: filled in again only once
+    // what it says, the device or the bindings change.
+    private void FillPrompts(Tooltip tip)
+    {
+        if (tip.Said is not { } value || !value.Contains('{'))
+            return;
+        var state = Game.MachineInput;
+        var rebinding = Game.PanelSystem.Rebinding;
+        if (tip.PromptedFrom is var (said, gamepad, listening, version) && ReferenceEquals(said, value) && gamepad == state.UsingGamepad &&
+            listening == rebinding && version == state.BindingsVersion)
+            return;
+        tip.PromptedFrom = (value, state.UsingGamepad, rebinding, state.BindingsVersion);
+        tip.SetShown(InputPrompts.Fill(Game.Input, value, rebinding));
     }
 
     // The Text the showing tooltip names says what it says; the one written into before says what it said, once nothing

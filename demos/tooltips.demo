@@ -43,3 +43,20 @@ wait: 0.5
 expectvalue: Hover Info.Text.Value = Hover a deck
 say: Move off, and the line says what it said before.
 stop
+
+chapter: On a HUD button | Keys in braces
+create: Button
+rename: Jump Button
+add: ScreenAnchor
+set: ScreenAnchor.Anchor = TopLeft
+set: ScreenAnchor.Offset = 3, -1.5
+add: Tooltip
+set: Tooltip.Value = Jumps. Key: {Jump}
+explain: field:Tooltip.Value | Value | An action's name in braces shows the key that does it, as in a Text: here, Jump's key. It follows the player's rebinding and the gamepad.
+play
+gamehover: Jump Button
+wait: 1
+expectvalue: Jump Button.Tooltip.IsShowing = true
+expectvalue: Jump Button.Tooltip.Shown = Jumps. Key: Space
+explain: game | On the HUD | A button pinned to the screen shows its tooltip too, with the key filled in.
+stop

@@ -16,7 +16,11 @@ namespace Griff.Scenes;
 [ComponentName("Tooltip")]
 public sealed class Tooltip : Component
 {
-    /// <summary>What it says. Several lines are fine. With an <see cref="Output"/>, how that reads ("{0} cards").</summary>
+    /// <summary>
+    /// What it says. Several lines are fine. With an <see cref="Output"/>, how that reads ("{0} cards"). An action's name
+    /// in braces becomes the key or button that does it, as in a <see cref="Text"/>: "Key: {OpenWork}" reads "Key: K", and
+    /// follows the device being played with and the player's own bindings.
+    /// </summary>
     [OutputFormat(nameof(Output))]
     public string? Value { get; set; } = "Tooltip";
 
@@ -86,10 +90,23 @@ public sealed class Tooltip : Component
     /// <summary>True while it shows: hovered for its <see cref="Delay"/>.</summary>
     public bool IsShowing => IsHovered && HoveredFor >= Delay;
 
-    /// <summary>What it says now: <see cref="Value"/>, with its <see cref="Output"/> filled in while it's hovered in the game.</summary>
-    public string? Shown => _readout ?? Value;
+    /// <summary>
+    /// What it says now: <see cref="Value"/>, with its <see cref="Output"/> and input prompts ("{Interact}") filled in while
+    /// it's hovered in the game.
+    /// </summary>
+    public string? Shown => _shown.From is not null && _shown.From == Said ? _shown.To : Said;
 
+    private (string? From, string? To) _shown;
     private string? _readout;
+
+    // What it says before prompts are filled in: its Value, with the output it shows filled in.
+    internal string? Said => _readout ?? Value;
+
+    internal void SetShown(string? shown) => _shown = (Said, shown);
+
+    // What its prompts were last filled in from: what it said, whether a gamepad was being played with, the action being
+    // rebound and the bindings' version (as a Text's).
+    internal (string Said, bool Gamepad, string? Listening, int Version)? PromptedFrom;
 
     // The output it shows, found once, and what its readout was last made from (so it's only made again when that changes).
     [field: NotState("finds the output again")]

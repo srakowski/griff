@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+- A **Tooltip** fills in input prompts as a Text does: `Key: {OpenWork}` in its Value shows the key that does it now, following the gamepad and the player's rebinding.
+
 ## 0.1.0-alpha.10 - 2026-10-17
 
 - The **Assets** panel shows the folders as a tree on the left and the picked folder's files as tiles on the right, pictures as thumbnails and everything else with an icon for its kind. Double-clicking, dragging into the scene or onto a folder, and right-clicking work on the tiles as they did on the rows, a slider sizes the tiles, and the **Tree** button brings back the one tree.

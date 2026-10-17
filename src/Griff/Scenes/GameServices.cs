@@ -55,6 +55,9 @@ public interface IDialogues : IGameService
 {
     /// <summary>Starts a dialogue, as if the player had pressed Interact beside it.</summary>
     void Start(Dialogue dialogue);
+
+    /// <summary>Ends a dialogue being said at once, as saying its last line would: a cutscene skipped.</summary>
+    void End(Dialogue dialogue);
 }
 
 /// <summary>The flags kept in the game's save data.</summary>

@@ -15,6 +15,8 @@ internal sealed class LevelSystem : GameSystem, IVolleys, IDialogues, IFlags
 
     void IDialogues.Start(Dialogue dialogue) => StartDialogue(dialogue);
 
+    void IDialogues.End(Dialogue dialogue) => StopDialogue(dialogue);
+
     void IFlags.Set(string name, bool on) => SetFlag(name, on);
 
     bool IFlags.Holds(string? needs) => FlagHolds(needs);
@@ -571,6 +573,7 @@ internal sealed class LevelSystem : GameSystem, IVolleys, IDialogues, IFlags
         if (_talking is not null || dialogue.Lines.Count == 0 || dialogue.Entity?.Scene != Game.Scene)
             return;
         dialogue.CheckParts();
+        dialogue.CutShort = false;
         _dialoguesSeen.Add(dialogue);
         _talking = dialogue;
         _talkJustStarted = true;
@@ -599,6 +602,15 @@ internal sealed class LevelSystem : GameSystem, IVolleys, IDialogues, IFlags
 
         // "# Name" on the first row just names the start.
         SayFrom(dialogue, dialogue.Row(0).Kind == Dialogue.RowKind.Part ? 1 : 0);
+    }
+
+    // Ends the talk now, partway through a line or not, as saying its last line would: a cutscene skipped.
+    public void StopDialogue(Dialogue dialogue)
+    {
+        if (_talking != dialogue)
+            return;
+        dialogue.CutShort = true;
+        EndDialogue(finished: true);
     }
 
     public void AdvanceDialogue(Dialogue dialogue)
@@ -659,6 +671,19 @@ internal sealed class LevelSystem : GameSystem, IVolleys, IDialogues, IFlags
     }
 
     public event Action<string, bool>? FlagChanged;
+
+    // Each Show When shows its entity while its flag holds and hides it otherwise, before menus look for buttons to click.
+    internal void RunShowWhens()
+    {
+        foreach (var show in Game.RunHere<ShowWhen>())
+        {
+            if (string.IsNullOrWhiteSpace(show.NeedsFlag))
+                continue;
+            var shown = FlagHolds(show.NeedsFlag);
+            if (show.Entity!.IsEnabled != shown)
+                show.Entity.IsEnabled = shown;
+        }
+    }
 
     public bool FlagHolds(string? needs)
     {

@@ -23,7 +23,7 @@ public sealed class GameSystemsTests
     public static TheoryData<string, string> CoreSteps => new()
     {
         { "Panels", "Panels" }, { "Pauses", "Pauses" }, { "Time", "Time" }, { "Input", "Input" }, { "DebugDrawing", "Time" },
-        { "BeginNetwork", "Network" }, { "Tables", "Tables" }, { "CarriedValues", "Scenes" }, { "ScriptStart", "Scripts" },
+        { "BeginNetwork", "Network" }, { "Tables", "Tables" }, { "CarriedValues", "Scenes" }, { "ShowWhen", "Levels" }, { "ScriptStart", "Scripts" },
         { "Menus", "Menus" }, { "Lobby", "Lobby" }, { "Grids", "Tilemaps" }, { "SwitchTargets", "Switches" }, { "Turns", "Turns" },
         { "BeatClocks", "Beat" }, { "Calibrations", "Calibration" }, { "Enemies", "Levels" }, { "Movement", "Movement" },
         { "ItemUses", "Items" }, { "Scripts", "Scripts" }, { "HUD", "HUD" }, { "OtherPlayersTools", "Network" },

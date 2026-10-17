@@ -1,0 +1,55 @@
+title: Unlocks and skipping a tour
+intro: Show When shows anything only while a flag is set, flags named run. last one run of the game, and a dialogue's Stop action ends a tour partway through.
+project: Empty | Unlocks
+
+chapter: A tour | A dialogue as the scene starts
+create: Dialogue Box
+deselect
+create: Empty
+rename: Tour
+add: Dialogue
+set: Dialogue.Start = SceneStart
+set: Dialogue.Lines = Welcome to the factory.\n[set run.Contracts] Contracts are open now: up top.\nTake one to get paid.\nMachines come next.\nThen workers to run them.
+explain: field:Dialogue.Lines | A tour | The tour starts as the scene does. Its second line sets the flag run.Contracts as it's said.
+
+chapter: Shown once it's unlocked | Show When
+deselect
+create: Button
+rename: Contracts
+set: Transform.Position = 0, 3, 0
+add: ShowWhen
+set: ShowWhen.NeedsFlag = run.Contracts
+explain: field:ShowWhen.NeedsFlag | Needs Flag | Show When shows its entity only while its flag is set, and hides it, with everything inside it, otherwise. A hidden button can't be clicked, and its shortcut does nothing.
+say: In the Scene view it shows as ever, so it can be laid out. It's only hidden while the game runs.
+
+chapter: A skip button | Dialogue Stop
+deselect
+create: Button
+rename: Skip Tour
+set: Transform.Position = 5, 3, 0
+set: Button.Action = Do
+pick: Button.Targets = Tour
+pick: Button.Do = Stop
+pick: Button.Shortcut = K
+explain: field:Button.Do | Stop | The dialogue's Stop action ends it at once, even partway through a line, as reaching its end would: the box hides, the game moves again, and its Message and Finished go out.
+
+chapter: Play | Unlock, then skip
+play
+wait: 1
+waitgone: Contracts | 2
+say: The tour is on its first line, and Contracts is hidden.
+tap: E
+waitfor: Contracts | 3
+say: The second line set run.Contracts, and the button appears.
+tap: K
+waitgone: Dialogue Box | 3
+expectvalue: Tour.Dialogue.IsDone = true
+say: K skipped the rest of the tour: the box is gone and the game runs on.
+stop
+
+chapter: A new run | run. flags aren't kept
+play
+wait: 1
+waitgone: Contracts | 2
+say: A flag whose name starts with run. lasts only while the game runs, so playing again starts with Contracts hidden. A New Game button forgets every flag, too.
+stop

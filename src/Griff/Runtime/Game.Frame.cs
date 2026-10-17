@@ -459,6 +459,7 @@ public sealed partial class Game
         Step(Steps.BeginNetwork, _network.BeginNetwork);
         Step(Steps.Tables, _tableSystem.ApplyTables);
         Step(Steps.CarriedValues, _scenes.RunCarried);
+        Step(Steps.ShowWhen, _levels.RunShowWhens);
         Step(Steps.ScriptStart, _scriptSystem.StartScripts);
 
         Step(Steps.Menus, _menuSystem.UpdateMenus);

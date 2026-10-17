@@ -794,9 +794,17 @@ public sealed class Dialogue : Component
     [NotSent]
     public int Line { get; set; }
 
-    /// <summary>True once it has been said all the way through.</summary>
+    /// <summary>True once it has been said all the way through (or stopped: see <see cref="CutShort"/>).</summary>
     [NotSent]
     public bool IsDone { get; set; }
+
+    /// <summary>
+    /// True when it was stopped before its end (by its Stop action or a script's <c>Game.EndDialogue</c>) rather than said
+    /// to the end: read it in a <see cref="Finished"/> handler to tell a skipped cutscene from one watched through. False
+    /// again as it starts.
+    /// </summary>
+    [DoNotSerialize]
+    public bool CutShort { get; internal set; }
 
     /// <summary>True for one that starts by itself as the scene starts, which needs no collider.</summary>
     public bool StartsWithScene => Start == DialogueStart.SceneStart;
@@ -814,7 +822,7 @@ public sealed class Dialogue : Component
     /// <summary>Raised when a choice is picked, with its number in <see cref="Choices"/> (before the talk moves on).</summary>
     public event Action<int>? Chosen;
 
-    /// <summary>Raised when the last line is done.</summary>
+    /// <summary>Raised when the last line is done, or it's stopped partway (<see cref="CutShort"/> says which).</summary>
     public event Action? Finished;
 
     /// <summary>True if something on collision layer <paramref name="layer"/> can start it.</summary>
@@ -833,6 +841,14 @@ public sealed class Dialogue : Component
     /// <summary>Starts saying it now, as if the player had pressed Interact beside it: a cutscene, a boss appearing. Not while another dialogue is being said.</summary>
     [Action("Start")]
     private void Begin(IDialogues dialogues) => dialogues.Start(this);
+
+    /// <summary>
+    /// Ends it now if it's being said, even partway through a line, as saying its last line would: the box hides, the
+    /// game moves again, its Message is sent and Finished is raised (with <see cref="CutShort"/> true). The rows it didn't
+    /// reach aren't said and their tags aren't done: a "Skip" button on a cutscene or a tour.
+    /// </summary>
+    [Action]
+    private void Stop(IDialogues dialogues) => dialogues.End(this);
 
     /// <summary>What a row of <see cref="Lines"/> is.</summary>
     public enum RowKind

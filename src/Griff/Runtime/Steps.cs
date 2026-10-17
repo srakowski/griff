@@ -53,6 +53,9 @@ public static class Steps
     /// <summary>The "Carried Values" step of the Begin phase.</summary>
     public static readonly StepId CarriedValues = new(FramePhase.Begin, "Carried Values");
 
+    /// <summary>The "Show When" step of the Begin phase.</summary>
+    public static readonly StepId ShowWhen = new(FramePhase.Begin, "Show When");
+
     /// <summary>The "Script Start" step of the Begin phase.</summary>
     public static readonly StepId ScriptStart = new(FramePhase.Begin, "Script Start");
 

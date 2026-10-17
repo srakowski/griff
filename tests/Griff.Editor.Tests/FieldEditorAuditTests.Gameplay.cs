@@ -113,6 +113,7 @@ public sealed partial class FieldEditorAuditTests
         Pickup.Price: Rows
         Pickup.Sound: Sound
         Pickup.Effect: Names:Prefab
+        ShowWhen.NeedsFlag: Names:Flag
         Spawner.Prefab: Names:Prefab
         Spawner.NeedsFlag: Names:Flag
         Spawner.Clock: Entity

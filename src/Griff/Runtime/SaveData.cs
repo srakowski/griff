@@ -8,7 +8,8 @@ namespace Griff.Runtime;
 /// off the game's thread so a frame never waits for the disk, and changes made while one is being written go together in
 /// the next, so a value set every frame costs a write only as often as the disk keeps up. Stopping the game waits for the
 /// last write (<see cref="Flush"/>). A write that fails (a full disk, a file another program holds) is said once among
-/// the game's problems (<see cref="Game.Problems"/>) rather than stopping the game, and the next change tries again.
+/// the game's problems (<see cref="Game.Problems"/>) rather than stopping the game, and the next change tries again. A
+/// value whose name starts "run." lasts only while the game runs (see <see cref="LastsOneRun"/>).
 /// </summary>
 /// <example>
 /// <code>
@@ -37,7 +38,7 @@ public sealed class SaveData
     public SaveData(string? path = null)
     {
         FilePath = path;
-        _values = Load(path is not null && File.Exists(path) ? ReadFile(path) : null);
+        _values = WithoutRunValues(Load(path is not null && File.Exists(path) ? ReadFile(path) : null));
     }
 
     /// <summary>
@@ -49,7 +50,39 @@ public sealed class SaveData
     {
         ArgumentNullException.ThrowIfNull(store);
         _store = store;
-        _values = Load(saved);
+        _values = WithoutRunValues(Load(saved));
+    }
+
+    /// <summary>
+    /// True for a value that lasts one run of the game: one whose name starts "run." (capitals don't matter), such as the
+    /// flag "run.Contracts". While the game runs it's kept like any other (a saved game keeps it, and a New Game forgets
+    /// it), but it isn't written down, so the next time the game starts it isn't there: an unlock that doesn't carry over.
+    /// </summary>
+    public static bool LastsOneRun(string key) => key.StartsWith(RunPrefix, StringComparison.OrdinalIgnoreCase);
+
+    private const string RunPrefix = "run.";
+
+    // What a file or store had, but for values of one run (written before they were left out).
+    private static JsonObject WithoutRunValues(JsonObject values)
+    {
+        foreach (var key in values.Select(p => p.Key).Where(LastsOneRun).ToList())
+            values.Remove(key);
+        return values;
+    }
+
+    // What's written down: every value but those that last one run. Taken under the gate.
+    private string Written()
+    {
+        if (!_values.Any(p => LastsOneRun(p.Key)))
+            return _values.ToJsonString(WriteOptions);
+        var kept = new JsonObject();
+        foreach (var (key, value) in _values)
+        {
+            if (!LastsOneRun(key))
+                kept[key] = value?.DeepClone();
+        }
+
+        return kept.ToJsonString(WriteOptions);
     }
 
     /// <summary>Where values are written, or null when they're only kept in memory.</summary>
@@ -265,7 +298,7 @@ public sealed class SaveData
         {
             string text;
             lock (_gate)
-                text = _values.ToJsonString(WriteOptions);
+                text = Written();
             _store(text);
         }
         catch (Exception ex)
@@ -291,7 +324,7 @@ public sealed class SaveData
                     return;
                 }
 
-                (text, version) = (_values.ToJsonString(WriteOptions), Version);
+                (text, version) = (Written(), Version);
             }
 
             try

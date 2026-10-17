@@ -7,6 +7,9 @@
 
 ## Unreleased
 
+- A **Show When** (Gameplay) shows anything only while a flag holds (**Needs Flag** `run.Contracts`, or `not Tutorial`), hidden with what's inside it otherwise and looked at every frame: a HUD that brings in its tools as goals are met, whose hidden buttons can't be clicked or set off by their shortcuts. A flag (or any saved value) named `run.` lasts one run: kept while the game runs and in its saved games, but not written down, so it's unset the next time the game starts. A New Game already forgets every flag.
+- A dialogue's **Stop** action (on a button or trigger) and `Game.EndDialogue(dialogue)` end it at once, even mid-line, as saying its last line would: the box hides, the pause is let go, its **Message** is sent and `Finished` is raised, with `CutShort` true. For a Skip button on a cutscene or a tour.
+
 ## 0.1.0-alpha.13 - 2026-10-17
 
 - A **Slider** can be drawn with pictures, as a Bar can: a **Fill Image** shown only as far as it's set (cut off, not squeezed), a **Background Image** for the track that can be a nine-slice (**Background Slice**), and a **Knob Image** at the end of the fill, each tinted by its color. With none set it looks as before.

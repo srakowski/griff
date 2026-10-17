@@ -44,6 +44,16 @@ public sealed partial class Game
         _levels.ChooseDialogue(dialogue, choice);
 
     /// <summary>
+    /// Ends <paramref name="dialogue"/> at once, even partway through a line, as saying its last line would: its box hides,
+    /// the pause it held is let go (the time scale back as it was), it's done (<see cref="Dialogue.IsDone"/>), its Message is
+    /// sent and <see cref="Dialogue.Finished"/> is raised, with <see cref="Dialogue.CutShort"/> true. The rows it didn't
+    /// reach aren't said and their tags aren't done. For a "Skip" button on a cutscene or a tour (the dialogue's Stop action
+    /// does it with no code). Does nothing when it isn't being said.
+    /// </summary>
+    public void EndDialogue(Dialogue dialogue) =>
+        _levels.StopDialogue(dialogue);
+
+    /// <summary>
     /// True if flag <paramref name="name"/> is set: by a dialogue's "[set Name]", by <see cref="SetFlag"/>, or by anything
     /// else that saved true under that name in <see cref="SaveData"/> (a toggle's Save As). Capitals don't matter.
     /// </summary>
@@ -52,8 +62,10 @@ public sealed partial class Game
 
     /// <summary>
     /// Sets flag <paramref name="name"/> (or clears it, with <paramref name="on"/> false), as a dialogue's "[set Name]"
-    /// does. Flags are kept in <see cref="SaveData"/>, so they're still set the next time the game runs; a saved game
-    /// (<see cref="SaveGame"/>) keeps the ones set when it was saved, and loading it puts them back.
+    /// does. Flags are kept in <see cref="SaveData"/>, so they're still set the next time the game runs, until a New Game
+    /// (<see cref="NewGame"/>) forgets them; a saved game (<see cref="SaveGame"/>) keeps the ones set when it was saved, and
+    /// loading it puts them back. A flag whose name starts "run." ("run.Contracts") lasts only while the game runs: the
+    /// next time it starts, the flag isn't set (see <see cref="SaveData.LastsOneRun"/>).
     /// </summary>
     public void SetFlag(string name, bool on = true) =>
         _levels.SetFlag(name, on);

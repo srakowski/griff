@@ -912,6 +912,64 @@ public class LevelComponentTests
         Assert.Equal("A cutscene line.", text.Value);
     }
 
+    [Fact]
+    public void DialogueStop_FromAButton_EndsItPartway_AsFinishingItWould()
+    {
+        string[] lines = ["One.", "Two.", "Three.", "Four.", "Five.", "Six.", "Seven.", "Eight.", "[set Heard] Nine.", "Ten."];
+        var (dialogue, box, text) = AddTalker(new Vector2(30, 0), lines);
+        dialogue.Message = "Toured";
+        var (heard, finished, cutShort) = (0, 0, false);
+        _game.On("Toured", _ => heard++);
+        dialogue.Finished += () => (finished, cutShort) = (finished + 1, dialogue.CutShort);
+        var skip = Add("Skip Tour", new Vector2(0, 5)).AddComponent<Button>();
+        (skip.Action, skip.Do, skip.Targets, skip.Shortcut) = (ButtonAction.Do, "Dialogue.Stop", "Npc", Key.K);
+        _game.Time.Scale = 0.5f;
+        Run(Step);
+
+        _game.StartDialogue(dialogue);
+        Run(Step);
+        _game.AdvanceDialogue(dialogue);
+        _game.AdvanceDialogue(dialogue);
+        Assert.Equal("Three.", text.Value);
+        Assert.Equal(0, _game.Time.Scale);
+
+        Press(Key.K);
+
+        Assert.Null(_game.Talking);
+        Assert.False(dialogue.IsTalking);
+        Assert.False(box.IsEnabled);
+        Assert.Equal(0.5f, _game.Time.Scale);
+        Assert.True(dialogue.IsDone);
+        Assert.Equal((1, 1, true), (heard, finished, cutShort));
+        Assert.False(_game.HasFlag("Heard"));
+    }
+
+    [Fact]
+    public void EndDialogue_FromAScript_OnlyEndsTheOneBeingSaid_AndCutShortIsFalseAgainWhenItsSaidThrough()
+    {
+        var (dialogue, _, text) = AddTalker(new Vector2(30, 0), "Hi.", "Bye.");
+        var other = AddBox("Other", new Vector2(60, 0), Vector2.One, trigger: true).AddComponent<Dialogue>();
+        other.Lines = ["Me too!"];
+        var finished = 0;
+        dialogue.Finished += () => finished++;
+        Run(Step);
+
+        _game.EndDialogue(dialogue);
+        Assert.Equal(0, finished);
+
+        _game.StartDialogue(dialogue);
+        Run(Step);
+        _game.EndDialogue(other);
+        Assert.Same(dialogue, _game.Talking);
+        _game.EndDialogue(dialogue);
+        Assert.Null(_game.Talking);
+        Assert.True(dialogue.CutShort);
+
+        Assert.Equal(["Hi.", "Bye."], SayAll(dialogue, text));
+        Assert.False(dialogue.CutShort);
+        Assert.Equal(2, finished);
+    }
+
     // ---- Dialogue choices ----
 
     private void Click(Vector2 at)

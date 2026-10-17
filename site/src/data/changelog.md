@@ -11,6 +11,7 @@
 - A dialogue's **Stop** action (on a button or trigger) and `Game.EndDialogue(dialogue)` end it at once, even mid-line, as saying its last line would: the box hides, the pause is let go, its **Message** is sent and `Finished` is raised, with `CutShort` true. For a Skip button on a cutscene or a tour.
 - **Camera Controls** can take the camera over for a while: `FocusOn(entity, size)` glides to a character (or a point) and follows it at a closer Size, inside **Stay Inside**, while the player's pan, drag and wheel wait; `Release()` zooms back out to the Size it had and hands the camera back where it is. **Focus Size** and **Focus Seconds** set the defaults, and a Trigger or a Do button can do **Focus On** and **Release**, for a guided tour or a cutscene with no code.
 - Agents' clicks in `game_input` land on a button pinned to the screen even after the camera has moved: put on the HUD, the agent's mouse rests on its spot on the screen as a real one does, so clicking again where it rests clicks a panel that opened there again.
+- Fixed: the editor's **Step Frame** (F10) no longer takes F10 from a game that is playing: it steps a paused game only, and while a game plays, a plain Game menu shortcut goes to the game when one of its input actions is bound to that key. Pause (F6), Stop (Shift+F5) and Play Fullscreen (Alt+Enter) still always work.
 
 ## 0.1.0-alpha.13 - 2026-10-17
 

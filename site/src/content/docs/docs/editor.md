@@ -18,7 +18,7 @@ When you're done with a project, **File → Close Project** puts the editor back
 | Add Entity (find something to make by typing) | Ctrl+Shift+A |
 | Create empty entity | Ctrl+Alt+N |
 | Rename, duplicate, delete | F2, Ctrl+D, Delete |
-| Play / pause / step / stop | F5 / F6 / F10 / Shift+F5 |
+| Play / pause / step (a paused game) / stop | F5 / F6 / F10 / Shift+F5 |
 | Play fullscreen, and back to the editor | Alt+Enter |
 | Play with 2 players (a window for player 2) | Ctrl+F5 |
 | Breakpoint on the line (in a script) / remove them all | F9 / Ctrl+Shift+F9 |
@@ -89,13 +89,21 @@ The two buttons at the top left switch between these tiles and the **Tree** view
 
 **Game → Controls...** lists every input action the game has and the keys, mouse buttons and gamepad buttons that do each. Pick an action, click **Press a Key** and press one (or click the button with a mouse button) to add it; controller buttons come from **Add Button** with no controller needed, or **Press on Controller** with one. A key that another action also uses is pointed out, the × on a key takes it off, and **Reset to Default** puts one of Griff's twenty-six actions (Jump, Fire, Dash, Attack, Interact, Pause, EndTurn, Undo, Restart, Skip, Auto, Log, LeftFlipper, RightFlipper, Plunger, Nudge, Punch, Kick, Lane1 to Lane4, a rhythm game's lanes, and PanUp, PanDown, PanLeft and PanRight, which Camera Controls pans with) back; they can be rebound but keep their names, since components use them. **Add Action** makes one of the game's own (`Shield`), which scripts read with `Input.WasPressed("Shield")` and button prompts and Rebind buttons work with. Changes are saved in `project.griff` as you make them (only what differs from Griff's defaults), reach a running game straight away, and go into exported games. A player's own Rebind choice still wins over them, and a script's `Input.Bind` over both; the window says when a choice you made while testing is in the way (**Game → Clear Save Data** clears it).
 
+## Keys while the game plays
+
+While the game plays (not paused) and has focus, its keys are its own: F10 is not Step Frame then, which is for a
+paused game, and any other plain Game menu shortcut (no Ctrl, Alt or Shift) goes to the game when one of its input
+actions (**Game → Controls...**, or `Input.Bind`) is bound to that key. Three always win, even if the game binds them,
+as the way out: Pause (F6), Stop (Shift+F5) and Play Fullscreen (Alt+Enter). Paused, or typing in a field or the code
+(F9 breakpoints included), every shortcut works as usual.
+
 ## Playing fullscreen
 
 **Game → Play Fullscreen** (Alt+Enter) plays the game over the whole of the screen the editor is on, with no border, as
 a built game plays fullscreen: from the Game tab while it plays, or straight from the Scene view, playing the open scene.
 Alt+Enter again (or the menu item, ticked meanwhile) brings it back to the Game tab, still playing. The game's view is
-the screen's size, so its camera, HUD and mouse work as they would on a player's screen. Pause (F6), Step Frame (F10),
-Stop (Shift+F5) and the rest of the Game menu's shortcuts work over it; paused, the timeline shows above the game to
+the screen's size, so its camera, HUD and mouse work as they would on a player's screen. Pause (F6),
+Stop (Shift+F5) and the rest of the Game menu's shortcuts work over it, except that the game keeps its own keys (below); paused, the timeline shows above the game to
 rewind it, and the other shortcuts work as in the editor's window. A breakpoint, or a pause on an error, brings the game
 back to the editor to show what happened (Alt+Enter goes fullscreen again after Continue), and Stop does too. Alt+Tab
 away leaves it fullscreen behind the other window, and going back to the editor goes back to the game. Escape stays the

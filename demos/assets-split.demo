@@ -1,0 +1,33 @@
+title: Assets as tiles
+intro: The Assets panel now shows the project's folders as a tree on the left, and what's in the folder you pick as tiles on the right, pictures as thumbnails.
+project: Platformer | Asset Tiles
+
+chapter: Folders and tiles | Pick a folder on the left
+write: Sprites/hex.png | hex-tilemaps/hex.png
+write: Sprites/iso.png | isometric-tilemaps/iso.png
+explain: assets:folders | Folders | On the left, the project's folders, starting at Assets itself. Only folders show here.
+assetopen: Sprites
+expectassetfolder: Sprites
+explain: assets:items | Tiles | Pick a folder and what's in it shows on the right as tiles. A picture's tile is a thumbnail of it, read again whenever the file changes.
+assetsize: 120
+explain: assets:size | Tile size | The slider makes the tiles bigger or smaller, and they stay that way.
+
+chapter: Everything else | An icon for each kind
+assetopen: Sounds
+expectassetfolder: Sounds
+explain: assets:items | Sounds | Anything that isn't a picture has an icon for its kind: sounds, music, scenes, prefabs, scripts, fonts and tables. Double-click a sound to hear it.
+click: assets:up
+expectassetfolder: Assets
+explain: assets:path | Up a folder | Up, or Backspace, goes to the folder this one is in. Folders show as tiles too, and double-clicking one opens it.
+
+chapter: Use a tile | As you used a row
+assetdrop: Sprites/hex.png > scene
+explain: entity:hex | Dragged in | Drag a picture's tile into the Scene view and it's added there as a sprite. A prefab's tile adds a linked copy.
+assetmenu: Sprites/iso.png > Add to Scene
+explain: entity:iso | Right-click | The right-click menu is the one the rows had: add to the scene, paint it, set the start scene, rename a prefab. Drag a prefab's tile onto a folder to move it there.
+
+chapter: One tree | When you'd rather
+click: assets:tree
+explain: panel:Assets | Tree view | The Tree button shows every folder and file in one tree, as before. A narrow panel puts the folders above the tiles instead of beside them.
+click: assets:tiles
+say: Tiles or tree, the panel remembers which you like, and it keeps up with the disk either way.

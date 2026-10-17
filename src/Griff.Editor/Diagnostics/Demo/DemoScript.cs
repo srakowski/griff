@@ -177,21 +177,39 @@ internal sealed class DemoScript(DemoUi ui, Workspace workspace, ISelection sele
         DemoArt.WriteAll(Path.Combine(workspace.Project!.AssetsPath, "Sprites"));
         await DemoUi.Settle(800);
         await ExpandAsset("Sprites");
-        await ui.Explain(DemoUi.PanelContent("Assets"), "Sprites folder", "Copy files into the project's Assets folder and they appear in the Assets panel on their own, with no import step. Each image is a sprite sheet. The tileset, for example, is eight tiles across and three down.");
+        await ui.Explain(DemoUi.PanelContent("Assets"), "Sprites folder", "Copy files into the project's Assets folder and they appear in the Assets panel on their own, pictures as thumbnails, with no import step. Each image is a sprite sheet. The tileset, for example, is eight tiles across and three down.");
     }
 
     private async Task ExpandAsset(string folder)
     {
-        var view = DemoUi.PanelContent("Assets");
-        var item = await DemoUi.WaitFor(() => DemoUi.Descendants<TreeViewItem>(view).FirstOrDefault(i => i.DataContext is AssetNode n && n.Name == folder), $"asset folder {folder}", 5000);
+        var item = await DemoUi.WaitFor(() => DemoUi.AssetRow(folder), $"asset folder {folder}", 5000);
         await ui.Hover(item);
-        var expander = DemoUi.Descendants<ToggleButton>(item).FirstOrDefault();
-        if (expander is not null && expander.IsVisible)
-            await ui.Click(expander);
+        if (DemoUi.AssetsModel.ViewMode == AssetsViewMode.Split)
+        {
+            // Picking the folder in the folder tree shows what's in it as tiles.
+            await ui.Click(DemoUi.AssetLabel(item));
+            if (!string.Equals(DemoUi.AssetsModel.SelectedFolder, folder, StringComparison.OrdinalIgnoreCase))
+            {
+                Log($"FORCED picking the {folder} folder in Assets");
+                DemoUi.AssetsModel.SelectedFolder = folder;
+            }
+        }
         else
-            item.IsExpanded = true;
+        {
+            var expander = DemoUi.Descendants<ToggleButton>(item).FirstOrDefault();
+            if (expander is not null && expander.IsVisible)
+                await ui.Click(expander);
+            else
+                item.IsExpanded = true;
+        }
+
         await DemoUi.Settle(200);
     }
+
+    // The Menu scene's tile (or its row, in the Tree view) in the Assets panel, when it shows.
+    private static FrameworkElement? MenuSceneItem() =>
+        DemoUi.Descendants<FrameworkElement>(DemoUi.PanelContent("Assets")).FirstOrDefault(i => i is TreeViewItem or ListBoxItem &&
+            i.DataContext is AssetNode { Kind: AssetKind.Scene } n && n.Name.StartsWith("Menu", StringComparison.Ordinal) && i.IsVisible);
 
     // ===== 4. Level =====
 
@@ -801,11 +819,11 @@ internal sealed class DemoScript(DemoUi ui, Workspace workspace, ISelection sele
 
         // Start scene.
         await ui.Say("Last, the game should start on the menu. Right click the Menu scene in Assets, Set as Start Scene.");
-        TreeViewItem? menuScene = null;
+        FrameworkElement? menuScene = null;
         try
         {
             await ExpandAsset("Scenes");
-            menuScene = await DemoUi.WaitFor(() => DemoUi.Descendants<TreeViewItem>(DemoUi.PanelContent("Assets")).FirstOrDefault(i => i.DataContext is AssetNode n && n.Name.StartsWith("Menu", StringComparison.Ordinal) && i.IsVisible), "Menu.scene", 4000);
+            menuScene = await DemoUi.WaitFor(() => MenuSceneItem(), "Menu.scene", 4000);
         }
         catch (InvalidOperationException)
         {
@@ -817,16 +835,16 @@ internal sealed class DemoScript(DemoUi ui, Workspace workspace, ISelection sele
             return;
         }
 
-        await ui.Click(DemoUi.Descendants<TextBlock>(menuScene).First(), right: true);
+        await ui.Click(DemoUi.AssetLabel(menuScene), right: true);
         var item = await DemoUi.WaitFor(() => DemoUi.MenuItem("Set as Start Scene"), "Set as Start Scene");
         await DemoUi.Settle(150);
         await ui.Click(item);
         await DemoUi.Settle(200);
-        // Setting the start scene refreshes the Assets tree, so find the row again before opening it.
+        // Setting the start scene refreshes the Assets panel, so find the tile again before opening it.
         try
         {
-            var row = await DemoUi.WaitFor(() => DemoUi.Descendants<TreeViewItem>(DemoUi.PanelContent("Assets")).FirstOrDefault(i => i.DataContext is AssetNode n && n.Name.StartsWith("Menu", StringComparison.Ordinal) && i.IsVisible && PresentationSource.FromVisual(i) is not null), "Menu.scene again", 3000);
-            await Input.Click(DemoUi.Center(DemoUi.Descendants<TextBlock>(row).First()), clicks: 2);
+            var row = await DemoUi.WaitFor(() => MenuSceneItem() is { } i && PresentationSource.FromVisual(i) is not null ? i : null, "Menu.scene again", 3000);
+            await Input.Click(DemoUi.Center(DemoUi.AssetLabel(row)), clicks: 2);
             await WaitUntil(() => workspace.Scene?.Name == "Menu", 3000);
         }
         catch (InvalidOperationException)

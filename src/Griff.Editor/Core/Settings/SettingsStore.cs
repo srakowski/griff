@@ -46,6 +46,15 @@ public sealed class EditorSettings
     /// </summary>
     public bool Transform3D { get; set; }
 
+    /// <summary>
+    /// How the Assets panel shows the project's files: folders on the left and the picked folder's files as tiles on the
+    /// right, or every file in one tree.
+    /// </summary>
+    public Features.Assets.AssetsViewMode AssetsView { get; set; }
+
+    /// <summary>How big the Assets panel's tiles are, in pixels across.</summary>
+    public double AssetTileSize { get; set; } = Features.Assets.AssetsPanel.DefaultTileSize;
+
     /// <summary>The breakpoints in each project's scripts (see the Debugger), kept between sessions.</summary>
     public List<SavedBreakpoint> Breakpoints { get; set; } = [];
 

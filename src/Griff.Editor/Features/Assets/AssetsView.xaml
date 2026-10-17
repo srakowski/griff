@@ -4,62 +4,299 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:assets="clr-namespace:Griff.Editor.Features.Assets"
+             xmlns:theme="clr-namespace:Griff.Editor.Themes"
              xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters"
              mc:Ignorable="d"
-             d:DataContext="{d:DesignInstance Type=assets:AssetsPanel}">
-    <Grid>
-        <TreeView x:Name="Tree"
-                  ItemsSource="{Binding Roots}"
-                  MouseDoubleClick="OnDoubleClick"
-                  PreviewMouseLeftButtonDown="OnPreviewMouseLeftButtonDown"
-                  PreviewMouseMove="OnPreviewMouseMove"
-                  PreviewMouseRightButtonDown="OnPreviewMouseRightButtonDown"
-                  AllowDrop="True"
-                  DragOver="OnDragOver"
-                  Drop="OnDrop"
-                  Visibility="{Binding HasProject, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
-            <TreeView.ItemContainerStyle>
-                <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
-                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                </Style>
-            </TreeView.ItemContainerStyle>
-            <TreeView.ItemTemplate>
-                <HierarchicalDataTemplate DataType="assets:AssetNode" ItemsSource="{Binding Children}">
-                    <StackPanel Orientation="Horizontal">
+             d:DataContext="{d:DesignInstance Type=assets:AssetsPanel}"
+             d:DesignHeight="240" d:DesignWidth="800">
+    <UserControl.Resources>
+        <!-- An asset's icon and name, as a row in either tree -->
+        <HierarchicalDataTemplate x:Key="Row" DataType="assets:AssetNode" ItemsSource="{Binding Children}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="Glyph"
+                           Margin="0,0,6,0"
+                           FontSize="12"
+                           Foreground="{DynamicResource Brush.Text.Secondary}"
+                           Style="{StaticResource Style.Icon}"
+                           Text="{Binding Icon}" />
+                <TextBlock VerticalAlignment="Center" Text="{Binding Name}" />
+                <TextBlock x:Name="StartBadge"
+                           Margin="8,0,0,0"
+                           VerticalAlignment="Center"
+                           Style="{StaticResource Style.Text.Caption}"
+                           Text="start scene"
+                           Visibility="Collapsed" />
+            </StackPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsStartScene}" Value="True">
+                    <Setter TargetName="StartBadge" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="{x:Static assets:AssetKind.Folder}">
+                    <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource Brush.Status.Warning}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="{x:Static assets:AssetKind.Script}">
+                    <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource Brush.Status.Info}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="{x:Static assets:AssetKind.Scene}">
+                    <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource Brush.Accent}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="{x:Static assets:AssetKind.Prefab}">
+                    <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource Brush.Status.Success}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </HierarchicalDataTemplate>
+
+        <!-- The same row in the folder tree, which shows only folders -->
+        <HierarchicalDataTemplate x:Key="FolderRow" DataType="assets:AssetNode" ItemsSource="{Binding Folders}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Margin="0,0,6,0"
+                           FontSize="12"
+                           Foreground="{DynamicResource Brush.Status.Warning}"
+                           Style="{StaticResource Style.Icon}"
+                           Text="{Binding Icon}" />
+                <TextBlock VerticalAlignment="Center" Text="{Binding Name}" />
+            </StackPanel>
+        </HierarchicalDataTemplate>
+
+        <!-- An asset as a tile: a picture's thumbnail, or a big icon, with its name under it -->
+        <DataTemplate x:Key="Tile" DataType="assets:AssetNode">
+            <StackPanel Width="{Binding DataContext.TileSize, RelativeSource={RelativeSource AncestorType=ListBox}}" ToolTip="{Binding Name}">
+                <Grid Height="{Binding DataContext.TileSize, RelativeSource={RelativeSource AncestorType=ListBox}}">
+                    <Border x:Name="Frame"
+                            BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                            BorderThickness="1"
+                            CornerRadius="3"
+                            Visibility="Collapsed" />
+                    <Image x:Name="Picture"
+                           Margin="4"
+                           RenderOptions.BitmapScalingMode="NearestNeighbor"
+                           SnapsToDevicePixels="True"
+                           Source="{Binding Thumbnail}"
+                           Stretch="Uniform" />
+                    <Viewbox x:Name="GlyphBox" Margin="14" Visibility="Collapsed">
                         <TextBlock x:Name="Glyph"
-                                   Margin="0,0,6,0"
-                                   FontSize="12"
                                    Foreground="{DynamicResource Brush.Text.Secondary}"
                                    Style="{StaticResource Style.Icon}"
                                    Text="{Binding Icon}" />
-                        <TextBlock VerticalAlignment="Center" Text="{Binding Name}" />
-                        <TextBlock x:Name="StartBadge"
-                                   Margin="8,0,0,0"
+                    </Viewbox>
+                    <TextBlock x:Name="StartBadge"
+                               Margin="0,2,2,0"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Top"
+                               FontSize="10"
+                               Foreground="{DynamicResource Brush.Status.Success}"
+                               Style="{StaticResource Style.Icon}"
+                               Text="{x:Static theme:Icons.Play}"
+                               ToolTip="The start scene"
+                               Visibility="Collapsed" />
+                </Grid>
+                <TextBlock x:Name="Label"
+                           Margin="0,2,0,0"
+                           MaxHeight="30"
+                           HorizontalAlignment="Center"
+                           FontSize="11"
+                           Text="{Binding Name}"
+                           TextAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Thumbnail}" Value="{x:Null}">
+                    <Setter TargetName="Picture" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="GlyphBox" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="{x:Static assets:AssetKind.Image}">
+                    <Setter TargetName="Frame" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsStartScene}" Value="True">
+                    <Setter TargetName="StartBadge" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="{x:Static assets:AssetKind.Folder}">
+                    <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource Brush.Status.Warning}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="{x:Static assets:AssetKind.Script}">
+                    <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource Brush.Status.Info}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="{x:Static assets:AssetKind.Scene}">
+                    <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource Brush.Accent}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="{x:Static assets:AssetKind.Prefab}">
+                    <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource Brush.Status.Success}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <DockPanel Visibility="{Binding HasProject, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+            <!-- Toolbar: how to show the files, where the tiles are, and how big -->
+            <Border DockPanel.Dock="Top"
+                    Padding="4,2"
+                    BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                    BorderThickness="0,0,0,1">
+                <DockPanel>
+                    <ToggleButton Style="{StaticResource Style.ToggleButton.Toolbar}"
+                                  IsChecked="{Binding ShowsTiles}"
+                                  Tag="assets:tiles"
+                                  ToolTip="Folders beside the picked folder's files, as tiles">
+                        <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Blocks}" />
+                    </ToggleButton>
+                    <ToggleButton Margin="2,0,0,0"
+                                  Style="{StaticResource Style.ToggleButton.Toolbar}"
+                                  IsChecked="{Binding ShowsTree}"
+                                  Tag="assets:tree"
+                                  ToolTip="Every folder and file in one tree">
+                        <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Hierarchy}" />
+                    </ToggleButton>
+                    <DockPanel Visibility="{Binding ShowsTiles, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+                        <Separator DockPanel.Dock="Left" Style="{StaticResource Style.Separator.Vertical}" />
+                        <Button x:Name="UpButton"
+                                DockPanel.Dock="Left"
+                                Click="OnUp"
+                                IsEnabled="{Binding CanGoUp}"
+                                Style="{StaticResource Style.Button.Toolbar}"
+                                Tag="assets:up"
+                                ToolTip="Up to the folder this one is in (Backspace)">
+                            <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.MoveUp}" />
+                        </Button>
+                        <StackPanel Margin="8,0,0,0"
+                                    DockPanel.Dock="Right"
+                                    Orientation="Horizontal"
+                                    ToolTip="Tile size">
+                            <TextBlock Margin="0,0,4,0"
+                                       VerticalAlignment="Center"
+                                       FontSize="10"
+                                       Foreground="{DynamicResource Brush.Text.Secondary}"
+                                       Style="{StaticResource Style.Icon}"
+                                       Text="{x:Static theme:Icons.Image}" />
+                            <Slider x:Name="SizeSlider"
+                                    Width="90"
+                                    VerticalAlignment="Center"
+                                    LargeChange="16"
+                                    Maximum="128"
+                                    Minimum="48"
+                                    SmallChange="8"
+                                    Tag="assets:size"
+                                    Value="{Binding TileSize}" />
+                        </StackPanel>
+                        <TextBlock Margin="6,0,0,0"
                                    VerticalAlignment="Center"
-                                   Style="{StaticResource Style.Text.Caption}"
-                                   Text="start scene"
-                                   Visibility="Collapsed" />
-                    </StackPanel>
-                    <DataTemplate.Triggers>
-                        <DataTrigger Binding="{Binding IsStartScene}" Value="True">
-                            <Setter TargetName="StartBadge" Property="Visibility" Value="Visible" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding Kind}" Value="{x:Static assets:AssetKind.Folder}">
-                            <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource Brush.Status.Warning}" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding Kind}" Value="{x:Static assets:AssetKind.Script}">
-                            <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource Brush.Status.Info}" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding Kind}" Value="{x:Static assets:AssetKind.Scene}">
-                            <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource Brush.Accent}" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding Kind}" Value="{x:Static assets:AssetKind.Prefab}">
-                            <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource Brush.Status.Success}" />
-                        </DataTrigger>
-                    </DataTemplate.Triggers>
-                </HierarchicalDataTemplate>
-            </TreeView.ItemTemplate>
-        </TreeView>
+                                   Style="{StaticResource Style.Text.Secondary}"
+                                   Tag="assets:path"
+                                   Text="{Binding FolderTitle}"
+                                   TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                </DockPanel>
+            </Border>
+
+            <Grid>
+                <!-- Split: folders on the left, the picked folder's tiles on the right (one above the other when narrow) -->
+                <Grid x:Name="Split"
+                      SizeChanged="OnSplitSizeChanged"
+                      Visibility="{Binding ShowsTiles, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="FolderColumn" Width="200" MinWidth="0" />
+                        <ColumnDefinition x:Name="SplitterColumn" Width="Auto" />
+                        <ColumnDefinition x:Name="TilesColumn" Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition x:Name="FolderRow" Height="*" />
+                        <RowDefinition x:Name="SplitterRow" Height="0" />
+                        <RowDefinition x:Name="TilesRow" Height="0" />
+                    </Grid.RowDefinitions>
+                    <TreeView x:Name="Folders"
+                              AllowDrop="True"
+                              DragOver="OnDragOver"
+                              Drop="OnDrop"
+                              ItemTemplate="{StaticResource FolderRow}"
+                              ItemsSource="{Binding FolderTree}"
+                              PreviewMouseRightButtonDown="OnPreviewMouseRightButtonDown"
+                              SelectedItemChanged="OnFolderPicked"
+                              Tag="assets:folders">
+                        <TreeView.ItemContainerStyle>
+                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                            </Style>
+                        </TreeView.ItemContainerStyle>
+                    </TreeView>
+                    <GridSplitter x:Name="Splitter"
+                                  Grid.Column="1"
+                                  Width="5"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Stretch"
+                                  Background="Transparent"
+                                  ResizeDirection="Columns" />
+                    <Grid x:Name="TilesArea" Grid.Column="2">
+                        <ListBox x:Name="Tiles"
+                                 Padding="4"
+                                 AllowDrop="True"
+                                 DragOver="OnDragOver"
+                                 Drop="OnDrop"
+                                 ItemTemplate="{StaticResource Tile}"
+                                 ItemsSource="{Binding Items}"
+                                 KeyDown="OnTilesKeyDown"
+                                 MouseDoubleClick="OnDoubleClick"
+                                 PreviewMouseLeftButtonDown="OnPreviewMouseLeftButtonDown"
+                                 PreviewMouseMove="OnPreviewMouseMove"
+                                 PreviewMouseRightButtonDown="OnPreviewMouseRightButtonDown"
+                                 ScrollViewer.CanContentScroll="False"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 SelectedItem="{Binding SelectedAsset}"
+                                 SelectionMode="Single"
+                                 Tag="assets:items"
+                                 VirtualizingPanel.IsVirtualizing="False">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                    <Setter Property="Padding" Value="4" />
+                                    <Setter Property="Margin" Value="1" />
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                        </ListBox>
+                        <TextBlock x:Name="EmptyNote"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   IsHitTestVisible="False"
+                                   Text="This folder is empty">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource Style.Text.Caption}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Items.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </Grid>
+
+                <!-- Tree: every folder and file in one tree -->
+                <TreeView x:Name="Tree"
+                          AllowDrop="True"
+                          DragOver="OnDragOver"
+                          Drop="OnDrop"
+                          ItemTemplate="{StaticResource Row}"
+                          ItemsSource="{Binding Roots}"
+                          MouseDoubleClick="OnDoubleClick"
+                          PreviewMouseLeftButtonDown="OnPreviewMouseLeftButtonDown"
+                          PreviewMouseMove="OnPreviewMouseMove"
+                          PreviewMouseRightButtonDown="OnPreviewMouseRightButtonDown"
+                          Visibility="{Binding ShowsTree, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+                    <TreeView.ItemContainerStyle>
+                        <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                        </Style>
+                    </TreeView.ItemContainerStyle>
+                </TreeView>
+            </Grid>
+        </DockPanel>
         <TextBlock HorizontalAlignment="Center"
                    VerticalAlignment="Center"
                    Style="{StaticResource Style.Text.Caption}"

@@ -72,7 +72,12 @@ internal sealed partial class DemoUi
     {
         var window = Maker ?? throw new InvalidOperationException("The Sound Maker isn't open.");
         var row = await WaitFor(() => SliderRow(window, label), $"the {label} setting");
-        var slider = row as Slider ?? Descendants<Slider>(row).First();
+        await DragSlider(row as Slider ?? Descendants<Slider>(row).First(), value, $"slide {label}");
+    }
+
+    /// <summary>Drags a slider's thumb to <paramref name="value"/> with the real mouse; set outright if that misses, logged FORCED.</summary>
+    private async Task DragSlider(Slider slider, double value, string what)
+    {
         slider.BringIntoView();
         await Settle(80);
 
@@ -88,7 +93,7 @@ internal sealed partial class DemoUi
         if (Math.Abs(slider.Value - value) > (slider.Maximum - slider.Minimum) * 0.04)
         {
             slider.Value = value;
-            Log?.Invoke($"FORCED slide {label} = {value}");
+            Log?.Invoke($"FORCED {what} = {value}");
             await Settle(100);
         }
     }

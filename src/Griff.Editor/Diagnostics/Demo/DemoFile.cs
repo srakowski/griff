@@ -640,14 +640,40 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
                 await ui.Prompt(a);
                 break;
             case "assetmenu":
-                // "assetmenu: Prefabs/Coin.prefab > Rename...": right-click an asset's row in Assets and pick from its menu.
+                // "assetmenu: Prefabs/Coin.prefab > Rename...": right-click an asset's tile (or row) in Assets and pick from
+                // its menu.
                 var (menuAsset, menuItem) = Split2(a, '>');
                 await ui.AssetMenu(menuAsset, menuItem);
                 break;
             case "assetdrop":
-                // "assetdrop: Prefabs/Coin.prefab > Pickups": drag an asset's row onto a folder in Assets.
+                // "assetdrop: Prefabs/Coin.prefab > Pickups": drag an asset's tile (or row) onto a folder in Assets;
+                // "assetdrop: Sprites/hero.png > scene" into the middle of the Scene view.
                 var (dropAsset, dropFolder) = Split2(a, '>');
-                await ui.DropAsset(dropAsset, dropFolder);
+                if (dropFolder.Equals("scene", StringComparison.OrdinalIgnoreCase))
+                {
+                    var selectedBefore = selection.Entity;
+                    await ui.DropAssetInScene(dropAsset, () => selection.Entity is { } dropped && dropped != selectedBefore);
+                }
+                else
+                {
+                    await ui.DropAsset(dropAsset, dropFolder);
+                }
+
+                break;
+            case "assetopen":
+                // "assetopen: Sprites": double-click an asset's tile (or row) in Assets: a folder shows its contents, a
+                // scene opens.
+                await ui.OpenAsset(a);
+                break;
+            case "assetsize":
+                // "assetsize: 112": drag the Assets panel's tile size slider to that many pixels across.
+                await ui.AssetTileSize(double.Parse(a, CultureInfo.InvariantCulture));
+                break;
+            case "expectassetfolder":
+                // "expectassetfolder: Sprites": the folder whose contents show as tiles ("" or "Assets" for Assets itself).
+                var wantFolder = a.Equals("Assets", StringComparison.OrdinalIgnoreCase) ? "" : a.Trim('/');
+                if (!await Until(() => string.Equals(DemoUi.AssetsModel.SelectedFolder, wantFolder, StringComparison.OrdinalIgnoreCase), 3000))
+                    throw new InvalidOperationException($"Expected the Assets panel to show {a}, but it shows {DemoUi.AssetsModel.FolderTitle}.");
                 break;
             case "dock":
                 // "dock: Inspector > left", "dock: Output > right of Documents", "dock: Assets > bottom of Hierarchy", or
@@ -1845,10 +1871,11 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
             "code" => ui.CodePart(name),
             "edit" => DemoUi.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
-            "asset" => (FrameworkElement?)DemoUi.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
+            "asset" => DemoUi.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
+            "assets" => DemoUi.AssetsPart(name),
             // A genre's windows and panels: the Dialogue Editor's dialogue:, the Move List's moves:, the Chart's chart:.
             var genre when DemoGenre.All.Select(g => g.Part(genre, name)).FirstOrDefault(p => p is not null) is { } genrePart => genrePart,
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, editor:, component:, addall:, remove:, need:, needadd:, addlist:, entitylist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, dialogue:, moves:, chart:, sound:, image:, pick:, picker:, color:, transform:, filter:, profiler:, tables:, sims:, asset:, world:, gameworld:, hud:, tiles:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, editor:, component:, addall:, remove:, need:, needadd:, addlist:, entitylist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, dialogue:, moves:, chart:, sound:, image:, pick:, picker:, color:, transform:, filter:, profiler:, tables:, sims:, asset:, assets:, world:, gameworld:, hud:, tiles:)."),
         };
     }
 

@@ -25,7 +25,9 @@ public sealed partial class Tilemap
 
     /// <summary>
     /// One quad per tile (in the world), back to front, of those in <paramref name="cull"/> (and a cell around it) or all
-    /// of them. Without an image, tiles are solid shapes of the tint: squares, diamonds or hexagons (three quads each).
+    /// of them. Without an image, tiles are solid shapes of the tint (times their <see cref="PlaceholderColors"/>): squares,
+    /// diamonds or hexagons (three quads each), each over a slightly bigger one of its grid line's color with
+    /// <see cref="PlaceholderGrid"/>.
     /// </summary>
     public IEnumerable<SpriteDraw> TileDraws(Box? cull = null)
     {
@@ -63,7 +65,7 @@ public sealed partial class Tilemap
         // A hair bigger than a cell, so neighbors overlap: edges computed tile by tile can round apart and let a hairline of
         // the background show between them as the camera moves. The image is stretched, not extended, so nothing bleeds in.
         const float seamless = 1.004f;
-        var diamond = Diamond(TileSize * seamless);
+        var (grid, placeholders) = (BaseMap.PlaceholderGrid, BaseMap._placeholders);
         var (fromX, toX, fromY, toY) = cull is { } view ? CellRangeIn(world, view) : (0, int.MaxValue, 0, int.MaxValue);
         (fromX, toX) = (Math.Max(0, fromX), Math.Min(Width - 1, toX));
         (fromY, toY) = (Math.Max(0, fromY), Math.Min(Height - 1, toY));
@@ -101,20 +103,61 @@ public sealed partial class Tilemap
 
             var shown = ShownTile(x, y, tile);
             var tileset = TilesetOf(shown);
-            var (center, size) = PictureOf(x, y);
-            if (tileset.Image is null && Shape == TileShape.Hex)
+            if (tileset.Image is null)
             {
-                foreach (var part in HexParts)
-                    draws.Add(new SpriteDraw(part * Matrix4x4.CreateScale(TileSize * seamless, TileSize * seamless, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0) * world, null, tint, entity) { Source = new Vector4(0, 0, 1, 1) });
+                var color = placeholders.Length == 0 ? tint : Times(tint, placeholders[shown % placeholders.Length]);
+                if (grid)
+                {
+                    AddPlain(x, y, seamless, GridLineOf(color));
+                    AddPlain(x, y, 1 - GridLine, color);
+                }
+                else
+                {
+                    AddPlain(x, y, seamless, color);
+                }
+
                 return;
             }
 
-            var matrix = tileset.Image is null && Shape == TileShape.Isometric
-                ? diamond * Matrix4x4.CreateTranslation(new Vector3(CellCenter(x, y), 0)) * world
-                : Matrix4x4.CreateScale(size.X * seamless, size.Y * seamless, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0) * world;
-            draws.Add(new SpriteDraw(matrix, tileset.Image, tint, entity) { Source = tileset.Image is null ? new Vector4(0, 0, 1, 1) : tileset.Rect(shown) });
+            var (center, size) = PictureOf(x, y);
+            var matrix = Matrix4x4.CreateScale(size.X * seamless, size.Y * seamless, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0) * world;
+            draws.Add(new SpriteDraw(matrix, tileset.Image, tint, entity) { Source = tileset.Rect(shown) });
+        }
+
+        // A tile with no picture: its cell's shape (see CellShape) at `scale` of it round its middle, in one color.
+        void AddPlain(int x, int y, float scale, Color color)
+        {
+            var middle = Matrix4x4.CreateTranslation(new Vector3(CellCenter(x, y), 0)) * world;
+            var size = TileSize * scale;
+            switch (Shape)
+            {
+                case TileShape.Hex:
+                    foreach (var part in HexParts)
+                        draws.Add(new SpriteDraw(part * Matrix4x4.CreateScale(size, size, 1) * middle, null, color, entity) { Source = new Vector4(0, 0, 1, 1) });
+                    break;
+                case TileShape.Isometric:
+                    draws.Add(new SpriteDraw(Diamond(size) * middle, null, color, entity) { Source = new Vector4(0, 0, 1, 1) });
+                    break;
+                default:
+                    draws.Add(new SpriteDraw(Matrix4x4.CreateScale(size, size, 1) * middle, null, color, entity) { Source = new Vector4(0, 0, 1, 1) });
+                    break;
+            }
         }
     }
+
+    // How much of a tile's width the placeholder grid's line takes, half on each side of it.
+    private const float GridLine = 0.06f;
+
+    // The color of the placeholder grid's line round a tile of `color`: a little darker, or on a dark tile a little lighter,
+    // so it shows either way.
+    private static Color GridLineOf(Color color)
+    {
+        var light = 0.299f * color.R + 0.587f * color.G + 0.114f * color.B;
+        var line = Color.Lerp(color, light > 0.2f ? Color.Black : Color.White, 0.3f);
+        return line with { A = color.A };
+    }
+
+    private static Color Times(Color a, Color b) => new(a.R * b.R, a.G * b.G, a.B * b.B, a.A * b.A);
 
     // Without a picture, an isometric tile is its diamond, this wide: a square turned an eighth and squashed to half its height.
     private static Matrix4x4 Diamond(float width) =>

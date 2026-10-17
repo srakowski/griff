@@ -473,7 +473,7 @@ public sealed class TileCountsEditor : FieldEditor<TileCountsAttribute>
 
     internal ImageSource? Picture(int tile) => TilePictures.MapOf(Component) is { } map ? TilePictures.Of(Host.Art, map, tile) : null;
 
-    internal Brush Fill => TilePictures.MapOf(Component) is { } map ? TilePictures.Tint(map) : Brushes.Gray;
+    internal Brush Fill(int tile) => TilePictures.MapOf(Component) is { } map ? TilePictures.Fill(map, tile) : Brushes.Gray;
 
     private List<TileChoice> BuildTiles()
     {
@@ -483,8 +483,7 @@ public sealed class TileCountsEditor : FieldEditor<TileCountsAttribute>
             .SelectMany(p => TileNumbersAttribute.Read(p.GetValue(Component) as string)).Distinct().ToList();
         if (own.Count == 0 && TilePictures.MapOf(Component) is { } map && map.Tilesets() is [var first, ..])
             own = [.. Enumerable.Range(first.First, Math.Min(first.Count, 64))];
-        var fill = Fill;
-        return [.. own.Select(t => new TileChoice(t, Picture(t), fill, picked.Contains(t), n => Toggle(n)))];
+        return [.. own.Select(t => new TileChoice(t, Picture(t), Fill(t), picked.Contains(t), n => Toggle(n)))];
     }
 }
 
@@ -500,7 +499,7 @@ public sealed class TileCountRow(TileCountsEditor owner) : EditorRow(owner.Remov
 
     public ImageSource? Picture => owner.Picture(Pair.Tile);
 
-    public Brush Fill => owner.Fill;
+    public Brush Fill => owner.Fill(Pair.Tile);
 
     /// <summary>How many of it.</summary>
     public double Count

@@ -49,6 +49,8 @@ public sealed partial class Tilemap : Component, ISortsInParts
     private IReadOnlyList<(int X, int Y, bool Rising)>? _slopes;
     private IReadOnlyList<int> _autoGroups = [];
     private string[] _moreTilesets = [];
+    private string[] _placeholderColors = [];
+    private Color[] _placeholders = [];
     private TilesetCache? _tilesets;
     private float _tileSize = 1f;
     private TileShape _shape;
@@ -105,11 +107,13 @@ public sealed partial class Tilemap : Component, ISortsInParts
     }
 
     /// <summary>
-    /// On a layer, the tileset settings it takes from its map aren't its own, so the Inspector hides them; and
-    /// <see cref="TileHeight"/> only means something on an isometric map.
+    /// On a layer, the tileset settings it takes from its map aren't its own, so the Inspector hides them;
+    /// <see cref="TileHeight"/> only means something on an isometric map, and the placeholder settings only on a map with
+    /// no <see cref="Image"/>.
     /// </summary>
     public override bool Uses(string property) =>
-        (LayerOf is null || !TilesetSettings.Contains(property)) && (property != nameof(TileHeight) || Shape == TileShape.Isometric);
+        (LayerOf is null || !TilesetSettings.Contains(property)) && (property != nameof(TileHeight) || Shape == TileShape.Isometric)
+        && (property is not (nameof(PlaceholderColors) or nameof(PlaceholderGrid)) || string.IsNullOrWhiteSpace(Image));
 
     /// <summary>On a layer, which map it's a layer of; and a map sorting by Y in a scene whose camera doesn't.</summary>
     public override string? SetupNote()
@@ -126,11 +130,13 @@ public sealed partial class Tilemap : Component, ISortsInParts
     [
         nameof(Columns), nameof(Rows), nameof(MoreTilesets), nameof(Shape), nameof(TileSize), nameof(TileHeight), nameof(BackgroundTiles), nameof(OneWayTiles),
         nameof(AnimatedTiles), nameof(LadderTiles), nameof(SlopeUpTiles), nameof(SlopeDownTiles), nameof(AutoTiles),
+        nameof(PlaceholderColors), nameof(PlaceholderGrid),
     ];
 
     /// <summary>
     /// The first tileset's image, relative to Assets: tiles 0 on. Without one, its tiles draw as solid squares of
-    /// <see cref="Tint"/>, or inside another tilemap's entity, it's a layer of that map (see <see cref="LayerOf"/>).
+    /// <see cref="Tint"/> (or of <see cref="PlaceholderColors"/>, a color for each tile), or inside another tilemap's
+    /// entity, it's a layer of that map (see <see cref="LayerOf"/>).
     /// <see cref="MoreTilesets"/> adds others.
     /// </summary>
     public string? Image { get; set; }
@@ -140,6 +146,44 @@ public sealed partial class Tilemap : Component, ISortsInParts
 
     /// <summary>Tiles down the first tileset's image.</summary>
     public int Rows { get; set; } = 1;
+
+    /// <summary>
+    /// For a map with no <see cref="Image"/>: a color for each tile number, in order, to block a level out before there's
+    /// any art. Tile 0 draws as a solid shape of the first color, tile 1 of the second and so on (times
+    /// <see cref="Tint"/>), so a floor can be checkered and wall tops told from wall faces; a number past the end goes
+    /// round the list again. The palette in the Scene view offers a tile for each color to paint with. Empty (the
+    /// default), every tile is a solid shape of the tint. A layer uses its map's (see <see cref="LayerOf"/>), so every
+    /// layer's tile 2 is the same color.
+    /// </summary>
+    [ListRows(CellKind.Color)]
+    public IReadOnlyList<string> PlaceholderColors
+    {
+        get => _placeholderColors;
+        set
+        {
+            _placeholderColors = value?.ToArray() ?? [];
+            _placeholders = [.. _placeholderColors.Select(text => Color.TryParse(text, out var color) ? color : Color.White)];
+        }
+    }
+
+    /// <summary>
+    /// For a map with no <see cref="Image"/>: draws a thin line round each tile, a little darker than it (lighter on a
+    /// dark one), so the cells show on a floor of one color. Off by default. A layer uses its map's (see
+    /// <see cref="LayerOf"/>).
+    /// </summary>
+    public bool PlaceholderGrid { get; set; }
+
+    /// <summary>
+    /// The color tile <paramref name="tile"/> draws in on a map with no image, before <see cref="Tint"/>: its color of
+    /// the <see cref="BaseMap"/>'s <see cref="PlaceholderColors"/> (going round them), or white when there are none or
+    /// the map has an image.
+    /// </summary>
+    public Color PlaceholderColorOf(int tile)
+    {
+        var map = BaseMap;
+        var colors = map._placeholders;
+        return colors.Length == 0 || tile < 0 || !string.IsNullOrWhiteSpace(map.Image) ? Color.White : colors[tile % colors.Length];
+    }
 
     /// <summary>
     /// Tilesets after the first (<see cref="Image"/>), one per line: an image and its tiles across and down, like
@@ -834,18 +878,24 @@ public sealed partial class Tilemap : Component, ISortsInParts
     public string? ImageOf(int tile) => TilesetOf(tile).Image;
 
     /// <summary>
-    /// The map's tilesets in order: the first (<see cref="Image"/>, <see cref="Columns"/> and <see cref="Rows"/>) from
-    /// tile 0, then each line of <see cref="MoreTilesets"/> from the next hundred on. Blank lines are skipped. Cached
-    /// until those change.
+    /// The map's tilesets in order: the first (<see cref="Image"/>, <see cref="Columns"/> and <see cref="Rows"/>; with no
+    /// image and <see cref="PlaceholderColors"/>, a tile for each color in one row) from tile 0, then each line of
+    /// <see cref="MoreTilesets"/> from the next hundred on. Blank lines are skipped. Cached until those change.
     /// </summary>
     public IReadOnlyList<Tileset> Tilesets()
     {
         if (LayerOf is { } owner)
             return owner.Tilesets();
-        if (_tilesets is { } cached && cached.Image == Image && cached.Columns == Columns && cached.Rows == Rows && cached.More == _moreTilesets)
+        if (_tilesets is { } cached && cached.Image == Image && cached.Columns == Columns && cached.Rows == Rows && cached.More == _moreTilesets
+            && cached.Placeholders == _placeholderColors)
             return cached.Tilesets;
 
-        var list = new List<Tileset> { new(string.IsNullOrWhiteSpace(Image) ? null : Image, Math.Max(1, Columns), Math.Max(1, Rows), 0) };
+        var list = new List<Tileset>
+        {
+            string.IsNullOrWhiteSpace(Image) && _placeholderColors.Length > 0
+                ? new(null, Math.Min(_placeholderColors.Length, MaxTiles), 1, 0)
+                : new(string.IsNullOrWhiteSpace(Image) ? null : Image, Math.Max(1, Columns), Math.Max(1, Rows), 0),
+        };
         foreach (var line in _moreTilesets)
         {
             var last = list[^1];
@@ -856,7 +906,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
                 list.Add(tileset);
         }
 
-        _tilesets = new TilesetCache(Image, Columns, Rows, _moreTilesets, list);
+        _tilesets = new TilesetCache(Image, Columns, Rows, _moreTilesets, _placeholderColors, list);
         return list;
     }
 
@@ -1244,7 +1294,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
     private int CollisionOf(int tile) => tile < 0 || IsBackground(tile) || IsLadder(tile) || SlopeOf(tile) != 0 ? -1 : IsOneWay(tile) ? 1 : 0;
 
     // What Tilesets() was worked out from, and the answer.
-    private sealed record TilesetCache(string? Image, int Columns, int Rows, string[] More, IReadOnlyList<Tileset> Tilesets);
+    private sealed record TilesetCache(string? Image, int Columns, int Rows, string[] More, string[] Placeholders, IReadOnlyList<Tileset> Tilesets);
 
     // Runs of cells with the same non-negative kind; a change of kind ends a run.
     private static List<(int X, int Y, int Length, int Kind)> FindRuns(string[] tiles, Func<char, int> kindOf)

@@ -606,7 +606,6 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
         var plus = style.Text("+", "Brush.Text.Primary");
         dc.DrawText(plus, new Point(layout.AddTab.X + (layout.AddTab.Width - plus.Width) / 2, layout.AddTab.Y + (layout.AddTab.Height - plus.Height) / 2));
 
-        var fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(255, tilemap.Tint.RByte, tilemap.Tint.GByte, tilemap.Tint.BByte));
         for (var tile = layout.Shown.First; tile < layout.Shown.First + layout.Count; tile++)
         {
             if (layout.CellBounds(tile) is not { } cell)
@@ -614,9 +613,15 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
             var rect = cell;
             rect.Inflate(-2, -2);
             if (TileImage(tilemap, tile) is { } image)
+            {
                 dc.DrawImage(image, rect);
+            }
             else
-                dc.DrawRectangle(fill, null, rect);
+            {
+                var plain = palette.ColorOf(tile);
+                dc.DrawRectangle(new SolidColorBrush(System.Windows.Media.Color.FromRgb(plain.RByte, plain.GByte, plain.BByte)), null, rect);
+            }
+
             if (tile == model.BrushTile)
                 dc.DrawRectangle(null, new Pen(accent, 2), cell);
         }

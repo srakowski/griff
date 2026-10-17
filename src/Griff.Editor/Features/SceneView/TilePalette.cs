@@ -40,6 +40,21 @@ public sealed class TilePalette : ObservableObject
     /// <summary>The numbers of the tiles the palette shows, those of the <see cref="Shown"/> tileset; empty with nothing to paint.</summary>
     public IReadOnlyList<int> Tiles => ShownTileset is { } shown ? Enumerable.Range(shown.First, TileCount).ToList() : [];
 
+    /// <summary>
+    /// The colors <see cref="Tiles"/> show in when the shown tileset has no image, as hex: each tile's placeholder color
+    /// (see <see cref="Tilemap.PlaceholderColors"/>) times the map's tint, as the map draws it; empty when it has one.
+    /// </summary>
+    public IReadOnlyList<string> TileColors => ShownTileset is { Image: null } ? [.. Tiles.Select(t => ColorOf(t).ToHex())] : [];
+
+    /// <summary>The color tile <paramref name="tile"/> shows in without a picture: its placeholder color times the map's tint, opaque.</summary>
+    internal Color ColorOf(int tile)
+    {
+        if (Target is not { } map)
+            return Color.White;
+        var (tint, color) = (map.Tint, map.PlaceholderColorOf(tile));
+        return new Color(tint.R * color.R, tint.G * color.G, tint.B * color.B);
+    }
+
     /// <summary>How many rows the shown tiles take, eight to a row.</summary>
     public int Rows => (TileCount + Columns - 1) / Columns;
 
@@ -119,9 +134,12 @@ public sealed class TilePalette : ObservableObject
     /// <summary>The shown tileset, or null with nothing to paint.</summary>
     internal Tileset? ShownTileset => _model.PaletteTileset;
 
-    /// <summary>How many tiles the shown tileset has (one without an image), or 0 with nothing to paint.</summary>
+    /// <summary>
+    /// How many tiles the shown tileset has (without an image, one, or one for each of the map's
+    /// <see cref="Tilemap.PlaceholderColors"/>), or 0 with nothing to paint.
+    /// </summary>
     internal int TileCount => ShownTileset is not { } shown ? 0
-        : shown.Image is null ? 1 : Math.Clamp(shown.Count, 1, Tilemap.MaxTiles - shown.First);
+        : shown.Image is null && Target?.BaseMap.PlaceholderColors.Count is not > 0 ? 1 : Math.Clamp(shown.Count, 1, Tilemap.MaxTiles - shown.First);
 
     /// <summary>The key that picks a tool in the Scene view.</summary>
     public static char KeyOf(TileTool tool) => tool switch

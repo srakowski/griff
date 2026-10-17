@@ -491,8 +491,8 @@ public sealed class TileCell(RowsEditor owner, RowsRow row, int column) : RowCel
     /// <summary>Its tile's picture, or null when there's no tilemap.</summary>
     public ImageSource? Picture => Owner.Map is { } map && Tile >= 0 ? TilePictures.Of(Owner.Art, map, Tile) : null;
 
-    /// <summary>The tilemap's tint, behind a tile.</summary>
-    public Brush? Fill => Owner.Map is { } map ? TilePictures.Tint(map) : null;
+    /// <summary>What shows behind a tile: the tilemap's tint (times the tile's placeholder color).</summary>
+    public Brush? Fill => Owner.Map is { } map ? TilePictures.Fill(map, Math.Max(0, Tile)) : null;
 
     /// <summary>True when there's a tilemap to pick from.</summary>
     public bool HasMap => Owner.Map is not null;
@@ -522,10 +522,9 @@ public sealed class TileCell(RowsEditor owner, RowsRow row, int column) : RowCel
 
     private IReadOnlyList<TilesetChoices> Build(Tilemap map)
     {
-        var fill = TilePictures.Tint(map);
         var picked = Tile;
         return [.. map.Tilesets().Select(t => new TilesetChoices(t.Name, t.First,
-            [.. Enumerable.Range(t.First, Math.Min(t.Count, TileNumbersEditor.MostShown)).Select(n => new TileChoice(n, TilePictures.Of(Owner.Art, map, n), fill, n == picked, PickTile))],
+            [.. Enumerable.Range(t.First, Math.Min(t.Count, TileNumbersEditor.MostShown)).Select(n => new TileChoice(n, TilePictures.Of(Owner.Art, map, n), TilePictures.Fill(map, n), n == picked, PickTile))],
             Math.Clamp(t.Columns, 1, 16)))];
     }
 }

@@ -200,6 +200,7 @@ public sealed partial class FieldEditorAuditTests
         Text.Track: Entity
         Text.Output: Output
         Tilemap.Image: Image
+        Tilemap.PlaceholderColors: Rows
         Tilemap.MoreTilesets: Tilesets
         Tilemap.BackgroundTiles: TileNumbers
         Tilemap.OneWayTiles: TileNumbers

@@ -12,7 +12,7 @@ namespace Griff.Editor.Features.Inspector;
 
 /// <summary>
 /// Tile pictures for the tile fields' editors: each tile cut from its tileset's image, as the Scene view's palette shows
-/// it; null for a tile with no image (it draws as a square of the map's tint).
+/// it; null for a tile with no image (it draws as a square of its <see cref="Fill"/>).
 /// </summary>
 internal static class TilePictures
 {
@@ -36,8 +36,15 @@ internal static class TilePictures
         return Cache.Get(picture, area);
     }
 
-    /// <summary>The fill a tile with no picture shows: the map's tint.</summary>
-    public static Brush Tint(Tilemap map) => ColorPicker.BrushOf(map.Tint);
+    /// <summary>
+    /// The fill tile <paramref name="tile"/> shows with no picture: the map's tint times the tile's placeholder color (see
+    /// <see cref="Tilemap.PlaceholderColors"/>), as the map draws it.
+    /// </summary>
+    public static Brush Fill(Tilemap map, int tile)
+    {
+        var (tint, color) = (map.Tint, map.PlaceholderColorOf(tile));
+        return ColorPicker.BrushOf(new Griff.Color(tint.R * color.R, tint.G * color.G, tint.B * color.B, tint.A * color.A));
+    }
 
     // A cache of cut pictures for each image, dropped with the image.
     private sealed class ConditionalWeakTableCache
@@ -158,10 +165,9 @@ public sealed class TileNumbersEditor : FieldEditor<TileNumbersAttribute>
         if (Map is not { } map)
             return [];
         var picked = Picked.ToHashSet();
-        var fill = TilePictures.Tint(map);
         _builtFrom = map.Tilesets();
         return [.. _builtFrom.Select(t => new TilesetChoices(t.Name, t.First,
-            [.. Enumerable.Range(t.First, Math.Min(t.Count, MostShown)).Select(n => new TileChoice(n, TilePictures.Of(Host.Art, map, n), fill, picked.Contains(n), Toggle))],
+            [.. Enumerable.Range(t.First, Math.Min(t.Count, MostShown)).Select(n => new TileChoice(n, TilePictures.Of(Host.Art, map, n), TilePictures.Fill(map, n), picked.Contains(n), Toggle))],
             Math.Clamp(t.Columns, 1, 16)))];
     }
 
@@ -314,7 +320,7 @@ public sealed class TileRunRow(TileAnimationsEditor owner) : EditorRow(owner.Rem
             {
                 _framesFor = key;
                 _frames = owner.Map is { } map
-                    ? [.. Enumerable.Range(Run.First, Math.Clamp(Run.Last - Run.First + 1, 0, 16)).Select(n => new TileChoice(n, TilePictures.Of(owner.Art, map, n), TilePictures.Tint(map), false))]
+                    ? [.. Enumerable.Range(Run.First, Math.Clamp(Run.Last - Run.First + 1, 0, 16)).Select(n => new TileChoice(n, TilePictures.Of(owner.Art, map, n), TilePictures.Fill(map, n), false))]
                     : [];
             }
 
@@ -421,7 +427,7 @@ public sealed class AutoRunRow(AutoTilesEditor owner) : EditorRow(owner.Remove)
             {
                 _piecesFor = key;
                 _pieces = owner.Map is { } map
-                    ? [.. Enumerable.Range(first, 16).Select(n => new TileChoice(n, TilePictures.Of(owner.Art, map, n), TilePictures.Tint(map), false))]
+                    ? [.. Enumerable.Range(first, 16).Select(n => new TileChoice(n, TilePictures.Of(owner.Art, map, n), TilePictures.Fill(map, n), false))]
                     : [];
             }
 

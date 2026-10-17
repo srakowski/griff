@@ -146,6 +146,43 @@ public class SceneTileLayerTests
         Assert.False(command.CanExecute());
     });
 
+    [Fact]
+    public void AMapWithNoImage_PaintsWithItsPlaceholderColors_OnItsLayersToo() => EditorHost.Run(services =>
+    {
+        var (_, selection, model, map) = Open(services);
+        map.Image = null;
+        var inspector = services.GetRequiredService<InspectorPanel>();
+        selection.Select(map.Entity);
+
+        // The Inspector lists the colors a row each: adding two makes two tiles to paint with.
+        var section = inspector.Components.Single(c => c.Title == nameof(Tilemap));
+        var colors = Assert.IsType<RowsEditor>(section.Properties.Single(p => p.PropertyName == nameof(Tilemap.PlaceholderColors)).Editor);
+        colors.Set(colors.Add(), "Color", "#3A3F4B");
+        colors.Set(colors.Add(), "Color", "#FF00FF");
+        Assert.Equal(["#3A3F4B", "#FF00FF"], map.PlaceholderColors);
+
+        var palette = services.GetRequiredService<TilePalette>();
+        Assert.Equal([0, 1], palette.Tiles);
+        Assert.Equal(["#3A3F4BFF", "#FF00FFFF"], palette.TileColors);
+
+        // A layer paints with its map's colors.
+        model.AddLayer();
+        var layer = model.PaintTarget!;
+        Assert.Same(map, layer.LayerOf);
+        Assert.Equal([0, 1], palette.Tiles);
+        Assert.Equal(["#3A3F4BFF", "#FF00FFFF"], palette.TileColors);
+        palette.Step(1);
+        model.PaintTile(2, 0);
+        Assert.Equal(1, layer.GetTile(2, 0));
+        Assert.Equal(new Color(1, 0, 1), layer.TileDraws().Single().Tint);
+
+        // With an image, the palette shows its pictures and the colors are put away.
+        map.Image = "Tiles/ground.png";
+        selection.Select(map.Entity);
+        Assert.Empty(palette.TileColors);
+        Assert.DoesNotContain(nameof(Tilemap.PlaceholderColors), inspector.Components.Single(c => c.Title == nameof(Tilemap)).Properties.Select(p => p.PropertyName));
+    });
+
     private static void Wait(Task task)
     {
         EditorHost.Pump(task);

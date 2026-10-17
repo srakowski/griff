@@ -59,6 +59,8 @@ function Start-Demo([string] $what, [bool] $silent, [bool] $wait) {
     $env:GRIFF_DEMO_LOG = $log
     $env:GRIFF_DEMO_FAST = if ($silent) { '1' } else { '0' }
     $env:GRIFF_DEMO_EXIT = if ($wait) { '1' } else { '0' }
+    # Its own MCP port, so an agent driving the editor someone is working in never reaches a demo's editor instead.
+    $env:GRIFF_MCP_PORT = '7659'
     if ($Voice) { $env:GRIFF_DEMO_VOICE = $Voice }
     # Checks make no sound at all; -Mute plays in silence for this run (the bar's speaker is the lasting choice).
     $env:GRIFF_MUTE = if ($silent -or $Mute) { '1' } else { $callerMute }

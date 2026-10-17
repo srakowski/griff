@@ -406,11 +406,13 @@ public sealed class Drawing
     /// <summary>
     /// A bar of <paramref name="size"/> centered on the entity, in its own space: the background, then the trail up to
     /// <paramref name="trail"/> and the fill up to <paramref name="fraction"/> (both 0 to 1), filling towards
-    /// <paramref name="direction"/>. Fully transparent parts are left out.
+    /// <paramref name="direction"/>. Fully transparent parts are left out. With <paramref name="images"/>, its parts are
+    /// pictures tinted by those colors.
     /// </summary>
-    public void Bar(Vector2 size, BarDirection direction, float fraction, float trail, Color background, Color fill, Color trailColor)
+    public void Bar(Vector2 size, BarDirection direction, float fraction, float trail, Color background, Color fill, Color trailColor,
+        BarImages images = default)
     {
-        foreach (var draw in Quads.Bar(Entity, size, direction, fraction, trail, background, fill, trailColor))
+        foreach (var draw in Quads.Bar(Entity, size, direction, fraction, trail, background, fill, trailColor, images))
             _draws.Add(draw);
     }
 }
@@ -465,24 +467,36 @@ public static class Quads
     /// <summary>
     /// Quads for a bar of <paramref name="size"/> centered on <paramref name="owner"/>, in its space: the background, then
     /// the trail up to <paramref name="trail"/> and the fill up to <paramref name="fraction"/> (both 0 to 1), filling
-    /// towards <paramref name="direction"/>. Fully transparent parts are left out.
+    /// towards <paramref name="direction"/>. Fully transparent parts are left out. With <paramref name="images"/>, the
+    /// background is its picture (in nine pieces when sliced) and the fill and trail are the fill's picture, cut off where
+    /// they end rather than squeezed, all tinted by their colors.
     /// </summary>
     public static IEnumerable<SpriteDraw> Bar(Entity owner, Vector2 size, BarDirection direction, float fraction, float trail,
-        Color background, Color fill, Color trailColor)
+        Color background, Color fill, Color trailColor, BarImages images = default)
     {
         size = Vector2.Abs(size);
         if (size.X <= 0 || size.Y <= 0)
             yield break;
 
         var space = owner.Transform.WorldMatrix;
-        if (background.A > 0)
+        var (fillImage, backgroundImage) = (Named(images.Fill), Named(images.Background));
+        if (background.A > 0 && backgroundImage is null)
             yield return Rect(owner, Vector2.Zero, size, background, space);
+        else if (background.A > 0)
+        {
+            foreach (var (world, source) in NineSlice(size, images.Slice, images.SliceSize, new Vector4(0, 0, 1, 1), space))
+                yield return new SpriteDraw(world, backgroundImage, background, owner) { Source = source };
+        }
+
         if (trailColor.A > 0 && trail > fraction)
             yield return Part(fraction, trail, trailColor);
         if (fill.A > 0 && fraction > 0)
             yield return Part(0, fraction, fill);
 
-        // The stretch of the bar from `from` to `to` (0 to 1) along the way it fills.
+        static string? Named(string? image) => string.IsNullOrWhiteSpace(image) ? null : image.Trim();
+
+        // The stretch of the bar from `from` to `to` (0 to 1) along the way it fills: with a fill picture laid over the
+        // whole bar, just that stretch of it.
         SpriteDraw Part(float from, float to, Color color)
         {
             var (start, end) = (Math.Clamp(from, 0, 1), Math.Clamp(to, 0, 1));
@@ -491,9 +505,66 @@ public static class Quads
             var sign = direction is BarDirection.Right or BarDirection.Up ? 1 : -1;
             var middle = sign * (-length / 2 + (start + end) / 2 * length);
             var span = (end - start) * length;
-            return horizontal
+            var part = horizontal
                 ? Rect(owner, new Vector2(middle, 0), new Vector2(span, size.Y), color, space)
                 : Rect(owner, new Vector2(0, middle), new Vector2(size.X, span), color, space);
+            if (fillImage is null)
+                return part;
+
+            // Where the stretch lies counting from the bar's left or bottom edge; the picture's V counts down from its top.
+            var (low, high) = sign > 0 ? (start, end) : (1 - end, 1 - start);
+            return part with
+            {
+                Image = fillImage,
+                Source = horizontal ? new Vector4(low, 0, high - low, 1) : new Vector4(0, 1 - high, 1, high - low),
+            };
+        }
+    }
+
+    /// <summary>
+    /// The quads for a picture stretched to <paramref name="size"/> (centered, in <paramref name="space"/>), and the part
+    /// of <paramref name="frame"/> (u, v, width, height in 0-1 image space) on each. When <paramref name="slice"/> and
+    /// <paramref name="border"/> are more than 0 it's a nine-slice, as a <see cref="Sprite.Slice"/>d sprite is: corners,
+    /// edges and middle, left to right, top to bottom, the outer <paramref name="slice"/> of the picture (up to 0.5) drawn
+    /// <paramref name="border"/> world units wide (never more than half the size). Otherwise it's one quad.
+    /// </summary>
+    public static IEnumerable<(Matrix4x4 World, Vector4 Source)> NineSlice(Vector2 size, float slice, float border, Vector4 frame,
+        Matrix4x4 space)
+    {
+        size = Vector2.Abs(size);
+        if (!(slice > 0 && border > 0))
+        {
+            yield return (Matrix4x4.CreateScale(size.X, size.Y, 1) * space, frame);
+            yield break;
+        }
+
+        // Edges of the three columns and rows, in its own space (-size/2..size/2, Y up) and in the frame (V down).
+        var edge = Vector2.Min(new Vector2(border), size / 2);
+        slice = Math.Min(slice, 0.5f);
+        float[] xs = [-size.X / 2, -size.X / 2 + edge.X, size.X / 2 - edge.X, size.X / 2];
+        float[] ys = [size.Y / 2, size.Y / 2 - edge.Y, -size.Y / 2 + edge.Y, -size.Y / 2];
+        float[] us = [frame.X, frame.X + frame.Z * slice, frame.X + frame.Z * (1 - slice), frame.X + frame.Z];
+        float[] vs = [frame.Y, frame.Y + frame.W * slice, frame.Y + frame.W * (1 - slice), frame.Y + frame.W];
+        for (var row = 0; row < 3; row++)
+        {
+            for (var column = 0; column < 3; column++)
+            {
+                var width = xs[column + 1] - xs[column];
+                var height = ys[row] - ys[row + 1];
+                if (width <= 0 || height <= 0)
+                    continue;
+                var center = new Vector2(xs[column] + xs[column + 1], ys[row] + ys[row + 1]) / 2;
+                var piece = Matrix4x4.CreateScale(width, height, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0);
+                yield return (piece * space, new Vector4(us[column], vs[row], us[column + 1] - us[column], vs[row + 1] - vs[row]));
+            }
         }
     }
 }
+
+/// <summary>
+/// Pictures for the parts of a bar (see <see cref="Scenes.Bar"/> and <see cref="Quads.Bar"/>): the <paramref name="Fill"/>'s,
+/// laid over the whole bar and shown only as far as it's full, and the <paramref name="Background"/>'s, shown whole, as a
+/// nine-slice when <paramref name="Slice"/> is more than 0 (like <see cref="Sprite.Slice"/> and <see cref="Sprite.SliceSize"/>).
+/// Paths are relative to the project's Assets folder; null or empty for a plain color.
+/// </summary>
+public readonly record struct BarImages(string? Fill = null, string? Background = null, float Slice = 0, float SliceSize = 0.25f);

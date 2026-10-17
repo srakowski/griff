@@ -1,0 +1,48 @@
+title: Bars drawn with pictures
+intro: A Bar's fill and background can be your own pictures: the fill is revealed as it fills, never squeezed, over a background that stretches like a nine-slice panel.
+project: Empty | Bar Images
+write: Sprites/gauge.png | bar-images/gauge.png
+write: Sprites/frame.png | bar-images/frame.png
+
+chapter: A fill picture | Fill Image
+create: Bar
+rename: Gauge
+set: Transform.Position = 0, 0, 0
+set: Bar.Size = 6, 1
+set: Bar.Max = 10
+set: Bar.Value = 5
+look: 0, 0, 2.5
+say: Here's a bar, half full, drawn in plain colors as bars always have been.
+pickimage: Bar.FillImage = Sprites/gauge.png
+explain: field:Bar.FillImage | Fill Image | Give it a Fill Image, picked like any other picture. It's laid over the whole bar and shown only as far as the bar is full.
+set: Bar.Fill = #FFFFFF
+explain: field:Bar.Fill | Fill tints it | The Fill color tints the picture, as a sprite's Tint does. White shows it as it was painted.
+explain: scene | Cut off, not squeezed | Half full shows the left half of the gauge, its tick marks where they'll stay. Nothing is squashed to fit.
+set: Bar.Value = 8
+say: Fill it more, and more of the same picture shows.
+play
+expectdrawn: -1.5, 0 = lit
+stop
+
+chapter: A framed background | Background Image and Background Slice
+pickimage: Bar.BackgroundImage = Sprites/frame.png
+set: Bar.Background = #FFFFFF
+explain: field:Bar.BackgroundImage | Background Image | The Background Image is drawn whole behind the fill, tinted by the Background color.
+say: This frame is a small square picture, so stretched along the bar its border gets thick at the ends.
+set: Bar.BackgroundSlice = 0.125
+set: Bar.BackgroundSliceSize = 0.125
+explain: field:Bar.BackgroundSlice | Background Slice | Background Slice makes it a nine-slice, as a sprite's Slice does: the outer eighth of the picture is border, drawn an eighth of a unit thick, and its corners keep their shape however long the bar is.
+set: Bar.Value = 5
+play
+expectdrawn: -1.5, 0 = lit
+expectdrawn: 1.5, 0 = dark
+stop
+
+chapter: Any direction | Direction
+set: Bar.Direction = Left
+explain: field:Bar.Direction | Direction | It fills whichever way its Direction says. Filling from the right, it shows the right half of the gauge.
+play
+expectdrawn: 1.5, 0 = lit
+expectdrawn: -1.5, 0 = dark
+stop
+say: The game and the web player draw it exactly as the Scene view does. And with no pictures set, a bar is plain colors, just as before.

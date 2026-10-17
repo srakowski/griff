@@ -163,6 +163,8 @@ public sealed partial class FieldEditorAuditTests
         Bar.Track: Entity
         Bar.Output: Output
         Bar.Size: Resizable
+        Bar.FillImage: Image
+        Bar.BackgroundImage: Image
         Button.Size: Resizable
         Button.Scene: Names:Scene
         Button.SavedScene: Names:Saved

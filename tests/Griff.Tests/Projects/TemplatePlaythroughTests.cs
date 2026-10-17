@@ -24,32 +24,33 @@ public sealed class TemplatePlaythroughTests
     // Every template with a Text changed when texts got a Vertical Align and a Wrap Width (the same without them).
     // Every template changed when cameras got a Hud Size, and those with a tilemap when tilemaps got Placeholder Colors and
     // a Placeholder Grid (the same without them). Every template with a button changed when buttons got a Shortcut Action
-    // (the same without it).
+    // (the same without it), and every template with a Bar
+    // when bars got a Fill Image, a Background Image and its slice (the same without them).
     private static readonly Dictionary<string, string> Expected = new()
     {
         ["Adventure"] = "81386AF51920526D",
         ["Arcade"] = "71C8FCEB3BFD37D1",
         ["BunnyMark"] = "5DA87DF8545F3763",
-        ["Cards"] = "9BAA403D62E8B69A",
+        ["Cards"] = "94769951D7678626",
         ["Contraption"] = "51C549A22DB98F3F",
         ["Empty"] = "515ECFE77AC91034",
         ["FallingBlocks"] = "B4A438A636A85AE0",
-        ["Fighter"] = "FBE9BFBBFE206FE0",
-        ["Isometric"] = "E575D7F5AF8B9CAE",
+        ["Fighter"] = "B5E208B78FF08780",
+        ["Isometric"] = "BF0AFEF6B4D3DD0F",
         ["Match3"] = "B70D9E94F26B0959",
-        ["Multiplayer"] = "B89A2597C9DAB566",
+        ["Multiplayer"] = "DAE5818AF17DDD6C",
         ["Physics"] = "90682F50E82BAB9D",
         ["Pinball"] = "2B89F9AA75E545E1",
-        ["Platformer"] = "F6C4734DFAD0603B",
+        ["Platformer"] = "0C4958764B6FB0EF",
         ["Puzzle"] = "6847F19DD7FFC41B",
-        ["Rhythm"] = "F700CBA96F698C4F",
-        ["Roguelike"] = "E133F0E11A96B87D",
-        ["RpgStats"] = "0A57D1E24D16791F",
+        ["Rhythm"] = "D298BF6385BA6FEF",
+        ["Roguelike"] = "B958654488705BDA",
+        ["RpgStats"] = "7F73ABC2252DBEE8",
         ["Sandbox"] = "48AC9E7E7B73E2E8",
-        ["Shooter"] = "27E1B7448DB41E2D",
+        ["Shooter"] = "4EF84C928101439B",
         ["Strategy"] = "67A1D5B1727DE868",
         ["Tactics"] = "29DCB151C256ED09",
-        ["TopDown"] = "36897913E26B2AD8",
+        ["TopDown"] = "A783DCCCFEB22D0F",
         ["VisualNovel"] = "057DD124992D4C3B",
     };
 

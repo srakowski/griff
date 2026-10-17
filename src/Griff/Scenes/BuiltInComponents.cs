@@ -494,29 +494,10 @@ public sealed class Sprite : Component, IDrawable, INetState
             yield break;
         }
 
-        // Edges of the three columns and rows, in the sprite's own space (-size/2..size/2, Y up) and in the frame (V down).
-        var size = Vector2.Abs(drawnSize);
-        var border = Vector2.Min(new Vector2(SliceSize), size / 2);
-        var slice = Math.Min(Slice, 0.5f);
-        float[] xs = [-size.X / 2, -size.X / 2 + border.X, size.X / 2 - border.X, size.X / 2];
-        float[] ys = [size.Y / 2, size.Y / 2 - border.Y, -size.Y / 2 + border.Y, -size.Y / 2];
-        float[] us = [frame.X, frame.X + frame.Z * slice, frame.X + frame.Z * (1 - slice), frame.X + frame.Z];
-        float[] vs = [frame.Y, frame.Y + frame.W * slice, frame.Y + frame.W * (1 - slice), frame.Y + frame.W];
         var outside = Matrix4x4.CreateScale(MathF.Sign(drawnSize.X) * (FlipX ? -1 : 1), MathF.Sign(drawnSize.Y) * (FlipY ? -1 : 1), 1) *
                       Entity!.Transform.WorldMatrix;
-        for (var row = 0; row < 3; row++)
-        {
-            for (var column = 0; column < 3; column++)
-            {
-                var width = xs[column + 1] - xs[column];
-                var height = ys[row] - ys[row + 1];
-                if (width <= 0 || height <= 0)
-                    continue;
-                var center = new Vector2(xs[column] + xs[column + 1], ys[row] + ys[row + 1]) / 2;
-                var piece = Matrix4x4.CreateScale(width, height, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0);
-                yield return (piece * outside, new Vector4(us[column], vs[row], us[column + 1] - us[column], vs[row + 1] - vs[row]));
-            }
-        }
+        foreach (var piece in Quads.NineSlice(Vector2.Abs(drawnSize), Slice, SliceSize, frame, outside))
+            yield return piece;
     }
 
     // The whole sprite's quad in the world, flips included: as it's drawn, while a frame is drawn between steps.

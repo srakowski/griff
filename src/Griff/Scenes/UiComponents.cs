@@ -382,7 +382,8 @@ public enum BarDirection
 /// A bar that fills up to show <see cref="Value"/> out of <see cref="Max"/>: health, a boss's health, charge, a timer.
 /// Name an entity in <see cref="Track"/> and it shows that entity's <see cref="Health"/> with no code, or any of its
 /// outputs with <see cref="Output"/> (a board's score towards its target, a turn's time left). When it goes down, the part
-/// just lost lingers in the <see cref="Trail"/> color for a moment before draining away.
+/// just lost lingers in the <see cref="Trail"/> color for a moment before draining away. Its parts can be pictures too:
+/// a <see cref="FillImage"/> revealed as it fills, over a <see cref="BackgroundImage"/>.
 /// </summary>
 [Category("UI")]
 [ComponentName("Bar")]
@@ -396,7 +397,8 @@ public sealed class Bar : Component, IDrawable
     void IDrawable.Draw(Drawing drawing)
     {
         var fraction = FractionOf(drawing.Smooth(_value), drawing.Smooth(_max));
-        drawing.Bar(Size, Direction, fraction, Math.Max(fraction, drawing.Smooth(_trailAt)), Background, Fill, Trail);
+        drawing.Bar(Size, Direction, fraction, Math.Max(fraction, drawing.Smooth(_trailAt)), Background, Fill, Trail,
+            new BarImages(FillImage, BackgroundImage, BackgroundSlice, BackgroundSliceSize));
     }
 
     // The value, its max and how far the trail reaches, kept as they were when the step began too.
@@ -454,10 +456,10 @@ public sealed class Bar : Component, IDrawable
     [Resizable]
     public Vector2 Size { get; set; } = new(3, 0.35f);
 
-    /// <summary>The color of the full part.</summary>
+    /// <summary>The color of the full part, or what tints its <see cref="FillImage"/> (white shows the picture as it is).</summary>
     public Color Fill { get; set; } = Color.FromBytes(0x57, 0xAB, 0x5A);
 
-    /// <summary>The empty part of the bar.</summary>
+    /// <summary>The empty part of the bar, or what tints its <see cref="BackgroundImage"/> (white shows the picture as it is).</summary>
     public Color Background { get; set; } = new(0, 0, 0, 0.5f);
 
     /// <summary>The part just lost, shown for a moment before it drains away. Transparent for none.</summary>
@@ -468,6 +470,29 @@ public sealed class Bar : Component, IDrawable
 
     /// <summary>Higher draws on top, like <see cref="Sprite.Order"/>.</summary>
     public int Order { get; set; } = 100;
+
+    /// <summary>
+    /// A picture for the full part instead of a plain color, e.g. "Sprites/gauge.png": laid over the whole bar and shown
+    /// only as far as it's full in its <see cref="Direction"/>, cut off there rather than squeezed, so it stays crisp. The
+    /// trail shows the same picture, tinted by <see cref="Trail"/>.
+    /// </summary>
+    [Group("Images")]
+    public string? FillImage { get; set; }
+
+    /// <summary>A picture for the bar behind the fill, shown whole, instead of a plain color.</summary>
+    public string? BackgroundImage { get; set; }
+
+    /// <summary>
+    /// For a background that stretches (nine-slice), like <see cref="Sprite.Slice"/>: how much of the
+    /// <see cref="BackgroundImage"/>, from 0 to 0.5 of its width and height, is border at each edge. Its corners then keep
+    /// their shape however long the bar is. 0 stretches the whole picture.
+    /// </summary>
+    [ShownWhen(nameof(BackgroundImage))]
+    public float BackgroundSlice { get; set; }
+
+    /// <summary>With <see cref="BackgroundSlice"/>: how big the border is drawn, in world units (never more than half the bar).</summary>
+    [ShownWhen(nameof(BackgroundSlice))]
+    public float BackgroundSliceSize { get; set; } = 0.1f;
 
     /// <summary>How full the bar is, from 0 to 1.</summary>
     public float Fraction => FractionOf(Value, Max);

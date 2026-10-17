@@ -118,6 +118,105 @@ public class SliceAndBarRenderingTests
         Assert.Equal(new Vector2(0, 3 + 0.25f - 0.0625f), Center(down));
     }
 
+    [Theory]
+    // Filling right shows the picture's left; left, its right; up, its bottom (V counts down); down, its top.
+    [InlineData(BarDirection.Right, -1.5f, 0, 1, 0.5f, 0, 0, 0.25f, 1)]
+    [InlineData(BarDirection.Left, 1.5f, 0, 1, 0.5f, 0.75f, 0, 0.25f, 1)]
+    [InlineData(BarDirection.Up, 0, -0.1875f, 4, 0.125f, 0, 0.75f, 1, 0.25f)]
+    [InlineData(BarDirection.Down, 0, 0.1875f, 4, 0.125f, 0, 0, 1, 0.25f)]
+    public void Bar_WithAFillImage_ShowsThePictureOnlyAsFarAsItsFull(BarDirection direction, float x, float y, float width,
+        float height, float u, float v, float sourceWidth, float sourceHeight)
+    {
+        var bar = Add("Gauge").AddComponent<Bar>();
+        bar.Size = new Vector2(4, 0.5f);
+        bar.Max = 4;
+        bar.Value = 1;
+        bar.Direction = direction;
+        bar.FillImage = "Sprites/gauge.png";
+        bar.Fill = Color.White;
+
+        var draws = SceneRenderer.Build(_scene, 1).Sprites;
+
+        // A plain background, then the fill: the quarter it covers, showing that quarter of the picture (not all of it squeezed).
+        Assert.Equal(2, draws.Count);
+        Assert.Null(draws[0].Image);
+        var fill = draws[1];
+        Assert.Equal("Sprites/gauge.png", fill.Image);
+        Assert.Equal(Color.White, fill.Tint);
+        Assert.Equal(new Vector2(width, height), Size(fill));
+        Assert.Equal(new Vector2(x, y), Center(fill));
+        AssertClose(new Vector4(u, v, sourceWidth, sourceHeight), fill.Source);
+    }
+
+    [Fact]
+    public void Bar_WithAFillImage_ShowsTheTrailAsThePictureToo_AndTintsBoth()
+    {
+        var bar = Add("Gauge").AddComponent<Bar>();
+        bar.Size = new Vector2(4, 0.5f);
+        bar.FillImage = "Sprites/gauge.png";
+        bar.Max = 4;
+        bar.Value = 4;
+        bar.Advance(0.1f, _scene);
+        bar.Value = 2;
+        bar.Advance(0.1f, _scene);
+
+        var draws = SceneRenderer.Build(_scene, 1).Sprites;
+
+        // Background, the half just lost (the picture's right half, in the trail's color), then the half still full.
+        Assert.Equal(3, draws.Count);
+        Assert.Equal(("Sprites/gauge.png", bar.Trail), (draws[1].Image, draws[1].Tint));
+        AssertClose(new Vector4(0.5f, 0, 0.5f, 1), draws[1].Source);
+        Assert.Equal(("Sprites/gauge.png", bar.Fill), (draws[2].Image, draws[2].Tint));
+        AssertClose(new Vector4(0, 0, 0.5f, 1), draws[2].Source);
+    }
+
+    [Fact]
+    public void Bar_WithABackgroundImage_ShowsItWhole_OrNineSlicedLikeASprite()
+    {
+        var entity = Add("Gauge", new Vector3(10, 0, 0));
+        var bar = entity.AddComponent<Bar>();
+        bar.Size = new Vector2(6, 4);
+        bar.Value = 0;
+        bar.BackgroundImage = "Sprites/frame.png";
+        bar.Background = Color.White;
+
+        var whole = Assert.Single(SceneRenderer.Build(_scene, 1).Sprites);
+        Assert.Equal(("Sprites/frame.png", Color.White), (whole.Image, whole.Tint));
+        Assert.Equal(new Vector2(6, 4), Size(whole));
+        Assert.Equal(new Vector4(0, 0, 1, 1), whole.Source);
+
+        // Sliced, it's the nine pieces a sprite of the same size and slice is drawn with.
+        bar.BackgroundSlice = 0.25f;
+        bar.BackgroundSliceSize = 0.5f;
+        var sprite = Add("Panel", new Vector3(10, 0, 0)).AddComponent<Sprite>();
+        sprite.Size = new Vector2(6, 4);
+        sprite.Slice = 0.25f;
+        sprite.SliceSize = 0.5f;
+        var pieces = SceneRenderer.Build(_scene, 1).Sprites.Where(d => d.Entity == entity).ToList();
+
+        Assert.Equal(9, pieces.Count);
+        Assert.All(pieces, p => Assert.Equal("Sprites/frame.png", p.Image));
+        Assert.Equal(sprite.Pieces().Select(p => (p.World, p.Source)), pieces.Select(p => (p.World, p.Source)));
+        Assert.Equal(new Vector2(0.5f, 0.5f), Size(pieces[0]));
+        Assert.Equal(new Vector4(0.25f, 0.25f, 0.5f, 0.5f), pieces[4].Source);
+    }
+
+    [Fact]
+    public void Bar_WithoutImages_DrawsPlainColors()
+    {
+        var bar = Add("Health").AddComponent<Bar>();
+        bar.FillImage = "  ";
+
+        var draws = SceneRenderer.Build(_scene, 1).Sprites;
+
+        Assert.Equal(2, draws.Count);
+        Assert.All(draws, d => Assert.Null(d.Image));
+        Assert.All(draws, d => Assert.Equal(new Vector4(0, 0, 1, 1), d.Source));
+    }
+
+    private static void AssertClose(Vector4 expected, Vector4 actual) =>
+        Assert.True(Vector4.Distance(expected, actual) < Tolerance, $"Expected {expected}, got {actual}");
+
     [Fact]
     public void Slider_DrawsItsBarAndAKnobAtTheValue()
     {

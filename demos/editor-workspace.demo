@@ -15,3 +15,12 @@ explain: menu:View | View, Panels | Every panel is listed under View, Panels. Pi
 menu: View > Panels > Chart
 expectlayout: Hierarchy | (Documents / Profiler, Assets, Output, Tables, Chart) | Inspector; closed: Simulations
 explain: panel:Chart | Back again | Saved layouts remember the order of the tabs and which panels are closed, and Reset Layout opens them all again.
+
+chapter: Panels in the middle | Drop a panel among the documents
+say: The Tables panel is a spreadsheet, and it wants room.
+dock: Tables > Documents
+expectlayout: Hierarchy | (Documents: Tables / Profiler, Assets, Output, Chart) | Inspector; closed: Simulations
+explain: panel:Tables | Among the documents | Dropped on the Scene and Game tabs, or in the middle of the scene, a panel becomes a tab beside them, filling the whole area.
+dock: Tables > Profiler
+expectlayout: Hierarchy | (Documents / Profiler, Assets, Output, Chart, Tables) | Inspector; closed: Simulations
+explain: panel:Tables | And back | Drag its tab out again to put it back among the panels. Layouts remember where it was.

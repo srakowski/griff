@@ -22,7 +22,7 @@ explain: panel:Inspector | Tabbed together | Dropped on another panel's tabs, it
 chapter: Float it | A window of its own
 float: Output > 150, -60
 expectlayout: (Hierarchy, Inspector / Assets) | (Documents / Profiler, Tables, Simulations, Chart); floating: Output
-explain: float:Output | Floating | Dropped over the middle of the scene, or outside the editor, a panel floats in its own window. Put it on another screen if you have one; the editor's shortcuts still work in it.
+explain: float:Output | Floating | Dropped over the scene away from its middle, or outside the editor, a panel floats in its own window. Put it on another screen if you have one; the editor's shortcuts still work in it.
 dock: Assets > Output
 expectlayout: Hierarchy, Inspector | (Documents / Profiler, Tables, Simulations, Chart); floating: Output, Assets
 explain: float:Output | Tabbed in the window | Floating windows take more tabs too.

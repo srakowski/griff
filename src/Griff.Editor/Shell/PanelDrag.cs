@@ -87,8 +87,11 @@ public sealed class PanelDrag(PanelHost host)
         var panel = (string)tab.Tag;
         var drop = DockTargets.Find(point, host.Workspace is { } workspace ? Bounds(workspace) : Rect.Empty, Areas(), FloatSize(tab),
             floatOnly: Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
+        // With no project open the documents' tabs are hidden: nothing goes among them.
+        if (drop is { Kind: DockDropKind.Tab, Target: PanelLayout.Documents } && host.DocumentTabs is { IsVisible: false })
+            drop = DockTargets.Find(point, Rect.Empty, [], FloatSize(tab), floatOnly: true);
         // Along its own group's tabs, the drop moves its tab.
-        if (drop is { Kind: DockDropKind.Tab, Index: >= 0 } && host.Layout.GroupOf(drop.Target!) == host.Layout.GroupOf(panel))
+        if (drop is { Kind: DockDropKind.Tab, Index: >= 0 } && host.Layout.Group(drop.Target!) == host.Layout.GroupOf(panel))
             drop = drop with { Label = "Move the tab here" };
         _drop = host.Layout.WouldChange(panel, drop) ? drop : null;
         if (_drop is null)
@@ -122,8 +125,9 @@ public sealed class PanelDrag(PanelHost host)
             var control = element as TabControl;
             var header = control?.Template.FindName("HeaderPanel", control) is FrameworkElement strip ? strip.ActualHeight : 28;
             var tabs = control?.Items.OfType<TabItem>().Where(t => t.IsVisible).Select(Bounds).ToList();
+            var documentsHeader = host.DocumentTabs?.Template?.FindName("HeaderPanel", host.DocumentTabs) is FrameworkElement { ActualHeight: > 0 } documentStrip ? documentStrip.ActualHeight : 32;
             areas.Add(group is null
-                ? new DockArea(Bounds(element), null, PanelLayout.Documents, Floating: false)
+                ? new DockArea(Bounds(element), null, PanelLayout.Documents, Floating: false, documentsHeader)
                 : new DockArea(Bounds(element), group.Panels[0], host.Layout.Title(group.Selected ?? group.Panels[0]), group.Float is not null, header, tabs));
         }
 

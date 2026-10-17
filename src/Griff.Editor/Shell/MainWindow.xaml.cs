@@ -86,7 +86,7 @@ public partial class MainWindow : ChromeWindow
         playShortcuts.Attach(this);
         _ = fullscreen;
 
-        panelHost.Attach(this, DockRoot, DocumentArea);
+        panelHost.Attach(this, DockRoot, DocumentArea, DocumentTabs);
     }
 
     /// <summary>Every command's shortcuts: its gesture and any other it has (Redo's Ctrl+Shift+Z).</summary>

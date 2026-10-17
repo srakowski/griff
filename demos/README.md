@@ -74,8 +74,8 @@ build: standalone
 | `assetsize: <pixels>` | Drag the Assets panel's tile size slider with the real mouse, e.g. `assetsize: 112` (48 to 128). |
 | `expectassetfolder: <folder>` | Fail unless that folder's contents are showing as tiles, e.g. `expectassetfolder: Sprites` (`Assets` for Assets itself). |
 | `expectlinked: <entity> = <path>` | Fail unless the entity is a copy of the prefab at that path in Assets, e.g. `expectlinked: Gem 2 = Pickups/Gem.prefab`. |
-| `dock: <panel> > <where>` | Drag a panel's tab with the real mouse to dock it: on a side of the window (`dock: Inspector > left`), on a side of another panel or of the documents (`dock: Assets > bottom of Hierarchy`, `dock: Output > right of Documents`), or onto a panel to tab it with that one (`dock: Output > Inspector`, floating or not). |
-| `float: <panel> [> <x>, <y>]` | Drag a panel's tab out over the middle of the document area (moved that far, in screen units), floating it in a window of its own. |
+| `dock: <panel> > <where>` | Drag a panel's tab with the real mouse to dock it: on a side of the window (`dock: Inspector > left`), on a side of another panel or of the documents (`dock: Assets > bottom of Hierarchy`, `dock: Output > right of Documents`), onto a panel to tab it with that one (`dock: Output > Inspector`, floating or not), or into the middle of the document area to tab it among the documents (`dock: Tables > Documents`). |
+| `float: <panel> [> <x>, <y>]` | Drag a panel's tab out over the document area, that far from its middle (in screen units; the very middle tabs it among the documents, so it goes at least 160 to the side), floating it in a window of its own. |
 | `closefloat: <panel>` | Click the close button on the floating window a panel is in, putting its panels back. |
 | `movetab: <panel> > <index>` | Drag a panel's tab along its group's tabs with the real mouse so it ends up at that place among them (0 is the first). |
 | `closepanel: <panel>` | Click the close button on a panel's tab, closing the panel (`menu: View > Panels > <panel>` opens it again). |

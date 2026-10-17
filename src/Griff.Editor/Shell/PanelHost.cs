@@ -21,6 +21,8 @@ public sealed class PanelHost(IEnumerable<PanelDescriptor> descriptors, PanelLay
     private Window? _main;
     private Decorator? _root;
     private FrameworkElement? _documents;
+    private TabControl? _documentTabs;
+    private TabItem? _beforePanel;
     private bool _building;
     private bool _closed;
 
@@ -34,13 +36,35 @@ public sealed class PanelHost(IEnumerable<PanelDescriptor> descriptors, PanelLay
     /// <summary>The floating windows, by the panels in them.</summary>
     public IReadOnlyDictionary<FloatingPanels, FloatingPanelWindow> Windows => _windows;
 
-    /// <summary>Makes every panel's view and tab and lays them out in <paramref name="root"/> around <paramref name="documents"/>.</summary>
-    public void Attach(Window main, Decorator root, FrameworkElement documents)
+    /// <summary>The document area's tabs (Scene, Game, the documents), which panels can be tabbed among.</summary>
+    public TabControl? DocumentTabs => _documentTabs;
+
+    /// <summary>
+    /// Makes every panel's view and tab and lays them out in <paramref name="root"/> around <paramref name="documents"/>;
+    /// panels tabbed among the documents go in <paramref name="documentTabs"/>, after the documents.
+    /// </summary>
+    public void Attach(Window main, Decorator root, FrameworkElement documents, TabControl? documentTabs = null)
     {
         _main = main;
         _root = root;
         _documents = documents;
+        _documentTabs = documentTabs;
         PlaceMain(main);
+        if (documentTabs is not null)
+        {
+            documentTabs.SelectionChanged += (_, e) =>
+            {
+                if (_building || e.OriginalSource != documentTabs)
+                    return;
+                // The panel showing among the documents, and what showed before one did, to go back to when it leaves.
+                if (documentTabs.SelectedItem is TabItem { Tag: string id } && _tabs.TryGetValue(id, out var tab) && tab == documentTabs.SelectedItem)
+                {
+                    layout.Group(PanelLayout.Documents).Selected = id;
+                    if (e.RemovedItems is [TabItem before] && !IsPanelTab(before))
+                        _beforePanel = before;
+                }
+            };
+        }
 
         // Where the window is has to be read while it's closing: once closed, it's nowhere.
         EditorWindowData? placed = null;
@@ -130,8 +154,10 @@ public sealed class PanelHost(IEnumerable<PanelDescriptor> descriptors, PanelLay
             _builtSplits.Clear();
             _builtGroups.Clear();
             _parts.Clear();
+            var added = TakeOutOfDocuments();
 
             _root.Child = Build(layout.Root);
+            PutInDocuments(added);
             SyncWindows();
         }
         finally
@@ -139,6 +165,54 @@ public sealed class PanelHost(IEnumerable<PanelDescriptor> descriptors, PanelLay
             _building = false;
         }
     }
+
+    // Takes the panels that have left the documents out of their tabs (going back to what showed before, if one was showing),
+    // and says which are new there.
+    private List<string> TakeOutOfDocuments()
+    {
+        if (_documentTabs is null)
+            return [];
+        var wanted = layout.InDocuments;
+        foreach (var tab in _documentTabs.Items.OfType<TabItem>().Where(IsPanelTab).ToList())
+        {
+            if (wanted.Contains((string)tab.Tag))
+                continue;
+            if (tab.IsSelected)
+                _documentTabs.SelectedItem = _beforePanel is { } before && _documentTabs.Items.Contains(before) ? before : _documentTabs.Items[0];
+            _documentTabs.Items.Remove(tab);
+            // Back in a group, it takes the groups' look again.
+            tab.ClearValue(FrameworkElement.StyleProperty);
+        }
+
+        return wanted.Where(id => !_documentTabs.Items.Contains(_tabs[id])).ToList();
+    }
+
+    // The panels among the documents go after the documents, in the layout's order; one just put there comes to the front.
+    private void PutInDocuments(List<string> added)
+    {
+        if (_documentTabs is null)
+            return;
+        var wanted = layout.InDocuments;
+        var showing = _documentTabs.Items.OfType<TabItem>().Where(IsPanelTab).Select(t => (string)t.Tag).ToList();
+        if (!showing.SequenceEqual(wanted.Where(showing.Contains)))
+        {
+            foreach (var id in showing)
+                _documentTabs.Items.Remove(_tabs[id]);
+            showing.Clear();
+        }
+
+        foreach (var id in wanted.Where(id => !showing.Contains(id)))
+            _documentTabs.Items.Add(_tabs[id]);
+        // (Not as the editor opens: it starts on the scene.)
+        if (_root?.IsLoaded == true && added.Count > 0 && layout.Group(PanelLayout.Documents).Selected is { } selected && added.Contains(selected))
+        {
+            if (_documentTabs.SelectedItem is TabItem before && !IsPanelTab(before))
+                _beforePanel = before;
+            _documentTabs.SelectedItem = _tabs[selected];
+        }
+    }
+
+    private bool IsPanelTab(TabItem tab) => tab.Tag is string id && _tabs.TryGetValue(id, out var own) && own == tab;
 
     private FrameworkElement Build(DockNode node)
     {
@@ -344,7 +418,8 @@ public sealed class PanelHost(IEnumerable<PanelDescriptor> descriptors, PanelLay
         return header;
     }
 
-    // What a panel's tab offers on a right-click: closing it, floating it, putting it back where it starts out.
+    // What a panel's tab offers on a right-click: closing it, floating it, putting it among the documents, putting it back
+    // where it starts out.
     private void FillMenu(ContextMenu menu, string id)
     {
         menu.Items.Clear();
@@ -356,8 +431,11 @@ public sealed class PanelHost(IEnumerable<PanelDescriptor> descriptors, PanelLay
         }
 
         Add("_Close", () => layout.Close(id));
-        if (layout.GroupOf(id).Float is null)
+        var group = layout.GroupOf(id);
+        if (group.Float is null)
             Add("_Float", () => layout.Float(id));
+        if (group.Documents is null)
+            Add("Put in the _Documents", () => layout.Tab(id, PanelLayout.Documents));
         Add("_Put Back", () => layout.Return(id));
     }
 }

@@ -15,7 +15,8 @@ internal sealed partial class DemoUi
 
     /// <summary>
     /// Drags a panel's tab to where it docks: a side of the window ("left"), a side of a panel or of the documents
-    /// ("bottom of Hierarchy", "right of Documents"), or onto a panel to tab with it ("Inspector").
+    /// ("bottom of Hierarchy", "right of Documents"), onto a panel to tab with it ("Inspector"), or into the middle of the
+    /// documents to tab it among them ("Documents").
     /// </summary>
     public async Task DockPanel(string panel, string where)
     {
@@ -35,23 +36,38 @@ internal sealed partial class DemoUi
             to = SidePoint(Area(beside), side);
             force = () => layout.Dock(id, side, beside);
         }
+        else if (where.Trim().Equals(PanelLayout.Documents, StringComparison.OrdinalIgnoreCase))
+        {
+            // The middle of the document area puts it among the documents.
+            to = Center(Area(PanelLayout.Documents));
+            force = () => layout.Tab(id, PanelLayout.Documents);
+        }
         else
         {
             var with = layout.PanelId(where);
             var group = Area(with);
-            to = Window.GetWindow(group) is FloatingPanelWindow ? Center(group) : Offset(group, ScreenRect(group).Width / 2 / Scale, 14);
+            // Just inside the end of the last tab, so it goes after them (a floating window's middle tabs it too).
+            to = Window.GetWindow(group) is FloatingPanelWindow ? Center(group)
+                : group is TabControl tabs && tabs.Items.OfType<TabItem>().LastOrDefault(t => t.IsVisible) is { } last ? new Point(ScreenRect(last).Right - 4 * Scale, Center(last).Y)
+                : Offset(group, ScreenRect(group).Width / 2 / Scale, 14);
             force = () => layout.Tab(id, with);
         }
 
         await DragTab(id, to, force);
     }
 
-    /// <summary>Drags a panel's tab out over the middle of the documents (moved by <paramref name="dx"/>, <paramref name="dy"/>), floating it.</summary>
+    /// <summary>
+    /// Drags a panel's tab out over the documents, away from their middle (moved by <paramref name="dx"/>,
+    /// <paramref name="dy"/> from it), floating it.
+    /// </summary>
     public async Task FloatPanel(string panel, double dx, double dy)
     {
         var id = Host.Layout.PanelId(panel);
         var documents = Area(PanelLayout.Documents);
         var middle = Center(documents);
+        // The very middle puts it among the documents: float it to the side of that.
+        if (Math.Abs(dx) < 130 && Math.Abs(dy) < 100)
+            dx = dx < 0 ? -160 : 160;
         var to = new Point(middle.X + dx * Scale, middle.Y + dy * Scale);
         await DragTab(id, to, () => Host.Layout.Float(id));
     }
@@ -140,12 +156,14 @@ internal sealed partial class DemoUi
         }
     }
 
-    // A group by one of its panels, or the document area.
+    // A group by one of its panels, or the document area (for a panel tabbed among the documents too).
     private FrameworkElement Area(string name)
     {
         if (name.Trim().Equals(PanelLayout.Documents, StringComparison.OrdinalIgnoreCase))
             return Host.Areas().First(a => a.Group is null).Element;
         var group = Host.Layout.GroupOf(name);
+        if (group.Documents is not null)
+            return Area(PanelLayout.Documents);
         return Host.Areas().First(a => a.Group == group).Element;
     }
 
@@ -174,10 +192,13 @@ internal sealed partial class DemoUi
         {
             DockSide.Left => new Point(r.Left + near, r.Top + r.Height / 2),
             DockSide.Right => new Point(r.Right - near, r.Top + r.Height / 2),
-            DockSide.Top => new Point(r.Left + r.Width / 2, r.Top + (element is TabControl ? 28 * Scale : 0) + 18 * Scale),
+            // Below the tabs (a group's, or the documents', which tab it among them).
+            DockSide.Top => new Point(r.Left + r.Width / 2, r.Top + (element is TabControl ? 28 : DocumentsHeader) * Scale + 18 * Scale),
             _ => new Point(r.Left + r.Width / 2, r.Bottom - near),
         };
     }
+
+    private double DocumentsHeader => Host.DocumentTabs?.Template?.FindName("HeaderPanel", Host.DocumentTabs) is FrameworkElement { ActualHeight: > 0 } strip ? strip.ActualHeight : 32;
 
     private Point Offset(FrameworkElement element, double x, double y)
     {

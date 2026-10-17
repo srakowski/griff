@@ -329,14 +329,21 @@ public class PanelLayoutTests
     }
 
     [Fact]
-    public void DropsOnTheDocumentsDockBesideThemOrFloat()
+    public void DropsOnTheDocumentsDockBesideThemTabAmongThemOrFloat()
     {
         var right = Drop(960, 300);
         Assert.Equal((DockDropKind.Dock, DockSide.Right, "Documents", "Dock right of the documents"), (right.Kind, right.Side, right.Target, right.Label));
 
+        // Their middle, or their tabs, put it among the documents, filling the area.
         var middle = Drop(640, 300);
-        Assert.Equal(DockDropKind.Float, middle.Kind);
-        Assert.Equal(new Rect(600, 286, 320, 400), middle.Preview);
+        Assert.Equal((DockDropKind.Tab, "Documents", "Tab among the documents"), (middle.Kind, middle.Target, middle.Label));
+        Assert.Equal(new Rect(284, 0, 716, 600), middle.Preview);
+        Assert.Equal((DockDropKind.Tab, "Documents"), (Drop(400, 20).Kind, Drop(400, 20).Target));
+
+        // Between the middle and the edges, it floats.
+        var aside = Drop(420, 150);
+        Assert.Equal(DockDropKind.Float, aside.Kind);
+        Assert.Equal(new Rect(380, 136, 320, 400), aside.Preview);
 
         Assert.Equal(DockDropKind.Float, Drop(1200, 300).Kind);
         Assert.Equal(DockDropKind.Float, Drop(140, 14, floatOnly: true).Kind);
@@ -446,6 +453,48 @@ public class PanelLayoutTests
         Assert.DoesNotContain("closed", NextSession(layout, settings).Summary);
     });
 
+    [Fact]
+    public void PanelsGoAmongTheDocumentsAndComeBackOut() => WithLayout((layout, settings) =>
+    {
+        layout.Tab("Tables", "Documents");
+        layout.Tab("Simulations", "documents");
+        const string Among = "Hierarchy | (Documents: Tables, Simulations / Assets, Output, Profiler, Chart) | Inspector";
+        Assert.Equal(Among, layout.Summary);
+        Assert.Equal(["Tables", "Simulations"], layout.InDocuments);
+        Assert.Equal("Simulations", layout.GroupOf("Tables").Selected);
+        Assert.NotNull(layout.GroupOf("Tables").Documents);
+
+        // Already there, it changes nothing; dropped on another panel or beside one, it leaves.
+        var there = new DockDrop(DockDropKind.Tab, DockSide.Left, "Documents", Rect.Empty, "");
+        Assert.False(layout.WouldChange("Tables", there));
+        Assert.True(layout.WouldChange("Output", there));
+
+        // Kept with the layout, saved and between sessions.
+        layout.Save("Data");
+        layout.Remember();
+        var read = new TestSettings();
+        read.Settings.PanelLayout = JsonSerializer.Deserialize<EditorSettings>(JsonSerializer.Serialize(settings.Settings))!.PanelLayout;
+        Assert.Equal(Among, NextSession(layout, read).Summary);
+
+        // Docking beside a panel among the documents docks beside the documents.
+        layout.Dock("Output", DockSide.Right, "Tables");
+        Assert.Equal("Hierarchy | ((Documents: Tables, Simulations | Output) / Assets, Profiler, Chart) | Inspector", layout.Summary);
+
+        // Dragged back out: tabbed with a panel, floated, or put back where it starts out.
+        layout.Tab("Tables", "Assets");
+        layout.Float("Simulations");
+        Assert.Equal("Hierarchy | ((Documents | Output) / Assets, Profiler, Chart, Tables) | Inspector; floating: Simulations", layout.Summary);
+        Assert.Empty(layout.InDocuments);
+
+        layout.Load("Data");
+        Assert.Equal(Among, layout.Summary);
+        layout.Return("Tables");
+        layout.Close("Simulations");
+        Assert.Equal("Hierarchy | (Documents / Assets, Output, Profiler, Tables, Chart) | Inspector; closed: Simulations", layout.Summary);
+        layout.Reset();
+        Assert.Equal(Start, layout.Summary);
+    });
+
     // Stand-ins for the editor's panels, whose views need the editor's theme.
     private sealed class Tree : ToolPanel
     {
@@ -487,7 +536,9 @@ public class PanelLayoutTests
         var host = services.GetRequiredService<PanelHost>();
         var root = new Border();
         var documents = new Grid();
-        host.Attach(new Window(), root, documents);
+        var documentTabs = new TabControl();
+        documentTabs.Items.Add(new TabItem { Header = "Scene" });
+        host.Attach(new Window(), root, documents, documentTabs);
 
         string[][] Groups() => host.Areas().Where(a => a.Group is { Float: null })
             .Select(a => ((TabControl)a.Element).Items.Cast<TabItem>().Select(t => (string)t.Tag).ToArray()).ToArray();
@@ -502,5 +553,18 @@ public class PanelLayoutTests
         Assert.Equal(3, ((Grid)root.Child).ColumnDefinitions.Count);
         Assert.Same(documents, host.Areas().Last().Element);
         Assert.True(host.Tab("Details").IsSelected);
+
+        // A panel among the documents is a tab after them, and leaves them again.
+        layout.Tab("Log", "Documents");
+        Assert.Equal([["Tree", "Details"], ["Files"]], Groups());
+        Assert.Equal(["Scene", "Log"], documentTabs.Items.Cast<TabItem>().Select(t => t.Tag as string ?? (string)t.Header));
+        layout.Tab("Log", "Files");
+        Assert.Equal([["Tree", "Details"], ["Files", "Log"]], Groups());
+        Assert.Single(documentTabs.Items);
+
+        // A closed panel's tab is nowhere.
+        layout.Close("Files");
+        Assert.Equal([["Tree", "Details"], ["Log"]], Groups());
+        Assert.Null(ItemsControl.ItemsControlFromItemContainer(host.Tab("Files")));
     });
 }

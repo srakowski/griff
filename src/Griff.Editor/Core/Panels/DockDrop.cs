@@ -35,10 +35,10 @@ public static class DockTargets
 
     /// <summary>
     /// The drop at <paramref name="point"/>: on a group's tabs or middle tabs it with them (on its tabs, between the two
-    /// nearest, when the area says where they are); right by an edge of the
-    /// <paramref name="workspace"/> docks it on that side of the window; near a group's edges docks it beside them; near
-    /// the edges of the document area docks it beside that; anywhere else (the middle of the document area, outside the
-    /// editor) floats it. Areas are checked in order, so floating windows (on top) come first.
+    /// nearest, when the area says where they are); right by an edge of the <paramref name="workspace"/> docks it on that
+    /// side of the window; near a group's edges docks it beside them; on the document area's tabs or in its middle tabs it
+    /// among the documents; near the edges of the document area docks it beside that; anywhere else (the rest of the
+    /// document area, outside the editor) floats it. Areas are checked in order, so floating windows (on top) come first.
     /// </summary>
     public static DockDrop Find(Point point, Rect workspace, IReadOnlyList<DockArea> areas, Size floatSize, bool floatOnly = false)
     {
@@ -60,6 +60,15 @@ public static class DockTargets
 
         if (area is null)
             return floating;
+
+        // The document area's tabs, or the middle of it, put it among the documents, filling the area as they do.
+        if (area.Panel is null)
+        {
+            var (across, down) = (Math.Min(120, area.Bounds.Width / 4), Math.Min(90, area.Bounds.Height / 4));
+            var middle = new Rect(area.Bounds.Left + area.Bounds.Width / 2 - across, area.Bounds.Top + area.Bounds.Height / 2 - down, across * 2, down * 2);
+            if (point.Y - area.Bounds.Top < area.HeaderHeight || middle.Contains(point))
+                return new DockDrop(DockDropKind.Tab, DockSide.Left, PanelLayout.Documents, area.Bounds, "Tab among the documents");
+        }
 
         var (side, away) = Nearest(area.Bounds, point);
         var band = Math.Min(area.Panel is null ? 90 : 70, (side is DockSide.Left or DockSide.Right ? area.Bounds.Width : area.Bounds.Height) * 0.3);

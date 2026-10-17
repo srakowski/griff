@@ -57,12 +57,23 @@ public sealed class DockGroup : DockNode
     /// <summary>The floating window it's in, or null when it's docked in the main window.</summary>
     public FloatingPanels? Float { get; internal set; }
 
+    /// <summary>The document area, for the panels tabbed among the documents (<see cref="DockDocuments.Tabs"/>); else null.</summary>
+    public DockDocuments? Documents { get; internal set; }
+
     public override bool HasDocuments => false;
 }
 
-/// <summary>The document area (Scene, Game, prefab and script tabs). There's one, and it stays in the main window.</summary>
+/// <summary>
+/// The document area (Scene, Game, prefab and script tabs, and the asset editors). There's one, and it stays in the main
+/// window. Panels can be tabbed among the documents too (<see cref="Tabs"/>), filling the area as a document does.
+/// </summary>
 public sealed class DockDocuments : DockNode
 {
+    public DockDocuments() => Tabs = new DockGroup { Documents = this };
+
+    /// <summary>The panels tabbed among the documents, after them; it stays when it has none.</summary>
+    public DockGroup Tabs { get; }
+
     public override bool HasDocuments => true;
 }
 
@@ -137,8 +148,8 @@ public sealed class PanelLayout
 
     /// <summary>
     /// Where everything is, e.g. "Hierarchy | (Documents / Assets, Output) | Inspector": "|" between parts side by side,
-    /// "/" between parts one above another, "," between panels tabbed together (in the order of their tabs), then any
-    /// floating windows and the panels closed ("; closed: Profiler").
+    /// "/" between parts one above another, "," between panels tabbed together (in the order of their tabs), "Documents:
+    /// Tables" for panels tabbed among the documents, then any floating windows and the panels closed ("; closed: Profiler").
     /// </summary>
     public string Summary =>
         Describe(Root, nested: false) + string.Concat(_floats.Select(f => "; floating: " + string.Join(", ", f.Group.Panels)))
@@ -165,13 +176,14 @@ public sealed class PanelLayout
     }
 
     /// <summary>
-    /// Tabs a panel with another, docked or floating, and shows it: its tab goes before the tab at <paramref name="at"/>
-    /// among theirs (0 is the first), or after the last one when that's left out.
+    /// Tabs a panel with another, docked or floating, or (<paramref name="with"/> "Documents") among the documents, filling
+    /// the document area as a scene does, and shows it: its tab goes before the tab at <paramref name="at"/> among theirs
+    /// (0 is the first), or after the last one when that's left out.
     /// </summary>
     public void Tab(string panel, string with, int at = -1)
     {
         var id = PanelId(panel);
-        var target = GroupOf(PanelId(with));
+        var target = Group(with);
         var from = target.Panels.IndexOf(id);
         if (from >= 0)
         {
@@ -253,7 +265,7 @@ public sealed class PanelLayout
         var id = PanelId(panel);
         var zone = _panels.First(p => p.Id == id).Zone;
         // (A panel a kept layout left out isn't in any group yet.)
-        var partner = _panels.FirstOrDefault(p => p.Zone == zone && p.Id != id && Groups().FirstOrDefault(g => g.Panels.Contains(p.Id)) is { Float: null });
+        var partner = _panels.FirstOrDefault(p => p.Zone == zone && p.Id != id && Groups().FirstOrDefault(g => g.Panels.Contains(p.Id)) is { Float: null, Documents: null });
         if (partner is not null)
         {
             var target = GroupOf(partner.Id);
@@ -446,7 +458,14 @@ public sealed class PanelLayout
             {
                 case PanelLayoutPart.DocumentsKind:
                     documents++;
-                    node = new DockDocuments();
+                    var area = new DockDocuments();
+                    if (Tabs(part.Panels ?? [], part.Selected) is { } among)
+                    {
+                        area.Tabs.Panels.AddRange(among.Panels);
+                        area.Tabs.Selected = among.Selected;
+                    }
+
+                    node = area;
                     break;
                 case PanelLayoutPart.TabsKind:
                     node = Tabs(part.Panels ?? [], part.Selected);
@@ -508,8 +527,19 @@ public sealed class PanelLayout
             ?? throw new InvalidOperationException(_closed.Contains(id) ? $"{id} is closed (View > Panels opens it)." : $"{id} isn't in the layout.");
     }
 
-    /// <summary>Every group, docked ones first.</summary>
-    internal IEnumerable<DockGroup> Groups() => Nodes(Root).OfType<DockGroup>().Concat(_floats.Select(f => f.Group));
+    /// <summary>Every group, docked ones first, then the panels among the documents and the floating ones.</summary>
+    internal IEnumerable<DockGroup> Groups() =>
+        Nodes(Root).OfType<DockGroup>().Concat(Nodes(Root).OfType<DockDocuments>().Select(d => d.Tabs)).Concat(_floats.Select(f => f.Group));
+
+    /// <summary>The panels tabbed among the documents, in the order of their tabs.</summary>
+    public IReadOnlyList<string> InDocuments => DocumentArea.Tabs.Panels;
+
+    /// <summary>The group a panel is in, or the panels among the documents for "Documents".</summary>
+    internal DockGroup Group(string name) => IsDocuments(name) ? DocumentArea.Tabs : GroupOf(name);
+
+    private DockDocuments DocumentArea => Nodes(Root).OfType<DockDocuments>().Single();
+
+    private static bool IsDocuments(string name) => name.Trim().Equals(Documents, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Whether a drop would change anything: tabbing a panel where it already is (or dropping its tab right where it is
@@ -520,9 +550,9 @@ public sealed class PanelLayout
         var own = GroupOf(panel);
         return drop.Kind switch
         {
-            DockDropKind.Tab when drop.Index >= 0 && GroupOf(drop.Target!) == own =>
+            DockDropKind.Tab when drop.Index >= 0 && Group(drop.Target!) == own =>
                 own.Panels.IndexOf(PanelId(panel)) is var at && drop.Index != at && drop.Index != at + 1,
-            DockDropKind.Tab => GroupOf(drop.Target!) != own,
+            DockDropKind.Tab => Group(drop.Target!) != own,
             DockDropKind.Dock => drop.Target is null || Node(drop.Target) != own || own.Panels.Count > 1,
             _ => true,
         };
@@ -583,6 +613,14 @@ public sealed class PanelLayout
             Width = group.Width,
             Height = group.Height,
         },
+        DockDocuments documents => new PanelLayoutPart
+        {
+            Kind = PanelLayoutPart.DocumentsKind,
+            Panels = documents.Tabs.Panels.Count > 0 ? [.. documents.Tabs.Panels] : null,
+            Selected = documents.Tabs.Selected,
+            Width = node.Width,
+            Height = node.Height,
+        },
         _ => new PanelLayoutPart { Kind = PanelLayoutPart.DocumentsKind, Width = node.Width, Height = node.Height },
     };
 
@@ -625,9 +663,9 @@ public sealed class PanelLayout
         return split;
     }
 
-    // A panel's group, or the document area.
+    // A panel's group, or the document area (for "Documents", or a panel tabbed among the documents).
     private DockNode Node(string name) =>
-        name.Trim().Equals(Documents, StringComparison.OrdinalIgnoreCase) ? Nodes(Root).OfType<DockDocuments>().Single() : GroupOf(name);
+        IsDocuments(name) ? DocumentArea : GroupOf(name) is { Documents: { } area } ? area : GroupOf(name);
 
     private static IEnumerable<DockNode> Nodes(DockNode node) =>
         node is DockSplit split ? split.Children.SelectMany(Nodes).Prepend(split) : [node];
@@ -641,7 +679,7 @@ public sealed class PanelLayout
         group.Panels.Remove(id);
         if (group.Selected == id)
             group.Selected = group.Panels.FirstOrDefault();
-        if (group.Panels.Count > 0)
+        if (group.Panels.Count > 0 || group.Documents is not null)
             return;
 
         if (group.Float is { } window)
@@ -729,6 +767,7 @@ public sealed class PanelLayout
 
     private static string Describe(DockNode node, bool nested) => node switch
     {
+        DockDocuments { Tabs.Panels.Count: > 0 } documents => $"{Documents}: {string.Join(", ", documents.Tabs.Panels)}",
         DockDocuments => Documents,
         DockGroup group => string.Join(", ", group.Panels),
         DockSplit split => (nested ? "(" : "") + string.Join(split.Horizontal ? " | " : " / ", split.Children.Select(c => Describe(c, nested: true))) + (nested ? ")" : ""),

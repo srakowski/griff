@@ -1,0 +1,10 @@
+title: A new roll every Play
+intro: A project can start each game's random numbers from the clock, so loot and offers differ every Play instead of repeating until the editor restarts.
+project: Platformer | Fresh Rolls
+
+chapter: Same rolls, every Play | Game > New Random Numbers Each Game
+say: The game's random numbers, Rand, start from the same place for every game one running editor makes. That keeps a run repeatable, but a script that rolls three offers in Start shows the same three each Play.
+menu: Game > New Random Numbers Each Game
+explain: menu:Game | New Random Numbers Each Game | Ticked, every new game starts its numbers from the clock, so its rolls differ each Play. It's saved in the project and goes into exported games.
+say: Rewinding still draws the same numbers again, so a rewound game plays on exactly as it did, and Rand dot Seed in a script still makes a run repeat.
+menu: Game > New Random Numbers Each Game

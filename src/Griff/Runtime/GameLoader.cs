@@ -192,6 +192,9 @@ public static class GameLoader
     {
         game.HostInput.UseControls(project.Controls);
         game.Time.StepRate = project.StepRate;
+        // Opt-in: otherwise every game starts from the numbers its thread had (see Game.Random), the same each time.
+        if (project.NewRandomEachGame)
+            game.Random.Reseed(System.Random.Shared.Next());
         game.Tables = tables ?? Griff.Data.TableSet.Load(project.AssetsPath);
         game.Simulations = Griff.Data.SimulationFile.LoadAll(project.AssetsPath);
     }

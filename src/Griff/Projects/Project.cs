@@ -93,6 +93,22 @@ public sealed class Project
         JsonSerializer.Serialize(stream, Manifest, JsonOptions);
     }
 
+    /// <summary>
+    /// Whether each new game's random numbers (<see cref="Rand"/>) start from a seed taken from the clock, so its rolls differ
+    /// every time it's played; set in the editor with Game &gt; New Random Numbers Each Game. Off unless it's turned on, when
+    /// every game made by one running editor or player starts from the same numbers. A rewound game still draws the same
+    /// numbers again, and a script's <c>Rand.Seed</c> still wins.
+    /// </summary>
+    public bool NewRandomEachGame => Manifest.NewRandomEachGame ?? false;
+
+    /// <summary>Sets <see cref="NewRandomEachGame"/> and saves the manifest straight away.</summary>
+    public void SetNewRandomEachGame(bool on)
+    {
+        Manifest = Manifest with { NewRandomEachGame = on ? true : null };
+        using var stream = File.Create(ManifestPath);
+        JsonSerializer.Serialize(stream, Manifest, JsonOptions);
+    }
+
     private async Task SaveManifestAsync(CancellationToken cancellationToken)
     {
         await using var stream = File.Create(ManifestPath);

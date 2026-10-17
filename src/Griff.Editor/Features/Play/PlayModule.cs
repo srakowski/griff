@@ -29,7 +29,8 @@ public sealed class PlayModule : IEditorModule
             .AddCommand<PlayWithThreeCommand>()
             .AddCommand<PlayWithFourCommand>()
             .AddCommand<SlowConnectionCommand>()
-            .AddCommand<StepRateCommand>();
+            .AddCommand<StepRateCommand>()
+            .AddCommand<NewRandomEachGameCommand>();
     }
 }
 
@@ -225,6 +226,34 @@ public sealed class ClearSaveDataCommand(IProjectSession projectSession, IPlaySe
             status.Show($"Couldn't clear save data: {ex.Message}");
         }
 
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Makes each new game start its random numbers (Rand) from the clock, for the whole project: saved in project.griff and
+/// used by the game played here and exported. Without it every game made by one running editor starts from the same
+/// numbers, so the same rolls come up each Play. Rewinding still draws the same numbers again, and Rand.Seed in a script
+/// still wins. Again turns it off.
+/// </summary>
+public sealed class NewRandomEachGameCommand(IProjectSession projectSession, IStatusService status) : EditorCommand
+{
+    public override string Id => "Game.NewRandomEachGame";
+    public override string Text => "New _Random Numbers Each Game";
+    public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 2, Order: 2);
+
+    public override bool? IsChecked => projectSession.Project?.NewRandomEachGame;
+
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        if (projectSession.Project is not { } project)
+            return Task.CompletedTask;
+        project.SetNewRandomEachGame(!project.NewRandomEachGame);
+        status.Show(project.NewRandomEachGame
+            ? "Each game starts with new random numbers (from the next Play)"
+            : "Every game starts with the same random numbers");
         return Task.CompletedTask;
     }
 }

@@ -562,7 +562,9 @@ public sealed class Sprite : Component, IDrawable, INetState
 /// <summary>One named animation of an <see cref="Animation"/>'s <see cref="Animation.Clips"/>.</summary>
 /// <param name="FramesPerSecond">The clip's own speed, or null to use the animation's.</param>
 /// <param name="Loop">Whether the clip loops, or null to use the animation's <see cref="Animation.Loop"/>.</param>
-public readonly record struct AnimationClip(string Name, int FirstFrame, int FrameCount, float? FramesPerSecond = null, bool? Loop = null);
+/// <param name="Backward">Whether it plays its frames from the last down to the first (written "3-0").</param>
+public readonly record struct AnimationClip(string Name, int FirstFrame, int FrameCount, float? FramesPerSecond = null, bool? Loop = null,
+    bool Backward = false);
 
 /// <summary>
 /// Plays frames of the entity's sprite sheet: <see cref="FrameCount"/> frames starting at <see cref="FirstFrame"/>.
@@ -595,7 +597,8 @@ public sealed class Animation : Component
 
     /// <summary>
     /// Named animations on the sprite sheet, separated by commas: a name, a frame or range of frames, and optionally
-    /// a speed and whether it plays once, e.g. <c>Idle 0-3, Run 4-9 @12, Jump 10, Die 11-15 @8 once</c>.
+    /// a speed and whether it plays once, e.g. <c>Idle 0-3, Run 4-9 @12, Jump 10, Die 11-15 @8 once</c>. A range
+    /// written high to low plays backward: <c>Open 0-3 once, Close 3-0 once</c>.
     /// </summary>
     [Clips]
     public string? Clips
@@ -675,7 +678,22 @@ public sealed class Animation : Component
         if (Playing)
             Time += seconds;
 
-        sprite.Frame = first + FrameAt(Time, count, fps, loop);
+        var index = FrameAt(Time, count, fps, loop);
+        sprite.Frame = first + (PlaysBackward(Clip) ? count - 1 - index : index);
+    }
+
+    /// <summary>Whether the clip called <paramref name="clip"/> plays from its last frame down to its first ("3-0").</summary>
+    public bool PlaysBackward(string? clip)
+    {
+        if (string.IsNullOrEmpty(clip))
+            return false;
+        for (var i = 0; i < _parsed.Count; i++)
+        {
+            if (string.Equals(_parsed[i].Name, clip, StringComparison.OrdinalIgnoreCase))
+                return _parsed[i].Backward;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -697,7 +715,8 @@ public sealed class Animation : Component
     public static string FormatClips(IEnumerable<AnimationClip> clips) => string.Join(", ", clips.Select(clip =>
     {
         var last = clip.FirstFrame + Math.Max(1, clip.FrameCount) - 1;
-        var text = last == clip.FirstFrame ? $"{clip.Name} {clip.FirstFrame}" : $"{clip.Name} {clip.FirstFrame}-{last}";
+        var text = last == clip.FirstFrame ? $"{clip.Name} {clip.FirstFrame}"
+            : clip.Backward ? $"{clip.Name} {last}-{clip.FirstFrame}" : $"{clip.Name} {clip.FirstFrame}-{last}";
         if (clip.FramesPerSecond is { } fps)
             text += " @" + fps.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
         if (clip.Loop is { } loop)
@@ -715,7 +734,7 @@ public sealed class Animation : Component
         foreach (var entry in (text ?? "").Split([',', ';', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var words = entry.Split([' ', '\t', ':'], StringSplitOptions.RemoveEmptyEntries);
-            if (words.Length < 2 || !TryParseRange(words[1], out var first, out var count))
+            if (words.Length < 2 || !TryParseRange(words[1], out var first, out var count, out var backward))
                 continue;
 
             float? fps = null;
@@ -731,24 +750,24 @@ public sealed class Animation : Component
                     loop = true;
             }
 
-            clips.Add(new AnimationClip(words[0], first, count, fps, loop));
+            clips.Add(new AnimationClip(words[0], first, count, fps, loop, backward));
         }
 
         return clips;
     }
 
-    // "4" is one frame; "4-9" is six, and so is "9-4".
-    private static bool TryParseRange(string text, out int first, out int count)
+    // "4" is one frame; "4-9" is six, and so is "9-4", played from 9 down to 4.
+    private static bool TryParseRange(string text, out int first, out int count, out bool backward)
     {
         var dash = text.IndexOf('-', 1);
         var (from, to) = dash < 0 ? (text, text) : (text[..dash], text[(dash + 1)..]);
         if (!int.TryParse(from, out var a) || !int.TryParse(to, out var b) || a < 0 || b < 0)
         {
-            (first, count) = (0, 0);
+            (first, count, backward) = (0, 0, false);
             return false;
         }
 
-        (first, count) = (Math.Min(a, b), Math.Abs(b - a) + 1);
+        (first, count, backward) = (Math.Min(a, b), Math.Abs(b - a) + 1, b < a);
         return true;
     }
 

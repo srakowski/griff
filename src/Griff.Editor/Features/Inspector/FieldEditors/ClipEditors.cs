@@ -56,7 +56,7 @@ public sealed class ClipsEditor : FieldEditor<ClipsAttribute>
     public void Set(int number, string name, int first, int last, double speed = 0, bool once = false)
     {
         Change(number, c => new AnimationClip(Name(name, c), Math.Min(first, last), Math.Abs(last - first) + 1,
-            speed > 0 ? (float)speed : null, once ? false : c.Loop == true ? true : null), seal: true);
+            speed > 0 ? (float)speed : null, once ? false : c.Loop == true ? true : null, last < first), seal: true);
     }
 
     /// <summary>Opens the Clip Editor on the selected entity, to see its clips play and pick their frames off the sheet.</summary>

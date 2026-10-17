@@ -76,9 +76,30 @@ public class AnimationTests
                 new AnimationClip("Idle", 0, 4),
                 new AnimationClip("Run", 4, 6, 12),
                 new AnimationClip("Jump", 10, 1),
-                new AnimationClip("Die", 11, 5, 8, false),
+                new AnimationClip("Die", 11, 5, 8, false, Backward: true),
             ],
             clips);
+    }
+
+    [Fact]
+    public void Clip_WrittenHighToLow_PlaysBackward()
+    {
+        var (game, sprite, animation) = Setup();
+        animation.Clips = "Open 0-3 @20 once, Close 3-0 @20 once";
+        animation.Play("Close");
+
+        var frames = new List<int>();
+        for (var i = 0; i < 5; i++)
+        {
+            game.Tick(0.05);
+            frames.Add(sprite.Frame);
+        }
+
+        // From 3 down to 0, then held on its last frame, 0.
+        Assert.Equal([2, 1, 0, 0, 0], frames);
+        Assert.True(animation.Finished);
+        Assert.True(animation.PlaysBackward("close"));
+        Assert.False(animation.PlaysBackward("Open"));
     }
 
     [Fact]
@@ -165,7 +186,7 @@ public class AnimationTests
     [Fact]
     public void FormatClips_WritesWhatParseClipsReadsBack()
     {
-        var text = "Idle 0-3, Run 4-9 @12.5, Jump 10, Die 11-15 @8 once, Spin 16-17 loop";
+        var text = "Idle 0-3, Run 4-9 @12.5, Jump 10, Die 11-15 @8 once, Spin 16-17 loop, Close 21-18 once";
         var clips = Animation.ParseClips(text);
 
         Assert.Equal(text, Animation.FormatClips(clips));

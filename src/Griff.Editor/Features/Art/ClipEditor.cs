@@ -171,7 +171,7 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
     public int Frame => _frame;
 
     /// <summary>The sprite sheet's frame showing (what the sprite's Frame is set to), counting from 0.</summary>
-    public int SheetFrame => Selected is { } clip ? clip.First + _frame : 0;
+    public int SheetFrame => Selected is { } clip ? clip.SheetFrameOf(_frame) : 0;
 
     /// <summary>Where the preview is, e.g. "Frame 2 of 4 (sheet frame 5)".</summary>
     public string FrameText => Selected is { } clip ? $"Frame {_frame + 1} of {clip.Count} (sheet frame {SheetFrame})" : "";
@@ -548,7 +548,7 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
         _overlaysFor = key;
         var newEntity = _newEntity;
         _overlaysAgain = _newEntity = false;
-        OnionImage = OnionSkin && key is not null && _frame > 0 && Selected is { } row ? SheetImage(row.First + _frame - 1) : null;
+        OnionImage = OnionSkin && key is not null && _frame > 0 && Selected is { } row ? SheetImage(row.SheetFrameOf(_frame - 1)) : null;
         OnPropertyChanged(nameof(CanEditFrame));
         OnPropertyChanged(nameof(FrameSize));
         OnPropertyChanged(nameof(FrameName));
@@ -597,7 +597,7 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
             {
                 var (first, count, fps, loop) = animation.ClipSettings(clip.Name);
                 Clips.Add(new ClipRow(clip.Name, first, count, fps, loop, clip.FramesPerSecond is not null, clip.Loop is not null,
-                    false, Same(clip.Name, animation.Clip)));
+                    false, Same(clip.Name, animation.Clip), clip.Backward));
             }
 
             if (clips.Count == 0 || !startsWithClip)
@@ -669,7 +669,7 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
         {
             // A clip longer than any sheet would hold (a typo) shows its first frames.
             for (var i = 0; i < Math.Min(clip.Count, MaxStrip); i++)
-                Frames.Add(new ClipFrame(i, clip.First + i, SheetImage(clip.First + i)));
+                Frames.Add(new ClipFrame(i, clip.SheetFrameOf(i), SheetImage(clip.SheetFrameOf(i))));
         }
 
         MarkSheet();
@@ -684,7 +684,7 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
         _frame = index;
         for (var i = 0; i < Frames.Count; i++)
             Frames[i].IsCurrent = i == index;
-        FrameImage = Selected is { } clip ? SheetImage(clip.First + index) : null;
+        FrameImage = Selected is { } clip ? SheetImage(clip.SheetFrameOf(index)) : null;
         var showing = Selected is null ? -1 : SheetFrame;
         foreach (var cell in Sheet)
             cell.IsCurrent = cell.Index == showing;
@@ -838,10 +838,14 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
 /// <param name="HasOwnLoop">True if the clip says whether it loops rather than following the animation.</param>
 /// <param name="IsOwnFrames">True for the animation's own frames (<see cref="ClipEditor.OwnFrames"/>), played without a clip.</param>
 /// <param name="IsStart">True for what the game starts playing.</param>
+/// <param name="Backward">True for a clip written high to low ("3-0"), played from its last frame down to its first.</param>
 public sealed record ClipRow(string Name, int First, int Count, float FramesPerSecond, bool Loop, bool HasOwnSpeed, bool HasOwnLoop,
-    bool IsOwnFrames, bool IsStart)
+    bool IsOwnFrames, bool IsStart, bool Backward = false)
 {
-    public string FramesText => Count <= 1 ? $"frame {First}" : $"frames {First}–{First + Count - 1}";
+    /// <summary>The sheet frame its frame <paramref name="index"/> (from 0) shows: from the last down for a clip played backward.</summary>
+    public int SheetFrameOf(int index) => Backward ? First + Count - 1 - index : First + index;
+
+    public string FramesText => Count <= 1 ? $"frame {First}" : Backward ? $"frames {First + Count - 1}–{First}" : $"frames {First}–{First + Count - 1}";
 
     public string SpeedText => FramesPerSecond.ToString("0.##", CultureInfo.InvariantCulture) + " fps";
 

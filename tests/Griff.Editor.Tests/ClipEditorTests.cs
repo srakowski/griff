@@ -25,12 +25,12 @@ public sealed class ClipEditorTests : IDisposable
     }
 
     // A hero on a 12-frame sheet (4 across, 3 down) with three clips, starting with Idle, and a crate with just a sprite.
-    private static (SceneDocument Document, ISelection Selection, ClipEditor Clips) Open(IServiceProvider services, string? start = "Idle")
+    private static (SceneDocument Document, ISelection Selection, ClipEditor Clips) Open(IServiceProvider services, string? start = "Idle", string clipsText = "Idle 0-1, Run 2-5 @12, Die 6-7 once")
     {
         var scene = new Scene();
         var hero = new Entity("Hero");
         hero.AddComponent(new Sprite { Columns = 4, Rows = 3 });
-        hero.AddComponent(new Animation { FramesPerSecond = 10, Clips = "Idle 0-1, Run 2-5 @12, Die 6-7 once", Clip = start });
+        hero.AddComponent(new Animation { FramesPerSecond = 10, Clips = clipsText, Clip = start });
         scene.Add(hero);
         var crate = new Entity("Crate");
         crate.AddComponent(new Sprite { Columns = 2 });
@@ -94,6 +94,24 @@ public sealed class ClipEditorTests : IDisposable
         clips.Play();
         Assert.True(clips.IsPlaying);
         Assert.Equal(0, clips.Frame);
+    });
+
+    [Fact]
+    public void AClipWrittenHighToLow_PreviewsBackward_AndKeepsItsWayAsItsFramesChange() => EditorHost.Run(services =>
+    {
+        var (document, _, clips) = Open(services, clipsText: "Idle 0-1, Rewind 5-2 @12");
+        var animation = document.Scene.Entities.Single(e => e.Name == "Hero").GetComponent<Animation>()!;
+        clips.SelectClip("Rewind");
+
+        Assert.Equal("frames 5–2", clips.Selected!.FramesText);
+        Assert.Equal([5, 4, 3, 2], clips.Frames.Select(f => f.SheetFrame));
+        Assert.Equal(5, clips.SheetFrame);
+        clips.Tick(0.1);
+        Assert.Equal(4, clips.SheetFrame);
+
+        // Picking other frames off the sheet keeps it backward.
+        clips.SetFrames(2, 6);
+        Assert.Equal("Idle 0-1, Rewind 6-2 @12", animation.Clips);
     });
 
     [Fact]

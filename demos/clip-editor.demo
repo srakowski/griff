@@ -67,3 +67,18 @@ say: Here's the slime in the game, wearing its hat.
 play
 wait: 3
 stop
+
+chapter: Backward | Frames written high to low
+set: Animation.Clips = Idle 0-1, Party 2-3 @4 once, Rewind 3-0 @3
+explain: field:Animation.Clips | Backward | Frames written high to low play backward: Rewind is the whole sheet from three down to nought, over and over, three frames a second.
+clips
+click: clips:clip:Rewind
+click: clips:play
+explain: clips:frames | Last to first | The strip runs from frame three down to nought, and the preview plays it that way.
+click: clips:start
+play
+wait: 2
+expectvalue: Slime.Animation.Clip = Rewind
+say: In the game it loops backward too: hat off, breathing out, then round again.
+wait: 3
+stop

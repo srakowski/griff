@@ -1,0 +1,38 @@
+title: Pan and zoom with no code
+intro: Camera Controls lets the player pan around a big level and zoom toward the mouse, and the HUD keeps its size and place.
+
+project: Empty | Camera Controls
+
+chapter: A level bigger than the screen | Camera Controls on the camera
+create: Tilemap
+rename: Level
+set: Tilemap.Tiles = 111122221111222211112222111122221111\n111122221111222211112222111122221111\n111122221111222211112222111122221111\n111122221111222211112222111122221111\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n111122221111222211112222111122221111\n111122221111222211112222111122221111\n111122221111222211112222111122221111\n111122221111222211112222111122221111\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n111122221111222211112222111122221111\n111122221111222211112222111122221111
+deselect
+select: Main Camera
+set: Camera.Size = 5
+add: CameraControls
+explain: component:CameraControls | Camera Controls | Camera Controls on the camera lets the player pan and zoom with no code: the arrow keys and W A S D pan, the middle or right mouse button drags the world along, and the wheel zooms toward the mouse.
+pick: CameraControls.StayInside = Level
+explain: field:CameraControls.StayInside | Stay Inside | Stay Inside keeps the view inside the level, and it's read every frame, so a level that grows lets the view go further.
+explain: field:CameraControls.ZoomMax | Zoom limits | The wheel zooms between Zoom Min and Zoom Max, the camera's smallest and largest size.
+
+chapter: A HUD that doesn't zoom | Hud Size keeps it the size it was laid out at
+set: Camera.HudSize = 5
+deselect
+create: Text
+rename: Cash
+set: Text.Value = Cash: 120
+add: ScreenAnchor
+set: ScreenAnchor.Offset = 1.5, -0.6
+say: The cash readout is pinned to the top left, and the camera's Hud Size says the HUD was laid out at size five.
+
+chapter: Play | Pan, drag and zoom
+play
+hold: Right 1.5
+hold: Down 1
+say: The arrow keys pan, and the view stops at the level's edge.
+hold: Right 2
+wheel: game = down 3
+say: The wheel zooms out toward the mouse. The world gets smaller, and the cash readout stays the same size in its corner.
+wheel: game = up 4
+stop

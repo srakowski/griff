@@ -218,6 +218,9 @@ public static class Steps
     /// <summary>The "Rooms" step of the Present phase.</summary>
     public static readonly StepId Rooms = new(FramePhase.Present, "Rooms");
 
+    /// <summary>The "Camera Controls" step of the Present phase.</summary>
+    public static readonly StepId CameraControls = new(FramePhase.Present, "Camera Controls");
+
     /// <summary>The "Followers" step of the Present phase.</summary>
     public static readonly StepId Followers = new(FramePhase.Present, "Followers");
 

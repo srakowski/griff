@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 
 namespace Griff.Scenes;
 
@@ -223,7 +224,7 @@ public sealed class Follow : Component, IViewFocus
     }
 
     // Keeps a view of half-size `half` centered on `point` inside `bounds`; a view bigger than the bounds is centered on them.
-    private static Vector2 Clamp(Vector2 point, Box bounds, Vector2 half) =>
+    internal static Vector2 Clamp(Vector2 point, Box bounds, Vector2 half) =>
         new(ClampAxis(point.X, bounds.Min.X + half.X, bounds.Max.X - half.X),
             ClampAxis(point.Y, bounds.Min.Y + half.Y, bounds.Max.Y - half.Y));
 
@@ -231,13 +232,152 @@ public sealed class Follow : Component, IViewFocus
 
     private static Vector2 Flat(Vector3 v) => new(v.X, v.Y);
 
-    private static void SetWorld(Transform transform, Vector2 world)
+    internal static void SetWorld(Transform transform, Vector2 world)
     {
         var target = new Vector3(world, transform.WorldPosition.Z);
         if (transform.Entity?.Parent is { } parent && Matrix4x4.Invert(parent.Transform.WorldMatrix, out var inverse))
             target = Vector3.Transform(target, inverse);
         transform.Position = new Vector3(target.X, target.Y, transform.Position.Z);
     }
+}
+
+/// <summary>What a <see cref="CameraControls"/>' mouse drag pans with.</summary>
+public enum CameraDrag
+{
+    /// <summary>Dragging doesn't pan.</summary>
+    None,
+    Left,
+    Middle,
+    Right,
+
+    /// <summary>The middle or the right button, whichever is held.</summary>
+    MiddleOrRight,
+}
+
+/// <summary>
+/// Pan and zoom with no code, for management, building and strategy games: put it on the camera, in place of a
+/// <see cref="Follow"/>. The arrow keys and WASD (or a controller's stick) pan, a mouse button drags the world along, the
+/// wheel zooms toward the mouse between <see cref="ZoomMin"/> and <see cref="ZoomMax"/>, and the mouse at the screen's
+/// edge can pan too. With <see cref="StayInside"/> the view never goes past the level's edges, however big it grows. The
+/// wheel and drags are the HUD's while the mouse is over it (anything pinned with a <see cref="ScreenAnchor"/>, an open
+/// panel, a button); set the camera's <see cref="Camera.HudSize"/> to keep the HUD's size as it zooms.
+/// </summary>
+/// <remarks>It runs on real time, so the view moves while the game is paused, but not under a menu that pauses it.</remarks>
+[Category("Movement")]
+[Requires(typeof(Camera))]
+[ComponentName("CameraControls")]
+[NetLocal]
+public sealed class CameraControls : Component
+{
+    // The world point the mouse took hold of as a drag began, while it's dragging.
+    private Vector2? _held;
+
+    /// <summary>
+    /// How fast the keys and the screen's edges pan, in screen heights a second: 1 crosses the screen's height in a second,
+    /// whatever the zoom.
+    /// </summary>
+    public float PanSpeed { get; set; } = 1;
+
+    /// <summary>Whether the arrow keys, WASD, the D-pad and the left stick pan.</summary>
+    public bool PanWithKeys { get; set; } = true;
+
+    /// <summary>The mouse button that drags the world along with the mouse, or None.</summary>
+    public CameraDrag DragButton { get; set; } = CameraDrag.MiddleOrRight;
+
+    /// <summary>Whether resting the mouse at the screen's edge pans that way.</summary>
+    public bool EdgeScroll { get; set; }
+
+    /// <summary>The closest the wheel zooms in: the camera's smallest Size.</summary>
+    public float ZoomMin { get; set; } = 3;
+
+    /// <summary>The furthest the wheel zooms out: the camera's largest Size.</summary>
+    public float ZoomMax { get; set; } = 16;
+
+    /// <summary>How much each notch of the wheel zooms: 0.15 shows 15% less of the world (or more). 0 leaves the wheel alone.</summary>
+    public float ZoomStep { get; set; } = 0.15f;
+
+    /// <summary>
+    /// The name of an entity whose area the view stays inside: a tilemap's grid, a box collider, or a sprite, as it is each
+    /// frame, so the view can reach more as the level grows.
+    /// </summary>
+    [EntityName]
+    public string? StayInside { get; set; }
+
+    /// <summary>True while a mouse button is dragging the view.</summary>
+    public bool IsDragging => _held is not null;
+
+    /// <summary>
+    /// Pans and zooms the camera by what <paramref name="input"/> says over <paramref name="seconds"/> of real time, on a
+    /// view <paramref name="aspect"/> times as wide as it's high. While <paramref name="mouseOnHud"/>, the wheel and a new
+    /// drag are the HUD's. Called by the game each frame.
+    /// </summary>
+    public void Advance(Runtime.IInput input, float seconds, float aspect, bool mouseOnHud)
+    {
+        if (Entity?.Scene is not { } scene || Entity.GetComponent<Camera>() is not { } camera)
+            return;
+        var transform = Entity.Transform;
+        var position = new Vector2(transform.WorldPosition.X, transform.WorldPosition.Y);
+        var start = position;
+        var size = camera.Size;
+        aspect = aspect > 0 ? aspect : 1;
+        var mouse = input.MouseWorld;
+        var mouseFree = input.IsMouseInView && !mouseOnHud;
+
+        var pan = PanWithKeys ? input.Move : Vector2.Zero;
+        if (EdgeScroll && input.IsMouseInView && _held is null)
+        {
+            // Where the mouse is across the view, from -1 to 1 each way; the edge is its outer 3%.
+            var across = (mouse - position) / new Vector2(size * aspect, size);
+            pan += new Vector2(across.X >= 0.97f ? 1 : across.X <= -0.97f ? -1 : 0, across.Y >= 0.97f ? 1 : across.Y <= -0.97f ? -1 : 0);
+        }
+
+        if (pan != Vector2.Zero && seconds > 0)
+            position += (pan.LengthSquared() > 1 ? Vector2.Normalize(pan) : pan) * PanSpeed * size * 2 * seconds;
+
+        // A drag keeps the point it took hold of under the mouse.
+        if (!Held(input))
+            _held = null;
+        else if (_held is { } held)
+            position += held - mouse;
+        else if (mouseFree && Pressed(input))
+            _held = mouse;
+
+        if (ZoomStep > 0 && input.Scroll != 0 && mouseFree && _held is null)
+        {
+            var (low, high) = (MathF.Max(MathF.Min(ZoomMin, ZoomMax), 0.01f), MathF.Max(MathF.Max(ZoomMin, ZoomMax), 0.01f));
+            var zoomed = Math.Clamp(size * MathF.Pow(1 - Math.Clamp(ZoomStep, 0, 0.9f), input.Scroll), low, high);
+            if (zoomed != size)
+            {
+                // Toward the mouse: the point under it stays there.
+                position = mouse + (position - mouse) * (zoomed / size);
+                camera.Size = size = zoomed;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(StayInside) && EntityNames.Find(scene, StayInside, new NameLookup(Entity)) is { } area &&
+            Follow.AreaOf(area) is { } bounds)
+            position = Follow.Clamp(position, bounds, new Vector2(size * aspect, size));
+        if (position != start)
+            Follow.SetWorld(transform, position);
+    }
+
+    private bool Held(Runtime.IInput input) => DragButton switch
+    {
+        CameraDrag.Left => input.IsDown(MouseButton.Left),
+        CameraDrag.Middle => input.IsDown(MouseButton.Middle),
+        CameraDrag.Right => input.IsDown(MouseButton.Right),
+        CameraDrag.MiddleOrRight => input.IsDown(MouseButton.Middle) || input.IsDown(MouseButton.Right),
+        _ => false,
+    };
+
+    private bool Pressed(Runtime.IInput input) => DragButton switch
+    {
+        CameraDrag.Left => input.WasPressed(MouseButton.Left),
+        CameraDrag.Middle => input.WasPressed(MouseButton.Middle),
+        CameraDrag.Right => input.WasPressed(MouseButton.Right),
+        CameraDrag.MiddleOrRight => input.WasPressed(MouseButton.Middle) || input.WasPressed(MouseButton.Right),
+        _ => false,
+    };
 }
 
 /// <summary>

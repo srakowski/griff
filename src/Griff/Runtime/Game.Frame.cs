@@ -525,6 +525,7 @@ public sealed partial class Game
         Step(Steps.SceneChange, _scenes.SwitchSceneIfRequested);
 
         Step(Steps.Rooms, _atmosphere.RunRooms);
+        Step(Steps.CameraControls, _views.RunCameraControls);
         Step(Steps.Followers, _effects.RunFollowers);
         Step(Steps.LateScripts, _scriptSystem.LateUpdateScripts, timesItself: true);
         Step(Steps.ScreenAnchors, _hud.LayOutScreen);

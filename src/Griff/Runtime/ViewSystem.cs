@@ -4,8 +4,8 @@ using Griff.Scenes;
 namespace Griff.Runtime;
 
 /// <summary>
-/// Where the game is seen from: a camera's aspect, the mouse in a view, the view a HUD is laid out for and what the
-/// player looks through.
+/// Where the game is seen from: a camera's aspect, the mouse in a view, the view a HUD is laid out for, what the player
+/// looks through, and cameras the player pans and zooms.
 /// </summary>
 internal sealed class ViewSystem : GameSystem
 {
@@ -22,6 +22,36 @@ internal sealed class ViewSystem : GameSystem
         var size = camera?.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize;
         var center = camera is null ? Vector2.Zero : new Vector2(camera.Transform.WorldPosition.X, camera.Transform.WorldPosition.Y);
         return (center, size, Game.ViewAspect);
+    }
+
+    // Cameras with CameraControls, on real time, but not under a menu that pauses the game here.
+    internal void RunCameraControls()
+    {
+        var controls = Game.Scene.ActiveNow<CameraControls>();
+        if (controls.Count == 0 || Game.LocalInputBlocked)
+            return;
+        var onHud = MouseOnHud();
+        foreach (var control in controls)
+            control.Advance(Game.Input, Game.Time.UnscaledDelta, AspectOf(control.Entity!), onHud);
+    }
+
+    // The mouse is over the HUD: a button, something a system shows there, or anything pinned to the screen with a sprite
+    // under the mouse (a bar's backdrop, an open panel).
+    private bool MouseOnHud()
+    {
+        if (Game.MouseOnUi)
+            return true;
+        var mouse = Game.Input.MouseWorld;
+        var camera = Views.FindCamera(Game.Scene);
+        foreach (var sprite in Game.Scene.ActiveNow<Sprite>())
+        {
+            var entity = sprite.Entity!;
+            if (Views.IsOnScreen(entity, camera) && Matrix4x4.Invert(entity.Transform.WorldMatrix, out var toSprite) &&
+                Vector2.Transform(mouse, toSprite) is var at && MathF.Abs(at.X) <= MathF.Abs(sprite.Size.X) / 2 && MathF.Abs(at.Y) <= MathF.Abs(sprite.Size.Y) / 2)
+                return true;
+        }
+
+        return false;
     }
 
     public bool LooksThrough(Entity entity)

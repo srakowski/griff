@@ -1,16 +1,19 @@
 title: Installer and updates
-intro: Griff's releases come with an installer that keeps the editor up to date. Help, Check for Updates looks for a newer Griff, downloads it quietly and asks before restarting into it, and the check a little after Griff starts can be turned off.
+intro: Griff's releases come with an installer that keeps the editor up to date. Help, Check for Updates opens the Updates window, which shows it checking and downloading a newer Griff and then what came of it, and asks before restarting into it, and the check a little after Griff starts can be turned off.
 project: Platformer | Update Check
 
 chapter: Check for Updates | Help menu
 spot: menu:Help | Help menu
 say: An installed Griff looks for a newer version a little after it starts, without slowing the start. Help, Check for Updates looks right away.
 menu: Help > Check for Updates...
-say: An installed Griff would look at Griff's releases on GitHub now. When there's a newer one it downloads it quietly, then asks: restart now to use it, or let it be put in place the next time Griff starts.
+say: The Updates window opens at once. An installed Griff would be looking at Griff's releases on GitHub now, with a bar moving. When there's a newer one it shows the download's progress, then asks: restart now to use it, or let it be put in place the next time Griff starts. Restarting asks about unsaved changes first, then Griff closes and the updater starts the new version.
 say: Griff installed from a pre-release takes newer pre-releases, and the first full release after them.
-say: This editor was built from source, so the status bar says it doesn't update itself. Neither does the portable zip: only the installer's Griff updates.
+say: This editor was built from source, so the window says it doesn't update itself. Neither does the portable zip: only the installer's Griff updates.
 agent: Help_CheckForUpdates {}
 expectagent: doesn't update itself
+agent: ui_inspect {"target": "EditorUpdates", "path": "Activity"}
+expectagent: doesn't update itself
+agent: ui_invoke {"target": "EditorUpdates", "path": "CloseWindow"}
 
 chapter: Turning the automatic check off | Help > Check for Updates Automatically
 say: The check after starting can be turned off. It's ticked in the Help menu while it's on, and the choice is kept.

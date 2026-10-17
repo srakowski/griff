@@ -32,8 +32,10 @@ internal sealed class CheckForUpdatesAtStart(EditorUpdates updates) : IHostedSer
 }
 
 /// <summary>
-/// Checks Griff's releases for a newer version of the editor. When there is one it's downloaded, then asked: restart now to
-/// use it ("Update ready": true), or let it be put in place the next time Griff starts (false). A Griff installed from a
+/// Checks Griff's releases for a newer version of the editor, in the Updates window: it shows the check and the download
+/// (with how far it's got) as they go, then what came of it: up to date, or why it couldn't check. When there's a newer
+/// version it's downloaded, then asked: restart now to use it ("Update ready": true; unsaved changes are asked about first,
+/// as closing asks), or let it be put in place the next time Griff starts (false). A Griff installed from a
 /// pre-release takes newer pre-releases and the first newer release; one installed from a release takes releases only.
 /// Only a Griff installed with the installer updates itself; a build from source or the portable zip says so and does nothing.
 /// </summary>

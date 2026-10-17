@@ -21,5 +21,10 @@ public static class Program
         var app = new App();
         app.InitializeComponent();
         app.Run();
+
+        // Restarting into an update: the updater is waiting for this process to end, so nothing (a thread still running)
+        // may keep it going once the editor has closed.
+        if (EditorUpdates.Restarting)
+            Environment.Exit(0);
     }
 }

@@ -23,10 +23,16 @@ public interface IUpdater
     /// <summary>The newest release on <paramref name="channel"/>, if it's newer than this one; null if none is.</summary>
     Task<FoundUpdate?> FindAsync(string channel);
 
-    /// <summary>Downloads <paramref name="update"/> beside the installed editor, ready to be put in place.</summary>
-    Task DownloadAsync(FoundUpdate update);
+    /// <summary>
+    /// Downloads <paramref name="update"/> beside the installed editor, ready to be put in place, saying how far it's got
+    /// (0 to 100) to <paramref name="progress"/> as it goes, from any thread.
+    /// </summary>
+    Task DownloadAsync(FoundUpdate update, Action<int> progress);
 
-    /// <summary>Puts a downloaded update in place as soon as the editor has closed, then starts it again.</summary>
+    /// <summary>
+    /// Starts the updater, which waits for this process to end, puts a downloaded update in place and starts Griff again.
+    /// The editor must then end within a minute (the updater gives up after that). Throws if the updater can't be started.
+    /// </summary>
     void ApplyOnExitAndRestart(FoundUpdate update);
 }
 
@@ -79,16 +85,18 @@ public sealed class VelopackUpdater : IUpdater
         return info is null || info.IsDowngrade ? null : new FoundUpdate(info.TargetFullRelease.Version, new Found(manager, info));
     }
 
-    public Task DownloadAsync(FoundUpdate update)
+    public Task DownloadAsync(FoundUpdate update, Action<int> progress)
     {
         var (manager, info) = (Found)update.Source;
-        return manager.DownloadUpdatesAsync(info);
+        return manager.DownloadUpdatesAsync(info, progress);
     }
 
     public void ApplyOnExitAndRestart(FoundUpdate update)
     {
         var (manager, info) = (Found)update.Source;
-        manager.WaitExitThenApplyUpdates(info.TargetFullRelease, silent: true, restart: true);
+        // Update.exe apply --waitPid: it waits (a minute at most) for the editor to end, then shows its progress while it
+        // puts the update in place, and starts the new version. The editor ends itself (EditorUpdates.Exit) right after.
+        manager.WaitExitThenApplyUpdates(info.TargetFullRelease, silent: false, restart: true);
     }
 
     private static IUpdateSource Source(string channel) => Environment.GetEnvironmentVariable(SourceVariable) is { Length: > 0 } other

@@ -118,7 +118,7 @@ internal sealed partial class HudSystem
         if (tip.Said is not { } value || !value.Contains('{'))
             return;
         var state = Game.MachineInput;
-        var rebinding = Game.PanelSystem.Rebinding;
+        var rebinding = Game.PanelSystem.ListeningFor;
         if (tip.PromptedFrom is var (said, gamepad, listening, version) && ReferenceEquals(said, value) && gamepad == state.UsingGamepad &&
             listening == rebinding && version == state.BindingsVersion)
             return;

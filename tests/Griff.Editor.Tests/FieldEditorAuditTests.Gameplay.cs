@@ -181,6 +181,11 @@ public sealed partial class FieldEditorAuditTests
         Choice.Format: Format
         Choice.SaveAs: Names:Saved
         Choice.Sound: Sound
+        ControlsList.Actions: Names:Action*
+        ControlsList.Hide: Names:Action*
+        ControlsList.Labels: Text
+        ControlsList.Template: Entity
+        ControlsList.Font: Names:Font
         Layout.Size: Resizable
         Panel.Pauses: Entity
         Panel.OpenOn: Names:Action

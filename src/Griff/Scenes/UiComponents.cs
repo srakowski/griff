@@ -85,8 +85,9 @@ public enum ButtonAction
 
     /// <summary>
     /// Waits for the player to press a key or button, and makes it do <see cref="Button.InputAction"/> from then on (a
-    /// keyboard key replaces the action's keys, a gamepad button its buttons; Esc cancels). It's remembered next time.
-    /// Label it "Jump: {Jump}" and it always shows the binding.
+    /// key or mouse button replaces the action's first key or mouse button, a gamepad button its first gamepad button, or
+    /// the one in <see cref="Button.BindingSlot"/>; the rest stay; Esc cancels). It's remembered next time. Label it
+    /// "Jump: {Jump}" and it always shows the binding.
     /// </summary>
     Rebind,
 
@@ -231,6 +232,14 @@ public sealed class Button : Component, IDrawEffect
     [Names(NameKind.Action)]
     [ShownWhen(nameof(Action), Is = [ButtonAction.Rebind])]
     public string? InputAction { get; set; }
+
+    /// <summary>
+    /// For <see cref="ButtonAction.Rebind"/>: which of the action's bindings on the device pressed it replaces, from 0:
+    /// 0 its first key or mouse button (or gamepad button), 1 its second, so a controls screen can have a primary and a
+    /// secondary key. One past the last adds one. Label it "{PanUp:1}" to show that slot's binding.
+    /// </summary>
+    [ShownWhen(nameof(Action), Is = [ButtonAction.Rebind])]
+    public int BindingSlot { get; set; }
 
     /// <summary>
     /// Whether it can be clicked. A button that can't is drawn faded, ignores the mouse and its shortcut, and is skipped

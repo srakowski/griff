@@ -248,7 +248,8 @@ public sealed partial class KnownNames : IProjectNames
     {
         NameKind.Prefab => _prefabs.Contains(AssetName(name, Project.PrefabExtension)),
         NameKind.Scene => _scenes.Contains(AssetName(name, Project.SceneExtension)),
-        NameKind.Action => _actions.Contains(name),
+        // A list of them may pick several with * and ? (a controls list's "Pan*").
+        NameKind.Action => _actions.Contains(name) || kind.Many && name.AsSpan().IndexOfAny('*', '?') >= 0,
         NameKind.Layer => _layers.Contains(name),
         NameKind.Table => _tables.ContainsKey(AssetName(name, Data.TableFile.Extension)),
         // A row is matched against its table, which takes the component (see Unmatched(Component, ...)).

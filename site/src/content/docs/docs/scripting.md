@@ -267,6 +267,7 @@ GetComponent<Panel>()!.Opened += _ => Audio.Play("Sounds/open.wav");
 
 // Show the player what to press, on the keyboard or the controller they're using.
 hint.Value = $"Press {Input.PromptFor("Jump")} to jump";   // or just "Press {Jump} to jump"
+keys.Value = Input.AllFor("DropTool");   // every key, "Esc / Right Click", as "{DropTool:all}"; Input.SlotFor("PanUp", 1) the second
 buy.Interactable = coins >= 10;
 Game.ListenForBinding("Dash");   // a rebind button of your own
 

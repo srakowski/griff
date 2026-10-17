@@ -1,0 +1,51 @@
+title: A controls list
+intro: A Controls List makes a game's controls screen by itself: a row for each input action, with a button that rebinds it showing every key it has.
+
+project: Empty | Controls List
+
+chapter: An action of the game's own | Drop Tool on Esc and Right Click
+menu: Game > Controls...
+controls
+click: controls:addaction
+actionname: DropTool
+bind: Escape
+expectcontrol: DropTool = Escape
+bind: Mouse Right
+say: Drop Tool is an action of the game's own, on Esc and on the right mouse button.
+click: controls:close
+
+chapter: A controls screen | Controls List on a panel
+create: Panel
+rename: Options
+set: Panel.Open = true
+add: ControlsList
+explain: field:ControlsList.Actions | Actions | A Controls List makes a row for each action it lists. Here it's Drop Tool, then every action starting with Pan: Griff's own camera keys.
+set: ControlsList.Actions = DropTool, Pan*
+explain: field:ControlsList.Hide | Hide | Hide leaves some out. Pan Down can stay as it is.
+set: ControlsList.Hide = PanDown
+say: Adding it brought a Layout, which lines the rows up on the panel. The Scene view shows sample rows where they'll go.
+
+chapter: Play | Rebind Drop Tool to Q
+play
+wait: 1
+expectvalue: Key.Text.Shown = Esc / Right Click
+say: A row for each action, its name and every key it has: Esc and Right Click for Drop Tool.
+tap: Down
+tap: Enter
+wait: 0.5
+say: Clicking its button waits for a new key.
+tap: Q
+wait: 0.5
+expectvalue: Key.Text.Shown = Q / Right Click
+say: Q takes Esc's place, and Right Click stays.
+stop
+
+chapter: A first and a second key | Slots
+select: Options
+set: ControlsList.Slots = 2
+say: With two slots, each row has a button for its first key and one for its second, rebound one at a time.
+play
+wait: 1
+expectvalue: Key 2.Text.Shown = Right Click
+say: Pan Up's second key is the up arrow, and Drop Tool's is the right mouse button.
+stop

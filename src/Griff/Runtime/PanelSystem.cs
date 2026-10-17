@@ -16,7 +16,7 @@ internal sealed class PanelSystem : GameSystem, IPanels
     void IPanels.Close(Panel panel) => ClosePanel(panel);
 
     // Open panels, oldest first, each with what was picked before it opened (given back as it closes); those already
-    // seen; and the action a controls screen is rebinding, with the button that asked.
+    // seen; and the action a controls screen is rebinding, with the button that asked and how its prompts read meanwhile.
     private readonly List<(Panel Panel, Component? FocusBefore)> _open = [];
 
     private readonly HashSet<Panel> _seen = [];
@@ -24,6 +24,8 @@ internal sealed class PanelSystem : GameSystem, IPanels
     private Button? _rebindButton;
 
     private string? _rebinding;
+
+    private string? _listeningFor;
 
     public override string Name => "Panels";
 
@@ -42,7 +44,18 @@ internal sealed class PanelSystem : GameSystem, IPanels
     internal Panel OpenAt(int index) => _open[index].Panel;
 
     // The button a controls screen is rebinding with, which listens until a key or button is pressed.
-    internal void RebindWith(Button button) => _rebindButton = button;
+    internal void RebindWith(Button button)
+    {
+        _rebindButton = button;
+        _listeningFor = $"{_rebinding}:{SlotOf(button)}";
+    }
+
+    // A Rebind button's slot, none below the first.
+    private static int SlotOf(Button button) => Math.Max(0, button.BindingSlot);
+
+    // The prompts that show "..." while listening, written as Fill takes them: "Jump" for all of them, "Jump:1" for a
+    // Rebind button's slot (and those showing the action whole).
+    internal string? ListeningFor => _listeningFor;
 
     public Panel? TopPanel => _open.Count > 0 ? _open[^1].Panel : null;
 
@@ -84,6 +97,7 @@ internal sealed class PanelSystem : GameSystem, IPanels
         _ = Game.Input.BindingsOf(action); // Throws, naming the actions there are, if it's misspelled.
         StopRebinding();
         _rebinding = action.Trim();
+        _listeningFor = _rebinding;
     }
 
     public Panel? PanelNamed(string name) =>
@@ -243,22 +257,70 @@ internal sealed class PanelSystem : GameSystem, IPanels
         if (Game.Input.AnyPressed is not { } pressed)
             return true;
         if (pressed.Key is not Key.Escape && pressed.Gamepad is not (GamepadButton.Start or GamepadButton.Back))
-            Rebind(action, pressed);
+            Rebind(action, pressed, _rebindButton is null ? 0 : SlotOf(_rebindButton));
 
         StopRebinding();
         return true;
     }
 
-    // The new one goes first, so prompts show it; the other device's bindings stay as they were.
-    private void Rebind(string action, InputBinding pressed)
+    // The binding in the slot (counting the keyboard and mouse's, or the gamepad's) is swapped for the one pressed if it's
+    // the same kind (a key for a key, a mouse button for a mouse button), and the rest stay: Q replaces Esc and keeps Right
+    // Click. A key pressed for a mouse button's slot (or the other way round) goes in before it, keeping it too. A new
+    // first one goes first of all, so prompts show it; one already bound in another slot changes places; one past the
+    // last is added.
+    internal void Rebind(string action, InputBinding pressed, int slot)
     {
-        var kept = Game.Input.BindingsOf(action).Where(b => (b.Gamepad is null) != (pressed.Gamepad is null) && b != pressed);
-        Game.Input.Rebind(action, [pressed, .. kept]);
+        var bindings = Game.Input.BindingsOf(action).ToList();
+        var gamepad = pressed.Gamepad is not null;
+        var at = -1;
+        for (var i = 0; i < bindings.Count && at < 0; i++)
+        {
+            if ((bindings[i].Gamepad is not null) == gamepad && slot-- == 0)
+                at = i;
+        }
+
+        var already = bindings.IndexOf(pressed);
+        if (at < 0)
+        {
+            if (already >= 0)
+                return;
+            bindings.Add(pressed);
+        }
+        else if (already == at)
+            return;
+        else if (KindOf(bindings[at]) == KindOf(pressed))
+        {
+            if (already >= 0)
+                bindings[already] = bindings[at];
+            bindings[at] = pressed;
+        }
+        else
+        {
+            if (already >= 0)
+            {
+                bindings.RemoveAt(already);
+                if (already < at)
+                    at--;
+            }
+
+            bindings.Insert(at, pressed);
+        }
+
+        if (at >= 0 && BindingNames.InSlot(bindings, gamepad, 0) == pressed)
+        {
+            bindings.Remove(pressed);
+            bindings.Insert(0, pressed);
+        }
+
+        Game.Input.Rebind(action, [.. bindings]);
     }
+
+    private static int KindOf(InputBinding binding) => binding.Key is not null ? 0 : binding.Mouse is not null ? 1 : 2;
 
     private void StopRebinding()
     {
         _rebinding = null;
+        _listeningFor = null;
         if (_rebindButton is not null)
             _rebindButton.IsListening = false;
         _rebindButton = null;
@@ -274,13 +336,13 @@ internal sealed class PanelSystem : GameSystem, IPanels
                 continue;
 
             // Filled in again only once what it says, the device played with or the bindings change: no garbage a frame.
-            var from = (value, state.UsingGamepad, Rebinding: _rebinding, state.BindingsVersion);
+            var from = (value, state.UsingGamepad, Rebinding: _listeningFor, state.BindingsVersion);
             if (text.PromptedFrom is var (said, gamepad, listening, version) && ReferenceEquals(said, value) && gamepad == from.UsingGamepad &&
                 listening == from.Rebinding && version == from.BindingsVersion)
                 continue;
             text.PromptedFrom = from;
 
-            text.SetShown(InputPrompts.Fill(Game.Input, value, _rebinding));
+            text.SetShown(InputPrompts.Fill(Game.Input, value, _listeningFor));
         }
     }
 

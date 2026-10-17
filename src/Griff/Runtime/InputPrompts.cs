@@ -9,65 +9,17 @@ namespace Griff.Runtime;
 public static class InputPrompts
 {
     /// <summary>What's shown for an action with nothing bound to it on the device being used.</summary>
-    public const string Unbound = "-";
+    public const string Unbound = BindingNames.Unbound;
 
     /// <summary>What's shown for an action while a Rebind button waits for the player to press something.</summary>
     public const string Listening = "...";
 
     /// <summary>The name to show for <paramref name="binding"/>, e.g. "Space", "Left Click" or "A".</summary>
-    public static string Name(InputBinding binding) =>
-        binding.Key is { } key ? Name(key)
-        : binding.Mouse is { } mouse ? $"{mouse} Click"
-        : binding.Gamepad is { } pad ? Name(pad)
-        : Unbound;
+    public static string Name(InputBinding binding) => BindingNames.Name(binding);
 
-    public static string Name(Key key) => key switch
-    {
-        >= Key.D0 and <= Key.D9 => ((char)('0' + (key - Key.D0))).ToString(),
-        >= Key.NumPad0 and <= Key.NumPad9 => $"Num {key - Key.NumPad0}",
-        Key.Escape => "Esc",
-        Key.LeftShift or Key.RightShift => "Shift",
-        Key.LeftControl or Key.RightControl => "Ctrl",
-        Key.LeftAlt or Key.RightAlt => "Alt",
-        Key.PageUp => "Page Up",
-        Key.PageDown => "Page Down",
-        Key.CapsLock => "Caps Lock",
-        Key.Delete => "Del",
-        Key.Insert => "Ins",
-        Key.NumPadPlus => "Num +",
-        Key.NumPadMinus => "Num -",
-        Key.NumPadMultiply => "Num *",
-        Key.NumPadDivide => "Num /",
-        Key.NumPadDecimal => "Num .",
-        Key.Minus => "-",
-        Key.Equals => "=",
-        Key.Comma => ",",
-        Key.Period => ".",
-        Key.Slash => "/",
-        Key.Backslash => "\\",
-        Key.Semicolon => ";",
-        Key.Quote => "'",
-        Key.LeftBracket => "[",
-        Key.RightBracket => "]",
-        Key.Grave => "`",
-        Key.None => Unbound,
-        _ => key.ToString(),
-    };
+    public static string Name(Key key) => BindingNames.Name(key);
 
-    public static string Name(GamepadButton button) => button switch
-    {
-        GamepadButton.LeftShoulder => "LB",
-        GamepadButton.RightShoulder => "RB",
-        GamepadButton.LeftTrigger => "LT",
-        GamepadButton.RightTrigger => "RT",
-        GamepadButton.LeftStick => "LS",
-        GamepadButton.RightStick => "RS",
-        GamepadButton.DPadUp => "D-Pad Up",
-        GamepadButton.DPadDown => "D-Pad Down",
-        GamepadButton.DPadLeft => "D-Pad Left",
-        GamepadButton.DPadRight => "D-Pad Right",
-        _ => button.ToString(),
-    };
+    public static string Name(GamepadButton button) => BindingNames.Name(button);
 
     /// <summary>
     /// What to show for <paramref name="action"/> right now: its first gamepad button while a gamepad is being played
@@ -83,9 +35,30 @@ public static class InputPrompts
     }
 
     /// <summary>
+    /// Every key and mouse button bound to <paramref name="action"/>, or every gamepad button while a gamepad is being
+    /// played with, joined with " / ": "Esc / Right Click". What "{DropTool:all}" shows. Follows the player's rebinding.
+    /// </summary>
+    public static string AllFor(this IInput input, string action)
+    {
+        var bindings = input.BindingsOf(action);
+        // Nothing on this device: what there is on the other, as PromptFor shows.
+        return BindingNames.All(bindings, input.UsingGamepad) ?? BindingNames.All(bindings, null) ?? Unbound;
+    }
+
+    /// <summary>
+    /// The binding in <paramref name="slot"/> of <paramref name="action"/> on the device being played with: 0 is its first
+    /// key or mouse button (or gamepad button), 1 its second, and so on, as a Rebind button's
+    /// <see cref="Scenes.Button.BindingSlot"/> counts them; <see cref="Unbound"/> past the last. What "{PanUp:1}" shows.
+    /// </summary>
+    public static string SlotFor(this IInput input, string action, int slot) =>
+        BindingNames.InSlot(input.BindingsOf(action), input.UsingGamepad, slot) is { } binding ? Name(binding) : Unbound;
+
+    /// <summary>
     /// <paramref name="text"/> with every action's name in braces swapped for its prompt: "Press {Jump}" becomes
-    /// "Press Space". Braces around anything else (not an action) are left alone. <paramref name="listening"/> is an
-    /// action shown as <see cref="Listening"/> instead.
+    /// "Press Space". "{DropTool:all}" shows every binding on the device in use ("Esc / Right Click", see
+    /// <see cref="AllFor"/>), and "{PanUp:1}" the one in a slot (see <see cref="SlotFor"/>). Braces around anything else
+    /// (not an action) are left alone. <paramref name="listening"/> is an action shown as <see cref="Listening"/> instead,
+    /// written the same way: "Jump" for all of its prompts, "Jump:1" for its slot 1 and those that show it whole.
     /// </summary>
     public static string Fill(IInput input, string text, string? listening = null)
     {
@@ -93,6 +66,7 @@ public static class InputPrompts
             return text;
 
         var actions = input.Actions;
+        var (listenAction, listenSlot) = Split(listening);
         var result = new StringBuilder(text.Length);
         var at = 0;
         while (at < text.Length)
@@ -102,18 +76,41 @@ public static class InputPrompts
             if (close < 0)
                 break;
 
-            var name = text[(open + 1)..close].Trim();
-            var action = actions.FirstOrDefault(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));
+            var (name, form) = Split(text[(open + 1)..close]);
+            var action = form == Form.Unknown ? null : actions.FirstOrDefault(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));
             result.Append(text, at, open - at);
             if (action is null)
                 result.Append(text, open, close - open + 1);
-            else if (listening is not null && action.Equals(listening.Trim(), StringComparison.OrdinalIgnoreCase))
+            else if (listenAction is not null && action.Equals(listenAction, StringComparison.OrdinalIgnoreCase) &&
+                     (form.Slot is null || listenSlot.Slot is null || form.Slot == listenSlot.Slot))
                 result.Append(Listening);
             else
-                result.Append(input.PromptFor(action));
+                result.Append(form.All ? input.AllFor(action) : form.Slot is { } slot ? input.SlotFor(action, slot) : input.PromptFor(action));
             at = close + 1;
         }
 
         return result.Append(text, at, text.Length - at).ToString();
+    }
+
+    // How a prompt in braces asks for its action: "Jump", "Jump:all" or "Jump:1". Anything else after the colon isn't a prompt.
+    private readonly record struct Form(bool All, int? Slot)
+    {
+        public static readonly Form Unknown = new(true, -1);
+    }
+
+    private static (string? Name, Form Form) Split(string? prompt)
+    {
+        if (prompt is null)
+            return (null, default);
+        var colon = prompt.IndexOf(':');
+        if (colon < 0)
+            return (prompt.Trim(), default);
+        var name = prompt[..colon].Trim();
+        var form = prompt[(colon + 1)..].Trim();
+        if (form.Equals("all", StringComparison.OrdinalIgnoreCase))
+            return (name, new Form(true, null));
+        return int.TryParse(form, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var slot)
+            ? (name, new Form(false, slot))
+            : (name, Form.Unknown);
     }
 }

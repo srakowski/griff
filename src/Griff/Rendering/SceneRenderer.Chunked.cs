@@ -33,9 +33,9 @@ public static partial class SceneRenderer
     // through each other (sorting by Y, say), and merging would go an entry or two at a time.
     private const int MergedStretchesPerRun = 8;
 
-    // What an entry sorts by (as Compare does), with its entity's place in the hierarchy last; and which of its run's draws
-    // are its.
-    private record struct RunEntry(bool Lifted, int Order, float Z, float Y, int At, int First, int Count);
+    // What an entry sorts by (as Compare does), with its entity's place in the hierarchy (its sort group's, in one) and its
+    // Order within its group last; and which of its run's draws are its.
+    private record struct RunEntry(bool Lifted, int Order, float Z, float Y, int At, int First, int Count, int Inner = 0);
 
     // A run of entries put back to front among themselves: a chunk's plain sprites, or what the game's thread drew. Its
     // entries are in hierarchy order, then Sort's order back to front, unless they're InOrder already.
@@ -58,14 +58,15 @@ public static partial class SceneRenderer
             Entries[Count++] = entry;
         }
 
-        // Puts them back to front: nothing to do when they're in order, as a crowd on one layer is.
-        public void PutInOrder(bool sortByY)
+        // Puts them back to front: nothing to do when they're in order, as a crowd on one layer is. With `grouped` (any of
+        // them in a sort group), by Order within a group too.
+        public void PutInOrder(bool sortByY, bool grouped = false)
         {
             var entries = Entries.AsSpan(0, Count);
             var stretches = Sort.TryMerge<RunEntry, RunComparer>(entries, default, MaxStretches);
             InOrder = stretches == 1;
             if (stretches == 0)
-                SortByKeys(entries, sortByY, Sort, withPlace: false);
+                SortByKeys(entries, sortByY, Sort, withPlace: grouped, grouped);
         }
     }
 
@@ -81,15 +82,25 @@ public static partial class SceneRenderer
                 c = a.Z.CompareTo(b.Z);
             if (c == 0)
                 c = b.Y.CompareTo(a.Y);
-            return c != 0 ? c : a.At.CompareTo(b.At);
+            if (c == 0)
+                c = a.At.CompareTo(b.At);
+            return c != 0 ? c : a.Inner.CompareTo(b.Inner);
         }
     }
 
-    // Puts entries in order by key, as SortBackToFront does, and with `withPlace`, by place in the hierarchy before that.
-    private static void SortByKeys(ReadOnlySpan<RunEntry> entries, bool sortByY, StableSort keys, bool withPlace)
+    // Puts entries in order by key, as SortBackToFront does, and with `withPlace`, by place in the hierarchy before that
+    // (and with `grouped`, by Order within a sort group before that).
+    private static void SortByKeys(ReadOnlySpan<RunEntry> entries, bool sortByY, StableSort keys, bool withPlace, bool grouped = false)
     {
         keys.Begin(entries.Length);
         var key = keys.Keys;
+        if (grouped)
+        {
+            for (var i = 0; i < entries.Length; i++)
+                key[i] = StableSort.KeyOf(entries[i].Inner);
+            keys.Apply();
+        }
+
         if (withPlace)
         {
             for (var i = 0; i < entries.Length; i++)
@@ -149,9 +160,10 @@ public static partial class SceneRenderer
                 var roles = entity.Roles;
                 if ((roles & ComponentRoles.Drawable) == 0)
                     continue;
-                // What's pinned to the screen is left to the game's thread too, which knows whether this view draws it.
+                // What's pinned to the screen is left to the game's thread too, which knows whether this view draws it, and so
+                // is a sort group's root, which sorts with what's inside it.
                 if (entity.SoleSprite is not { } sole || entity.Parent is not null ||
-                    (roles & (ComponentRoles.DrawEffect | ComponentRoles.Parallax | ComponentRoles.ScreenAnchor)) != 0)
+                    (roles & (ComponentRoles.DrawEffect | ComponentRoles.Parallax | ComponentRoles.ScreenAnchor | ComponentRoles.SortGroup)) != 0)
                 {
                     left[leftCount++] = at;
                     continue;
@@ -299,7 +311,7 @@ public static partial class SceneRenderer
             (job.Entities, job.Scene) = (s_noEntities, null);
         }
 
-        DrawLeft(chunked, entities, count, view, cameraSize, playing, overs, scratch.Drawables, timer, sortByY, filter);
+        var grouped = DrawLeft(chunked, entities, count, view, cameraSize, playing, overs, scratch.Drawables, timer, sortByY, filter);
 
         // The stretches of the frame, back to front, and how many draws it has.
         timer?.Mark(SortingPart);
@@ -312,7 +324,7 @@ public static partial class SceneRenderer
         var stretches = placing.Stretches;
         var end = MergeRuns(runs, chunked, stretches, first);
         if (end < 0)
-            end = SortRuns(runs, chunked, stretches, first, sortByY);
+            end = SortRuns(runs, chunked, stretches, first, sortByY, grouped);
 
         // The frame's list holds last frame's draws: overwritten, so they needn't be cleared first (only any past the end).
         CollectionsMarshal.SetCount(sprites, end);
@@ -331,7 +343,8 @@ public static partial class SceneRenderer
     private static readonly Entity[] s_noEntities = [];
 
     // Draws the entities the chunks left, in hierarchy order, into the game thread's run, and puts it back to front.
-    private static void DrawLeft(ChunkedScratch chunked, Entity[] entities, int count, Box view, float cameraSize, bool playing,
+    // Returns whether any is in a sort group.
+    private static bool DrawLeft(ChunkedScratch chunked, Entity[] entities, int count, Box view, float cameraSize, bool playing,
         List<IDrawable>? overs, List<IDrawable> drawables, BuildTimer? timer, bool sortByY, in ViewFilter filter)
     {
         var job = chunked.Job;
@@ -342,6 +355,7 @@ public static partial class SceneRenderer
         (drawing.View, drawing.LineWidth, drawing.IsPlaying, drawing.AsPlaced) = (view, cameraSize / 180, playing, filter.AsPlaced);
         draws.Clear();
         run.Count = 0;
+        var groups = new SortGroups();
         for (var c = 0; c < count; c++)
         {
             var left = job.Left[c];
@@ -354,12 +368,13 @@ public static partial class SceneRenderer
                 timer?.Mark(LeadOf(entity));
                 if (!Describe(entity, sortByY, drawables, overs, out var entry))
                     continue;
+                var grouped = groups.Join(ref entry, at, sortByY);
                 var start = draws.Count;
                 DrawEntity(entity, entry.Sole, drawables, drawing, draws, timer);
                 described.Clear();
                 if (drawing.Sorts.Count > 0)
                 {
-                    if (sortByY)
+                    if (sortByY && !grouped)
                         AddSorted(described, entry, start, draws.Count, drawing.Sorts);
                     else if (draws.Count > start)
                         described.Add(entry with { First = start, Count = draws.Count - start });
@@ -371,13 +386,14 @@ public static partial class SceneRenderer
                 }
 
                 foreach (var d in described)
-                    run.Add(new RunEntry(d.Lifted, d.Order, d.Z, d.Y, at, d.First, d.Count));
+                    run.Add(new RunEntry(d.Lifted, d.Order, d.Z, d.Y, d.Place, d.First, d.Count, d.Inner));
             }
         }
 
         described.Clear();
         timer?.Mark(SortingPart);
-        run.PutInOrder(sortByY);
+        run.PutInOrder(sortByY, groups.Any);
+        return groups.Any;
     }
 
     // Merges the runs back to front a stretch at a time: the run whose next entry goes first goes on until another run's
@@ -462,7 +478,7 @@ public static partial class SceneRenderer
     }
 
     // Too mixed to merge: every entry sorted as one, by key and then place in the hierarchy, each one a stretch of its own.
-    private static int SortRuns(List<Run> runs, ChunkedScratch chunked, List<Stretch> stretches, int first, bool sortByY)
+    private static int SortRuns(List<Run> runs, ChunkedScratch chunked, List<Stretch> stretches, int first, bool sortByY, bool grouped)
     {
         var all = chunked.All;
         all.Count = 0;
@@ -483,7 +499,7 @@ public static partial class SceneRenderer
 
         // An entity's entries (its parts, sorting by Y) are next to each other in the order they came: sorting by place in
         // the hierarchy first keeps them so.
-        SortByKeys(all.Entries.AsSpan(0, all.Count), sortByY, all.Sort, withPlace: true);
+        SortByKeys(all.Entries.AsSpan(0, all.Count), sortByY, all.Sort, withPlace: true, grouped);
         stretches.Clear();
         var place = first;
         foreach (var i in all.Sort.Order)

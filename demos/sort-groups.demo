@@ -1,0 +1,31 @@
+title: Sort groups
+intro: A thing made of several sprites, a stack of crates on a pallet, can now sort by Y as one, so a character walks in front of the whole stack or behind all of it.
+project: Empty | Warehouse
+
+chapter: A stack on a pallet | Each part sorts at its own feet
+select: Main Camera
+set: Camera.Sort By Y = true
+agent: entity_create {"entity": {"name": "Pallet", "position": [0, 0], "components": {"Sprite": {"tint": "#8A5A3A", "size": [1.6, 0.4]}}, "children": [{"name": "Crate 1", "position": [0, 0.4], "components": {"Sprite": {"tint": "#4870E0", "size": [1.2, 0.4]}}}, {"name": "Crate 2", "position": [0, 0.8], "components": {"Sprite": {"tint": "#5880F0", "size": [1.2, 0.4]}}}, {"name": "Crate 3", "position": [0, 1.2], "components": {"Sprite": {"tint": "#4870E0", "size": [1.2, 0.4]}}}, {"name": "Crate 4", "position": [0, 1.6], "components": {"Sprite": {"tint": "#5880F0", "size": [1.2, 0.4]}}}]}}
+agent: entity_create {"entity": {"name": "Worker", "position": [0, 0.9], "components": {"Sprite": {"tint": "#E04848", "size": [0.6, 1.2]}}}}
+look: 0, 0.6, 2.5
+say: The camera sorts by Y, as a top-down game's does: what stands lower down draws in front. Here's a pallet with four crates stacked on it, each its own sprite, and a worker standing behind it.
+play
+expectdrawn: 0, 1.2 = #E04848
+expectdrawn: 0, 0.4 = #4870E0
+stop
+explain: entity:Worker | Caught in the stack | Each crate sorts at its own feet, and the higher ones stand higher up the screen, so the worker draws over the top crates and under the bottom one, as if standing inside the stack.
+
+chapter: Sort Group | One entry at the pallet's feet
+select: Pallet
+add: Sort Group
+explain: component:SortGroup | Sort Group | A Sort Group on the pallet makes it and everything inside it sort as one thing, at the pallet's feet. Inside the group, the parts draw by their own Order, then in Hierarchy order: bottom crate to top.
+play
+expectdrawn: 0, 1.2 = #4870E0
+stop
+explain: entity:Pallet | Behind the whole stack | Standing above the pallet's feet, the worker is now behind every crate.
+select: Worker
+set: Transform.Position = 0, -0.5, 0
+play
+expectdrawn: 0, 0 = #E04848
+stop
+explain: entity:Worker | In front of all of it | One step lower, and the worker draws over the whole stack. Ground Offset moves the point the group sorts at, for a root drawn with space under its feet, and a tilemap's walls sorting by Y interleave with groups as with any sprite.

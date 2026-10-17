@@ -24,8 +24,60 @@ public static class Views
     public static readonly Entity ScreenEntity = new("Screen");
 
     // One entity that draws: its sprite when that's all it draws (or else its drawable components, gathered in step order
-    // apart), where its draws are in the frame's list once it's drawn (First, Count), and what it sorts by.
-    internal readonly record struct Drawn(Entity Entity, Sprite? Sole, int First, int Count, bool Lifted, int Order, float Z, float Y);
+    // apart), where its draws are in the frame's list once it's drawn (First, Count), and what it sorts by: Lifted, Order,
+    // Z and Y, then its place in the hierarchy (its sort group's, in one; see SortGroups), then its Order within its group.
+    internal readonly record struct Drawn(Entity Entity, Sprite? Sole, int First, int Count, bool Lifted, int Order, float Z, float Y,
+        int Place = 0, int Inner = 0);
+
+    // Puts the entities of a frame, met in hierarchy order, in their sort groups (see SortGroup): an entity in one sorts at
+    // its group's Order, Z and ground, and at its group's place in the hierarchy (that of the group's first entity drawn,
+    // so the group's draws stay together among equals), then by its own Order within the group. A group's entities come
+    // one after another in hierarchy order, so the group last met is all it keeps. It's made afresh for each frame.
+    internal struct SortGroups
+    {
+        private Entity? _root;
+        private int _place, _order;
+        private float _z, _y;
+
+        // Whether any entity met was in a group: sorting by key then sorts by place, and Order within a group, too.
+        public bool Any;
+
+        // Gives the entry its place in the hierarchy, and its group's keys if it's in one; returns whether it is.
+        public bool Join(ref Drawn entry, int place, bool sortByY)
+        {
+            if (GroupOf(entry.Entity) is not { } root)
+            {
+                entry = entry with { Place = place };
+                return false;
+            }
+
+            if (root != _root)
+            {
+                (_root, _place, _order) = (root, place, OrderOf(root) ?? entry.Order);
+                var world = root.Transform.WorldMatrix;
+                _z = world.M43;
+                _y = !sortByY ? 0 : (root.GetComponent<Sprite>() is { } sprite ? FeetOf(sprite, world) : world.M42) +
+                    root.GetComponent<SortGroup>()!.GroundOffset;
+            }
+
+            Any = true;
+            entry = entry with { Order = _order, Z = _z, Y = _y, Place = _place, Inner = entry.Order };
+            return true;
+        }
+    }
+
+    // The sort group an entity draws in: the outermost of it and the entities it's inside with a SortGroup, if any.
+    internal static Entity? GroupOf(Entity entity)
+    {
+        Entity? root = null;
+        for (var e = entity; e is not null; e = e.Parent)
+        {
+            if ((e.Roles & ComponentRoles.SortGroup) != 0)
+                root = e;
+        }
+
+        return root;
+    }
 
     // Whether the entity draws in the world, and what it sorts by: its sprite when that's all it draws, or else its
     // drawable components gathered into `drawables` in step order (and those that go over the world into `overs`). Its
@@ -93,9 +145,10 @@ public static class Views
     }
 
     // Lifted ones last, then by Order, then Z, then (sorting by Y) higher up first, keeping hierarchy order among equals
-    // (the order they come in): empty when that's the order they're in. A big scene is often in order already, all on one
-    // layer, or nearly (a few things over or under its crowd): that's seen, and merged, in a look at each.
-    internal static ReadOnlySpan<int> SortBackToFront(ReadOnlySpan<Drawn> entries, bool sortByY, StableSort keys)
+    // (the order they come in), but for a sort group's entities, by their Order among themselves (`grouped`: when any
+    // entry is in one): empty when that's the order they're in. A big scene is often in order already, all on one layer,
+    // or nearly (a few things over or under its crowd): that's seen, and merged, in a look at each.
+    internal static ReadOnlySpan<int> SortBackToFront(ReadOnlySpan<Drawn> entries, bool sortByY, StableSort keys, bool grouped = false)
     {
         switch (keys.TryMerge(entries, new BackToFront(), MaxStretches))
         {
@@ -107,6 +160,16 @@ public static class Views
 
         keys.Begin(entries.Length);
         var key = keys.Keys;
+        if (grouped)
+        {
+            for (var i = 0; i < entries.Length; i++)
+                key[i] = StableSort.KeyOf(entries[i].Inner);
+            keys.Apply();
+            for (var i = 0; i < entries.Length; i++)
+                key[i] = (uint)entries[i].Place;
+            keys.Apply();
+        }
+
         if (sortByY)
         {
             for (var i = 0; i < entries.Length; i++)
@@ -143,26 +206,36 @@ public static class Views
             c = a.Z.CompareTo(b.Z);
         if (c == 0)
             c = b.Y.CompareTo(a.Y);
+        if (c == 0)
+            c = a.Place.CompareTo(b.Place);
+        if (c == 0)
+            c = a.Inner.CompareTo(b.Inner);
         return c;
     }
 
     /// <summary>
     /// Drawable entities back to front: Order, then Z (higher is closer), then hierarchy order. With the camera's
-    /// <see cref="Camera.SortByY"/>, things lower down draw in front of things above them, before hierarchy order. An
-    /// entity drawn on top (a <see cref="Draggable"/> being held, and what's inside it) draws over everything else.
+    /// <see cref="Camera.SortByY"/>, things lower down draw in front of things above them, before hierarchy order. What's
+    /// in a <see cref="SortGroup"/> sorts as one, at its root's, and by its own Order within the group. An entity drawn
+    /// on top (a <see cref="Draggable"/> being held, and what's inside it) draws over everything else.
     /// </summary>
     public static IEnumerable<Entity> DrawOrder(Scene scene)
     {
         var sortByY = FindCamera(scene)?.GetComponent<Camera>()?.SortByY == true;
         var drawables = new List<IDrawable>();
         var entries = new List<Drawn>();
+        var groups = new SortGroups();
+        var place = 0;
         foreach (var entity in scene.Entities)
         {
-            if ((entity.Roles & ComponentRoles.Drawable) != 0 && entity.IsActive && Describe(entity, sortByY, drawables, null, out var entry))
-                entries.Add(entry);
+            place++;
+            if ((entity.Roles & ComponentRoles.Drawable) == 0 || !entity.IsActive || !Describe(entity, sortByY, drawables, null, out var entry))
+                continue;
+            groups.Join(ref entry, place, sortByY);
+            entries.Add(entry);
         }
 
-        var order = SortBackToFront(CollectionsMarshal.AsSpan(entries), sortByY, new StableSort());
+        var order = SortBackToFront(CollectionsMarshal.AsSpan(entries), sortByY, new StableSort(), groups.Any);
         return order.IsEmpty ? entries.Select(d => d.Entity).ToList() : order.ToArray().Select(at => entries[at].Entity).ToList();
     }
 
@@ -178,13 +251,17 @@ public static class Views
         var drawables = new List<IDrawable>();
         var entries = new List<Drawn>();
         var partOf = new List<int?>();
+        var groups = new SortGroups();
+        var place = 0;
         foreach (var entity in scene.Entities)
         {
+            place++;
             if ((entity.Roles & ComponentRoles.Drawable) == 0 || !entity.IsActive || !Describe(entity, sortByY, drawables, null, out var entry))
                 continue;
+            var grouped = groups.Join(ref entry, place, sortByY);
             entries.Add(entry);
             partOf.Add(null);
-            if (!sortByY)
+            if (!sortByY || grouped)
                 continue;
             foreach (var component in entity.ComponentList)
             {
@@ -198,7 +275,7 @@ public static class Views
             }
         }
 
-        var order = SortBackToFront(CollectionsMarshal.AsSpan(entries), sortByY, new StableSort());
+        var order = SortBackToFront(CollectionsMarshal.AsSpan(entries), sortByY, new StableSort(), groups.Any);
         return order.IsEmpty
             ? entries.Select((d, i) => (d.Entity, partOf[i])).ToList()
             : order.ToArray().Select(at => (entries[at].Entity, partOf[at])).ToList();

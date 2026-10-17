@@ -347,6 +347,7 @@ Built-in components:
 - `Bar` (`Value`, `Max`, `Fraction` and **Track**); see [HUD bars](/docs/ui/#hud-bars);
 - `Pickup` (`IsCollected` and a `Collected` event) and `Counter` (`Value`, `Best`, `Add` and a `Changed` event); see [Pickups and scores](/docs/ui/#pickups-and-scores);
 - `Follow`, which moves its entity after a **Target**, smoothly, with an offset, dead zone, look-ahead and an area to **Stay Inside** (see [Cameras](/docs/players/#cameras)). Scripts can set `TargetEntity` to follow something directly. `Camera` has **Sort By Y** for top-down games;
+- `SortGroup`, which sorts its entity and everything inside it as one at the root's feet (plus a `GroundOffset`), its parts by their own Order within it, for a thing made of several sprites in a top-down game;
 - `Parallax`, which scrolls a background layer at a fraction of the world's speed and can repeat its sprite across the view;
 - `ScreenAnchor`, which pins its entity to one of nine points on the screen plus an **Offset**, for HUDs and menus. The Scene view shows it where the game does (on a 16:9 screen) and dragging it there sets its Offset; with the camera's **HudSize** set, it keeps its size on the screen as the camera zooms (`Camera.HudScale` says how many times its own size it's drawn);
 - `Health` (`Damage`, `Heal`, `Kill`, `IsDead`, `IsInvincible`, **Respawn**, and `Damaged`, `Died` and `Respawned` events) and `DamageOnTouch` (with **Kill**); see [Health and hazards](/docs/combat/#health-and-hazards) and Checkpoints above. `Sprite` has `Flash` and `Blink` for scripts to use themselves;

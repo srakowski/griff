@@ -412,6 +412,33 @@ public sealed class Parallax : Component
 }
 
 /// <summary>
+/// Draws the entity and everything inside it as one thing among the rest: a pallet with a stack of crates on it, a
+/// machine with its operator, a truck with its label. The group sorts at its root's Order and Z and, with the camera's
+/// <see cref="Camera.SortByY"/>, at where the root stands (the bottom of its sprite, or its position if it has none),
+/// so a character walking past draws in front of the whole stack while lower down and behind all of it once above.
+/// Inside the group, its parts draw by their own Order, then in Hierarchy order, wherever they are on the screen.
+/// </summary>
+/// <remarks>
+/// Without it, each part of a tall thing sorts at its own feet, so the top of a stack sorts behind its bottom and a
+/// character can end up between them. A group inside a group sorts as part of the outer one. The root's Order is the
+/// group's; with nothing drawn on the root, it's that of its first part that draws. A part being dragged (see
+/// <see cref="Draggable"/>) still draws over everything. A tilemap inside a group draws as one, its rows not sorting
+/// apart.
+/// </remarks>
+[Category("Rendering")]
+[WorksWith(typeof(Sprite), Note = "on the root, whose feet the group sorts at")]
+[ComponentName("SortGroup")]
+public sealed class SortGroup : Component
+{
+    /// <summary>
+    /// How far above the root's feet the group sorts, in world units (below for less than 0): for a root whose picture
+    /// has empty space under where it stands, or a group whose root draws nothing. Only matters with the camera's
+    /// <see cref="Camera.SortByY"/>.
+    /// </summary>
+    public float GroundOffset { get; set; }
+}
+
+/// <summary>
 /// Draws the camera on its entity into part of the screen, over the main camera's view: a minimap in a corner, one
 /// player's half of a split screen, a first-person window (a camera with a First Person View) inside a 2D game. The part
 /// is given as fractions of the screen from its top left, so it keeps its place at any window size; the camera's own

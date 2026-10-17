@@ -550,6 +550,7 @@ public static partial class SceneRenderer
         sprites.EnsureCapacity(first + scene.EntitiesNow.Length + 16);
         var drawing = DrawingFor(ref scratch.Drawing, sprites, view, cameraSize, playing);
         drawing.AsPlaced = filter.AsPlaced;
+        var groups = new SortGroups();
         // By index: going through a list of them as such would make garbage.
         var entities = scene.EntitiesNow;
         for (var e = 0; e < entities.Length; e++)
@@ -560,12 +561,14 @@ public static partial class SceneRenderer
             timer?.Mark(LeadOf(entity));
             if (!Describe(entity, sortByY, drawables, overs, out var entry))
                 continue;
+            var grouped = groups.Join(ref entry, e, sortByY);
             var start = sprites.Count;
             DrawEntity(entity, entry.Sole, drawables, drawing, sprites, timer);
-            // What draws nothing this frame (blinked out, out of view) has nothing to put in order.
+            // What draws nothing this frame (blinked out, out of view) has nothing to put in order. In a sort group, it
+            // all sorts at the group's place.
             if (drawing.Sorts.Count > 0)
             {
-                if (sortByY)
+                if (sortByY && !grouped)
                     AddSorted(entries, entry, start, sprites.Count, drawing.Sorts);
                 else if (sprites.Count > start)
                     entries.Add(entry with { First = start, Count = sprites.Count - start });
@@ -579,7 +582,7 @@ public static partial class SceneRenderer
 
         drawing.Release();
         timer?.Mark(SortingPart);
-        PutBackToFront(sprites, first, CollectionsMarshal.AsSpan(entries), sortByY, scratch);
+        PutBackToFront(sprites, first, CollectionsMarshal.AsSpan(entries), sortByY, scratch, groups.Any);
     }
 
     // What goes over the world (ropes, wires), after it and under what's pinned to the screen. Returns how many draws at
@@ -642,9 +645,9 @@ public static partial class SceneRenderer
     // Puts the draws from `first` on (each entry's run of them, the runs in hierarchy order) back to front, each run kept
     // as it is. Nothing moves when they're in that order already, as a big scene on one layer is; otherwise entries next to
     // each other in both orders move together, the biggest such block of them in place and the rest by way of the spare.
-    private static void PutBackToFront(List<SpriteDraw> sprites, int first, ReadOnlySpan<Drawn> entries, bool sortByY, Scratch scratch)
+    private static void PutBackToFront(List<SpriteDraw> sprites, int first, ReadOnlySpan<Drawn> entries, bool sortByY, Scratch scratch, bool grouped)
     {
-        var order = SortBackToFront(entries, sortByY, scratch.Sort);
+        var order = SortBackToFront(entries, sortByY, scratch.Sort, grouped);
         if (order.IsEmpty)
             return;
 

@@ -148,18 +148,21 @@ internal sealed partial class HudSystem
     private static void DrawBox(FrameDrawing frame, Tooltip tip, Vector2 cursor)
     {
         var (lines, columns, rows) = LinesOf(tip);
-        var size = tip.Size;
+        // Drawn on the screen as the HUD is, so with the camera's Hud Size it keeps its size as the camera zooms.
+        var hud = frame.Camera?.GetComponent<Camera>()?.HudScale ?? 1;
+        var size = tip.Size * hud;
+        var offset = tip.Offset * hud;
         var pad = size * BoxPadding;
         var box = new Vector2(columns * size * LetterWidth + pad * 2, rows * size + pad * 2);
         var view = frame.View;
 
         // Its top-left corner by the cursor, on the other side of it at the screen's right or bottom edge, kept on the screen.
-        var left = cursor.X + tip.Offset.X;
+        var left = cursor.X + offset.X;
         if (left + box.X > view.Max.X)
-            left = cursor.X - tip.Offset.X - box.X;
-        var top = cursor.Y + tip.Offset.Y;
+            left = cursor.X - offset.X - box.X;
+        var top = cursor.Y + offset.Y;
         if (top - box.Y < view.Min.Y)
-            top = cursor.Y - tip.Offset.Y + box.Y;
+            top = cursor.Y - offset.Y + box.Y;
         left = Math.Clamp(left, view.Min.X, Math.Max(view.Min.X, view.Max.X - box.X));
         top = Math.Clamp(top, Math.Min(view.Max.Y, view.Min.Y + box.Y), view.Max.Y);
 

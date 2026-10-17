@@ -322,6 +322,26 @@ public class TooltipTests
     }
 
     [Fact]
+    public void Tooltip_WithTheCamerasHudSize_KeepsItsBoxsSizeOnTheScreen_AsTheCameraZooms()
+    {
+        AddDeck("Deck", Vector2.Zero, "Deck A");
+        var game = CreateGame();
+        MouseAt(new Vector2(0.5f, 0.5f));
+        Tick(game, 30);
+        var box = SceneRenderer.Build(game, 2).Sprites[^2].World;
+
+        var camera = _scene.Entities.Single(e => e.Name == "Camera").GetComponent<Camera>()!;
+        camera.HudSize = 5;
+        camera.Size = 10;
+        Tick(game);
+        var zoomed = SceneRenderer.Build(game, 2).Sprites[^2].World;
+
+        // Twice the zoom, twice as big in the world: the same size on the screen.
+        Assert.Equal(box.M11 * 2, zoomed.M11, 3);
+        Assert.Equal(box.M22 * 2, zoomed.M22, 3);
+    }
+
+    [Fact]
     public void Tooltip_BoxNearTheRightEdge_GoesLeftOfTheCursor()
     {
         AddDeck("Deck", new Vector2(9, 0), "A long tooltip that would run off the screen");

@@ -202,6 +202,12 @@ patch (`v0.1.1`) only fixes. The workflow ignores any other tag.
 1. **Check main is ready**: it is pushed, its CI run (Actions → CI) is green and its Site run deployed, and both test
    suites pass on it on your machine. The workflow runs no tests: CI's runner draws with software OpenGL, which refuses
    contexts now and then, so a CI run that fails only on "No OpenGL context could be made" doesn't stop a release.
+   **Write the changelog entry**: `site/src/data/changelog.md` holds what changed in each release, in plain words, and
+   its Unreleased section collects the changes since the last one (add a bullet to it with every user-visible change).
+   Check it says what this release changes, run `powershell -NoProfile -ExecutionPolicy Bypass -File
+   tools\changelog.ps1 -Version 0.1.0-alpha.1` (it makes Unreleased this version's entry, dated today, and starts a new
+   empty one) and commit the result to main before tagging. The release's notes on GitHub start with that entry, and the
+   Releases page lists every entry under Changelog.
 2. **Tag and push** it (a pre-release here; `v0.1.0` the same way for a release):
 
    ```sh
@@ -236,12 +242,9 @@ To redo a release that failed before it was created, delete the tag (`git push o
 `git tag -d v0.1.0-alpha.1`) and tag again after fixing main; a created release (or a draft left by a failed upload) has to
 be deleted on GitHub first. Don't reuse a version that installed editors may have taken: tag the next one instead.
 
-To try the release locally, without GitHub: `powershell -NoProfile -ExecutionPolicy Bypass -File tools
-elease.ps1 -Version 0.1.0-alpha.1`
-makes the same zip and Velopack files in `artifacts
-elease\` (`-NoInstaller` just the zip), and
-`tools
-elease-notes.ps1 -Tag v0.1.0-alpha.1` writes the notes (it needs the tag). Packing a second version into the same
+To try the release locally, without GitHub: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release.ps1 -Version 0.1.0-alpha.1`
+makes the same zip and Velopack files in `artifacts\release\` (`-NoInstaller` just the zip), and
+`tools\release-notes.ps1 -Tag v0.1.0-alpha.1` writes the notes (it needs the tag). Packing a second version into the same
 `-Out` folder makes a delta and a feed with both, to update from: [Building Griff](https://griff.games/docs/building/#releases)
 says how to install the first and update it from that folder (`GRIFF_UPDATE_SOURCE`). `tools/release-notices.cs` writes
 the notices from the files the editor folder holds and fails when a package has none on record: add its license to
@@ -254,5 +257,6 @@ built up a reputation. To sign them, `vpk pack` takes `--signParams` (signtool's
 The Releases page (`src/content/docs/releases.mdx`, `src/components/Releases.astro`) reads GitHub's list of releases when
 the site is built (`src/data/releases.mjs`): pre-releases too, labelled pre-alpha, each with its installer (the
 `-Setup.exe`) and its portable zip (its other files are the installed editor's updates). It says "No release yet" when
-there is none or GitHub can't be reached.
+there is none or GitHub can't be reached. Below the releases, the Changelog (`src/components/Changelog.astro`) lists
+`src/data/changelog.md`, which is in the repository and so shows even offline.
 `GRIFF_RELEASES_FILE=<json>` reads a saved copy of the API's answer instead, to see the page with releases offline.

@@ -36,6 +36,15 @@ try {
     $notes.Add('')
     $notes.Add('More at https://griff.games/docs/getting-started/. The `.nupkg` and `releases.*.json` files are the installed editor''s updates.')
     $notes.Add('')
+    # What changed, in plain words, from the changelog as it is at the tag (tools/changelog.ps1 writes the entry before tagging).
+    $changelog = (git show "${Tag}:site/src/data/changelog.md") -join "`n"
+    $entry = [regex]::Match($changelog, '(?ms)^## ' + [regex]::Escape($Tag.Substring(1)) + ' - [^\n]*\n(.*?)(?=^## |\z)')
+    if ($entry.Success -and $entry.Groups[1].Value.Trim()) {
+        $notes.Add('## What changed')
+        $notes.Add('')
+        $notes.Add($entry.Groups[1].Value.Trim())
+        $notes.Add('')
+    }
     if ($previous) {
         $notes.Add("## Changes since $previous")
         $notes.Add('')

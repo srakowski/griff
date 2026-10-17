@@ -1,0 +1,28 @@
+---
+// What changed in each release, newest first, from src/data/changelog.md; "Unreleased" is what the next release will take.
+import { getChangelog } from '../data/changelog.mjs';
+import { repoUrl } from '../data/releases.mjs';
+
+const sections = (getChangelog()).filter((s) => s.bullets.length > 0);
+---
+
+{
+	sections.map((s) => (
+		<section class="entry" aria-labelledby={`changes-${s.version ?? 'unreleased'}`}>
+			<h3 id={`changes-${s.version ?? 'unreleased'}`}>
+				{s.version ? <a href={`${repoUrl}/releases/tag/v${s.version}`}>{s.title}</a> : s.title}
+				{s.date && <span class="date">{s.date}</span>}
+			</h3>
+			<ul>{s.bullets.map((b) => <li set:html={b} />)}</ul>
+		</section>
+	))
+}
+
+<style>
+	.date {
+		margin-inline-start: 0.6rem;
+		color: var(--sl-color-gray-3);
+		font-size: var(--sl-text-sm);
+		font-weight: 400;
+	}
+</style>

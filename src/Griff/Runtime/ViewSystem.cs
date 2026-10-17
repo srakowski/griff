@@ -25,22 +25,29 @@ internal sealed class ViewSystem : GameSystem
         return (center, size, Game.ViewAspect);
     }
 
-    // Cameras with CameraControls, on real time, but not under a menu that pauses the game here.
+    // Cameras with CameraControls, on real time: the player's, but not under a menu that pauses the game here; the game's
+    // while it has one focused on something.
     internal void RunCameraControls()
     {
         var controls = Game.Scene.ActiveNow<CameraControls>();
-        if (controls.Count == 0 || Game.LocalInputBlocked)
+        if (controls.Count == 0)
             return;
-        var onHud = MouseOnHud();
+        var blocked = Game.LocalInputBlocked;
+        bool? onHud = null;
         foreach (var control in controls)
-            Advance(control, Game.Input, Game.Time.UnscaledDelta, AspectOf(control.Entity!), onHud);
+        {
+            if (control.IsFocused)
+                control.AdvanceFocus(Game.Time.UnscaledDelta, AspectOf(control.Entity!));
+            else if (!blocked)
+                Advance(control, Game.Input, Game.Time.UnscaledDelta, AspectOf(control.Entity!), onHud ??= MouseOnHud());
+        }
     }
 
     // Pans and zooms a camera by what `input` says over `seconds` of real time, on a view `aspect` times as wide as it's
     // high. While `mouseOnHud`, the wheel and a new drag are the HUD's.
     private static void Advance(CameraControls controls, IInput input, float seconds, float aspect, bool mouseOnHud)
     {
-        if (controls.Entity is not { Scene: { } scene } entity || entity.GetComponent<Camera>() is not { } camera)
+        if (controls.Entity is not { Scene: not null } entity || entity.GetComponent<Camera>() is not { } camera)
             return;
         var transform = entity.Transform;
         var position = new Vector2(transform.WorldPosition.X, transform.WorldPosition.Y);
@@ -81,8 +88,7 @@ internal sealed class ViewSystem : GameSystem
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(controls.StayInside) && EntityNames.Find(scene, controls.StayInside, new NameLookup(entity)) is { } area &&
-            Follow.AreaOf(area) is { } bounds)
+        if (controls.Bounds() is { } bounds)
             position = Follow.Clamp(position, bounds, new Vector2(size * aspect, size));
         if (position != start)
             Follow.SetWorld(transform, position);

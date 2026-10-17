@@ -9,6 +9,8 @@
 
 - A **Show When** (Gameplay) shows anything only while a flag holds (**Needs Flag** `run.Contracts`, or `not Tutorial`), hidden with what's inside it otherwise and looked at every frame: a HUD that brings in its tools as goals are met, whose hidden buttons can't be clicked or set off by their shortcuts. A flag (or any saved value) named `run.` lasts one run: kept while the game runs and in its saved games, but not written down, so it's unset the next time the game starts. A New Game already forgets every flag.
 - A dialogue's **Stop** action (on a button or trigger) and `Game.EndDialogue(dialogue)` end it at once, even mid-line, as saying its last line would: the box hides, the pause is let go, its **Message** is sent and `Finished` is raised, with `CutShort` true. For a Skip button on a cutscene or a tour.
+- **Camera Controls** can take the camera over for a while: `FocusOn(entity, size)` glides to a character (or a point) and follows it at a closer Size, inside **Stay Inside**, while the player's pan, drag and wheel wait; `Release()` zooms back out to the Size it had and hands the camera back where it is. **Focus Size** and **Focus Seconds** set the defaults, and a Trigger or a Do button can do **Focus On** and **Release**, for a guided tour or a cutscene with no code.
+- Agents' clicks in `game_input` land on a button pinned to the screen even after the camera has moved: put on the HUD, the agent's mouse rests on its spot on the screen as a real one does, so clicking again where it rests clicks a panel that opened there again.
 
 ## 0.1.0-alpha.13 - 2026-10-17
 

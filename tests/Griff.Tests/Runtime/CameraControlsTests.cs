@@ -237,6 +237,112 @@ public class CameraControlsTests
     }
 
     [Fact]
+    public void FocusOn_FollowsAWalkingCharacterAtItsSize_TheKeysAndWheelWaiting_ThenHandsBackAtTheOldSize()
+    {
+        _lens.Size = 9;
+        var walker = new Entity("Walker");
+        walker.Transform.Position = new Vector3(10, 0, 0);
+        _scene.Add(walker);
+        var game = CreateGame();
+        Tick(game);
+
+        _controls.FocusSeconds = 0.5f;
+        _controls.FocusOn(walker, 6);
+        Assert.True(_controls.IsFocused);
+        Assert.Same(walker, _controls.FocusTarget);
+
+        // Halfway through the glide it's on its way, zooming in; WASD and the wheel do nothing meanwhile.
+        _input.SetKey(Key.W, true);
+        for (var i = 0; i < 15; i++)
+        {
+            walker.Transform.Position += new Vector3(0.05f, 0, 0);
+            _input.AddScroll(-1);
+            Tick(game, new Vector2(0.5f, 0.5f));
+        }
+
+        Assert.InRange(_lens.Size, 6.01f, 8.99f);
+        Assert.InRange(At.X, 0.01f, 10.7f);
+
+        for (var i = 0; i < 60; i++)
+        {
+            walker.Transform.Position += new Vector3(0.05f, 0, 0);
+            _input.AddScroll(-1);
+            Tick(game, new Vector2(0.5f, 0.5f));
+        }
+
+        Assert.Equal(6, _lens.Size, 4);
+        Near(new Vector2(walker.Transform.Position.X, 0), At);
+        Assert.Equal(-10, _camera.Transform.Position.Z);
+
+        // Released, it zooms back to the Size it had, staying where it is, and then the keys and the wheel work again.
+        _input.SetKey(Key.W, false);
+        _controls.Release();
+        Assert.True(_controls.IsFocused);
+        Assert.Null(_controls.FocusTarget);
+        var there = At;
+        for (var i = 0; i < 31; i++)
+            Tick(game);
+        Assert.False(_controls.IsFocused);
+        Assert.Equal(9, _lens.Size, 4);
+        Near(there, At);
+
+        _input.SetKey(Key.D, true);
+        for (var i = 0; i < 30; i++)
+            Tick(game);
+        Near(there + new Vector2(9, 0), At);
+        _input.SetKey(Key.D, false);
+        _input.AddScroll(1);
+        Tick(game, Vector2.Zero);
+        Assert.Equal(9 * 0.85f, _lens.Size, 4);
+    }
+
+    [Fact]
+    public void FocusOn_APoint_StaysInsideTheLevel_AndWithNoSizeOrTime_JumpsThereAtItsOwnSize()
+    {
+        var level = new Entity("Level");
+        var map = level.AddComponent<Tilemap>();
+        map.Tiles = Enumerable.Repeat(new string('1', 30), 20).ToList();
+        _scene.Add(level);
+        _controls.StayInside = "Level";
+        var (min, _) = map.Bounds();
+        var game = CreateGame();
+        Tick(game);
+
+        _controls.FocusSeconds = 0;
+        _controls.FocusOn(min - new Vector2(50, 50));
+        Tick(game);
+
+        Assert.Equal(5, _lens.Size, 4);
+        Near(min + new Vector2(10, 5), At);
+    }
+
+    [Fact]
+    public void FocusOn_AndRelease_AreActions_ATriggerOrButtonCanDo_ByName()
+    {
+        var names = string.Join(", ", ComponentActions.Of(typeof(CameraControls)).Select(a => a.Name));
+        Assert.Equal("FocusOn, Release", names);
+
+        var walker = new Entity("Walker");
+        walker.Transform.Position = new Vector3(3, 1, 0);
+        _scene.Add(walker);
+        _controls.FocusSize = 4;
+        _controls.FocusSeconds = 0;
+        var game = CreateGame();
+
+        _controls.FocusOn("Nobody");
+        Assert.False(_controls.IsFocused);
+        _controls.FocusOn("Walker");
+        Tick(game);
+        Assert.Equal(4, _lens.Size, 4);
+        Near(new Vector2(3, 1), At);
+
+        _controls.Release();
+        Tick(game);
+        Assert.False(_controls.IsFocused);
+        Assert.Equal(5, _lens.Size, 4);
+    }
+
+    [Fact]
     public void APauseMenu_HoldsTheViewStill()
     {
         var menu = new Entity("Pause Menu");

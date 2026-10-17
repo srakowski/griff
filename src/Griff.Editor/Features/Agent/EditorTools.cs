@@ -70,6 +70,7 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
                 "\"scroll\" turns the mouse wheel that many notches (up, away from you, is positive; a visual novel's log opens on it), over \"point\" if given. " +
                 "\"touch\" puts fingers on a touch screen at a point or a list of points at once, e.g. {\"touch\": [\"Lane 1\", [2, -3]]}, holding them for \"seconds\" (a tap without), for what takes several fingers (rhythm lanes' chords and holds). " +
                 "A point is [x, y] in world units, an entity's name (its middle), or a button on the screen by its label (an inventory bar's item, \"Item: Key\"; the report lists them). The real mouse takes over again once it moves over the game. " +
+                "Put on a button or the HUD, the mouse rests on its spot on the screen as a real one does, so clicking again at the point it was put at clicks what's there now on the screen, even after the camera has moved (a panel pinned to the screen moves in the world with the camera). " +
                 "\"flags\" sets or clears dialogue flags first, e.g. {\"HasKey\": true}, to try a branch. Afterwards it reports where \"watch\"ed " +
                 "entities are (default: Player), any dialogue being said with its choices, and the flags set or cleared. The game runs on between calls unless \"pause_after\" " +
                 "freezes it, so nothing happens while you decide the next move; the next game_input resumes it. The editor window has to be on screen for the game to run.",

@@ -262,13 +262,30 @@ public enum CameraDrag
 /// wheel and drags are the HUD's while the mouse is over it (anything pinned with a <see cref="ScreenAnchor"/>, an open
 /// panel, a button); set the camera's <see cref="Camera.HudSize"/> to keep the HUD's size as it zooms.
 /// </summary>
-/// <remarks>It runs on real time, so the view moves while the game is paused, but not under a menu that pauses it.</remarks>
+/// <remarks>
+/// It runs on real time, so the view moves while the game is paused, but not under a menu that pauses it. For a "look
+/// at this" moment (a tour, a cutscene, a new building), <see cref="FocusOn(Entity, float?, float?)"/> takes the camera
+/// over: it glides to a character and follows it at a closer Size, the player's pan, drag and wheel waiting, until
+/// <see cref="Release"/> zooms back out and hands the camera back where it is. A Trigger or a Button can do both too.
+/// </remarks>
 [Category("Movement")]
 [Requires(typeof(Camera))]
 [ComponentName("CameraControls")]
 [NetLocal]
 public sealed class CameraControls : Component
 {
+    // While focused: the entity followed (null for a point, or once it's gone) and where it last was, the Size to zoom to
+    // (0 keeps the camera's), and the glide over: where and at what Size it set off, how long it's been going and how long
+    // it takes (real seconds).
+    private bool _focused;
+    private Entity? _focusEntity;
+    private Vector2 _focusPoint;
+    private float _focusZoom;
+    private (Vector2 From, float FromSize, float Elapsed, float Seconds)? _glide;
+
+    // The Size the camera had before it was focused, and once released, the zoom back to it.
+    private float _sizeBefore;
+    private (float From, float Elapsed, float Seconds)? _zoomBack;
 
     /// <summary>
     /// How fast the keys and the screen's edges pan, in screen heights a second: 1 crosses the screen's height in a second,
@@ -309,6 +326,169 @@ public sealed class CameraControls : Component
 
     // The world point the mouse took hold of as a drag began, while it's dragging (see Runtime.ViewSystem).
     internal Vector2? HeldAt { get; set; }
+
+    /// <summary>
+    /// The camera's Size while it's focused on something (see <see cref="FocusOn(Entity, float?, float?)"/>), smaller to
+    /// look closer: what it zooms to when not told. 0 keeps the Size it has.
+    /// </summary>
+    public float FocusSize { get; set; }
+
+    /// <summary>
+    /// How many seconds (of real time) the camera takes to glide over to what it focuses on, zooming as it goes, and to zoom
+    /// back once released. 0 jumps.
+    /// </summary>
+    public float FocusSeconds { get; set; } = 0.75f;
+
+    /// <summary>
+    /// True from <see cref="FocusOn(Entity, float?, float?)"/> until the camera is the player's again (after
+    /// <see cref="Release"/>'s zoom back): the player's pan, drag and wheel wait meanwhile.
+    /// </summary>
+    public bool IsFocused => _focused || _zoomBack is not null;
+
+    /// <summary>The entity the camera is following while focused; null when it's on a point, or not focused.</summary>
+    public Entity? FocusTarget => _focused ? _focusEntity : null;
+
+    /// <summary>
+    /// Takes the camera over to follow <paramref name="target"/>: it glides there in <paramref name="seconds"/> (or
+    /// <see cref="FocusSeconds"/>), zooming to <paramref name="size"/> (or <see cref="FocusSize"/>, and with neither keeping
+    /// its Size), then keeps it in the middle of the view as it moves, inside <see cref="StayInside"/>. The player's pan,
+    /// drag and wheel wait until <see cref="Release"/>. Focusing on something else while focused glides on from there.
+    /// </summary>
+    public void FocusOn(Entity target, float? size = null, float? seconds = null)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        Focus(target, Flat(target.Transform.WorldPosition), size, seconds);
+    }
+
+    /// <summary>Takes the camera over to look at a point in the world, as <see cref="FocusOn(Entity, float?, float?)"/> does a character.</summary>
+    public void FocusOn(Vector2 point, float? size = null, float? seconds = null) => Focus(null, point, size, seconds);
+
+    /// <summary>
+    /// Takes the camera over to follow the entity with this name (the nearest, if there are several), zooming to
+    /// <see cref="FocusSize"/> over <see cref="FocusSeconds"/>, until Release. Nothing happens if there's none.
+    /// </summary>
+    [Action]
+    public void FocusOn(string? name)
+    {
+        if (Entity?.Scene is { } scene && !string.IsNullOrWhiteSpace(name) && EntityNames.Find(scene, name, new NameLookup(Entity)) is { } target)
+            FocusOn(target);
+    }
+
+    /// <summary>
+    /// Hands the camera back to the player where it is: it zooms back to the Size it had before it was focused, over
+    /// <see cref="FocusSeconds"/>, and then the player's pan, drag and wheel work again.
+    /// </summary>
+    [Action]
+    public void Release()
+    {
+        if (!_focused)
+            return;
+        _focused = false;
+        _focusEntity = null;
+        _glide = null;
+        if (Entity?.GetComponent<Camera>() is not { } camera || _sizeBefore <= 0)
+            return;
+        if (FocusSeconds > 0 && camera.Size != _sizeBefore)
+            _zoomBack = (camera.Size, 0, FocusSeconds);
+        else
+            camera.Size = _sizeBefore;
+    }
+
+    private void Focus(Entity? target, Vector2 point, float? size, float? seconds)
+    {
+        var camera = Entity?.GetComponent<Camera>();
+        // A second focus (the next stop of a tour), or one while zooming back, still goes back to the Size from before the first.
+        if (!IsFocused)
+            _sizeBefore = camera?.Size ?? 0;
+        _zoomBack = null;
+        _focused = true;
+        _focusEntity = target;
+        _focusPoint = point;
+        _focusZoom = MathF.Max(size ?? FocusSize, 0);
+        HeldAt = null;
+        var from = Entity is { } entity ? Flat(entity.Transform.WorldPosition) : point;
+        _glide = (from, camera?.Size ?? 0, 0, MathF.Max(seconds ?? FocusSeconds, 0));
+    }
+
+    /// <summary>
+    /// Moves a focused camera on by <paramref name="seconds"/> of real time, on a view <paramref name="aspect"/> times as
+    /// wide as it's high: gliding and zooming to what it's on, following it, or zooming back once released. Called by the
+    /// game in place of the player's controls while <see cref="IsFocused"/>.
+    /// </summary>
+    internal void AdvanceFocus(float seconds, float aspect)
+    {
+        if (Entity is not { Scene: not null } entity || entity.GetComponent<Camera>() is not { } camera)
+            return;
+        var transform = entity.Transform;
+        var start = Flat(transform.WorldPosition);
+        var position = start;
+        var size = camera.Size;
+        var jumped = false;
+
+        if (_zoomBack is { } back)
+        {
+            var elapsed = back.Elapsed + seconds;
+            var t = Eased(elapsed, back.Seconds);
+            size = back.From + (_sizeBefore - back.From) * t;
+            _zoomBack = t >= 1 ? null : back with { Elapsed = elapsed };
+        }
+        else if (_focused)
+        {
+            // Following an entity that has gone: it stays on where that last was.
+            if (_focusEntity is { } followed)
+            {
+                if (followed.Scene == entity.Scene)
+                    _focusPoint = Flat(followed.Transform.WorldPosition);
+                else
+                    _focusEntity = null;
+            }
+
+            var zoom = _focusZoom > 0 ? _focusZoom : size;
+            var goal = _focusPoint;
+            if (_glide is { } glide)
+            {
+                var elapsed = glide.Elapsed + seconds;
+                var t = Eased(elapsed, glide.Seconds);
+                size = glide.FromSize > 0 ? glide.FromSize + (zoom - glide.FromSize) * t : zoom;
+                goal = Keep(goal, size, aspect);
+                position = Vector2.Lerp(glide.From, goal, t);
+                jumped = glide.Seconds <= 0;
+                _glide = t >= 1 ? null : glide with { Elapsed = elapsed };
+            }
+            else
+            {
+                size = zoom;
+                position = goal;
+            }
+        }
+
+        camera.Size = size;
+        position = Keep(position, size, aspect);
+        if (position == start)
+            return;
+        Follow.SetWorld(transform, position);
+        if (jumped)
+            transform.Jumped();
+    }
+
+    // Where a view of `size` centred on `point` goes to stay inside StayInside.
+    private Vector2 Keep(Vector2 point, float size, float aspect) =>
+        Bounds() is { } bounds ? Follow.Clamp(point, bounds, new Vector2(size * (aspect > 0 ? aspect : 1), size)) : point;
+
+    /// <summary>The area <see cref="StayInside"/> names, as it is now, or null.</summary>
+    internal Box? Bounds() =>
+        Entity?.Scene is { } scene && !string.IsNullOrWhiteSpace(StayInside) && EntityNames.Find(scene, StayInside, new NameLookup(Entity)) is { } area
+            ? Follow.AreaOf(area)
+            : null;
+
+    // How far along an ease in and out is after `elapsed` of `seconds`, from 0 to 1; done at once with no time.
+    private static float Eased(float elapsed, float seconds)
+    {
+        var t = seconds > 0 ? Math.Clamp(elapsed / seconds, 0, 1) : 1;
+        return t * t * (3 - 2 * t);
+    }
+
+    private static Vector2 Flat(Vector3 v) => new(v.X, v.Y);
 }
 
 /// <summary>

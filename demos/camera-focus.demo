@@ -1,0 +1,68 @@
+title: Show the player something
+intro: Camera Controls can take the camera over for a while: it glides to a character, follows it closer in, then hands the camera back.
+
+project: Empty | Camera Focus
+
+chapter: A level, a camera and a walker | Camera Controls on the camera
+create: Tilemap
+rename: Level
+set: Tilemap.Tiles = 111122221111222211112222111122221111\n111122221111222211112222111122221111\n111122221111222211112222111122221111\n111122221111222211112222111122221111\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n111122221111222211112222111122221111\n111122221111222211112222111122221111\n111122221111222211112222111122221111\n111122221111222211112222111122221111\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n111122221111222211112222111122221111\n111122221111222211112222111122221111
+deselect
+create: Sprite
+rename: Walker
+set: Transform.Position = 10, -4
+add: Mover
+set: Mover.Speed = 1.5
+say: The walker paces back and forth across the level by itself.
+deselect
+select: Main Camera
+set: Camera.Size = 9
+set: Camera.HudSize = 9
+add: CameraControls
+pick: CameraControls.StayInside = Level
+set: CameraControls.FocusSize = 3
+explain: field:CameraControls.FocusSize | Focus Size | Focus Size is how close the camera zooms in while it's focused on something. Focus Seconds is how long it takes to glide there, and to zoom back out.
+
+chapter: A button that shows the walker | Focus On, by name
+deselect
+create: Button
+rename: Show Walker
+set: Button.Action = Do
+pick: Button.Targets = Main Camera
+pick: Button.Do = Focus On
+set: Button.With = Walker
+set: Button.Shortcut = F
+add: ScreenAnchor
+set: ScreenAnchor.Offset = 2.5, -1.5
+explain: field:Button.Do | Do | Camera Controls can do Focus On, with the name of what to follow, and Release. A trigger can do them too, so a guided tour needs no code.
+deselect
+create: Button
+rename: Back
+set: Button.Action = Do
+pick: Button.Targets = Main Camera
+pick: Button.Do = Release
+set: Button.Shortcut = R
+add: ScreenAnchor
+set: ScreenAnchor.Offset = 2.5, -3
+
+chapter: Play | It follows, then hands back
+play
+wait: 1
+hold: Right 1
+say: The player pans as usual.
+tap: F
+wait: 1.5
+say: F clicks Show Walker. The camera glides over to the walker, zooming in, and follows it as it paces.
+hold: Left 1
+wheel: game = down 3
+expectvalue: Main Camera.CameraControls.IsFocused = true
+say: Meanwhile the keys and the wheel wait. The camera is the game's for now.
+tap: R
+wait: 1.5
+expectvalue: Main Camera.CameraControls.IsFocused = false
+expectvalue: Main Camera.Camera.Size = 9
+say: R clicks Back. The camera zooms back out to where it was, and hands control back right where it is.
+hold: Right 1
+wheel: game = up 2
+say: The keys pan and the wheel zooms again.
+stop

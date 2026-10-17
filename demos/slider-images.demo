@@ -1,0 +1,35 @@
+title: Sliders drawn with pictures
+intro: A Slider takes the same pictures as a Bar, plus one for its handle: a fill that is cut off where it's set, a track that stretches like a nine-slice panel, and a knob of your own.
+project: Empty | Slider Images
+write: Sprites/gauge.png | bar-images/gauge.png
+write: Sprites/frame.png | bar-images/frame.png
+
+chapter: A fill picture | Fill Image
+create: Slider
+rename: Volume
+set: Transform.Position = 0, 0, 0
+set: Slider.Size = 6, 1
+set: Slider.Value = 0.5
+look: 0, 0, 2.5
+say: Here's a slider, set halfway, drawn in plain colors as sliders always have been.
+pickimage: Slider.FillImage = Sprites/gauge.png
+set: Slider.Fill = #FFFFFF
+explain: field:Slider.FillImage | Fill Image | Give it a Fill Image. It's laid over the whole slider and shown only as far as it's set, cut off rather than squeezed, and the Fill color tints it.
+play
+expectdrawn: -1.5, 0 = lit
+stop
+
+chapter: A framed track | Background Image
+pickimage: Slider.BackgroundImage = Sprites/frame.png
+set: Slider.Background = #FFFFFF
+set: Slider.BackgroundSlice = 0.125
+set: Slider.BackgroundSliceSize = 0.125
+explain: field:Slider.BackgroundImage | Background Image | The Background Image is the track behind the fill, tinted by the Background color. Background Slice makes it a nine-slice, so its corners keep their shape however long the slider is.
+play
+expectdrawn: 1.5, 0 = dark
+stop
+
+chapter: A knob picture | Knob Image
+pickimage: Slider.KnobImage = Sprites/frame.png
+explain: field:Slider.KnobImage | Knob Image | The Knob Image replaces the handle at the end of the filled part, tinted by the Knob color. Dragging and clicking work exactly as before.
+say: With no pictures set, a slider is plain colors, just as before.

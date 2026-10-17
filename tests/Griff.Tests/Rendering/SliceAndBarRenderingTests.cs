@@ -233,6 +233,85 @@ public class SliceAndBarRenderingTests
     }
 
     [Fact]
+    public void Slider_WithoutImages_DrawsPlainColors()
+    {
+        var slider = Add("Volume").AddComponent<Slider>();
+        slider.FillImage = "  ";
+        slider.KnobImage = " ";
+
+        var draws = SceneRenderer.Build(_scene, 1).Sprites;
+
+        Assert.Equal(3, draws.Count);
+        Assert.All(draws, d => Assert.Null(d.Image));
+        Assert.All(draws, d => Assert.Equal(new Vector4(0, 0, 1, 1), d.Source));
+    }
+
+    [Fact]
+    public void Slider_WithAFillImage_CropsItToTheFraction_AndTintsIt()
+    {
+        var slider = Add("Volume").AddComponent<Slider>();
+        slider.Size = new Vector2(4, 0.5f);
+        slider.Value = 0.25f;
+        slider.Knob = Color.Transparent;
+        slider.FillImage = "Sprites/gauge.png";
+        slider.Fill = Color.White;
+
+        var draws = SceneRenderer.Build(_scene, 1).Sprites;
+
+        Assert.Equal(2, draws.Count);
+        var fill = draws[1];
+        Assert.Equal(("Sprites/gauge.png", Color.White), (fill.Image, fill.Tint));
+        Assert.Equal(new Vector2(1, 0.5f), Size(fill));
+        Assert.Equal(new Vector2(-1.5f, 0), Center(fill));
+        AssertClose(new Vector4(0, 0, 0.25f, 1), fill.Source);
+    }
+
+    [Fact]
+    public void Slider_WithAKnobImage_PutsItAtTheEndOfTheFill_TintedByTheKnob()
+    {
+        var slider = Add("Volume", new Vector3(5, 0, 0)).AddComponent<Slider>();
+        slider.Size = new Vector2(4, 0.5f);
+        slider.Value = 0.75f;
+        slider.Knob = Color.FromBytes(255, 0, 0);
+        slider.KnobImage = "Sprites/knob.png";
+
+        var knob = SceneRenderer.Build(_scene, 1).Sprites[2];
+
+        Assert.Equal(("Sprites/knob.png", slider.Knob), (knob.Image, knob.Tint));
+        Assert.Equal(new Vector2(6, 0), Center(knob));
+        Assert.Equal(new Vector2(0.25f, 0.75f), Size(knob));
+        Assert.Equal(new Vector4(0, 0, 1, 1), knob.Source);
+    }
+
+    [Fact]
+    public void Slider_WithABackgroundImage_IsNineSlicedLikeASprite()
+    {
+        var entity = Add("Volume", new Vector3(10, 0, 0));
+        var slider = entity.AddComponent<Slider>();
+        slider.Size = new Vector2(6, 4);
+        slider.Value = 0;
+        slider.Knob = Color.Transparent;
+        slider.Background = Color.White;
+        slider.BackgroundImage = "Sprites/frame.png";
+
+        var whole = Assert.Single(SceneRenderer.Build(_scene, 1).Sprites);
+        Assert.Equal(("Sprites/frame.png", Color.White), (whole.Image, whole.Tint));
+        Assert.Equal(new Vector2(6, 4), Size(whole));
+
+        slider.BackgroundSlice = 0.25f;
+        slider.BackgroundSliceSize = 0.5f;
+        var sprite = Add("Panel", new Vector3(10, 0, 0)).AddComponent<Sprite>();
+        sprite.Size = new Vector2(6, 4);
+        sprite.Slice = 0.25f;
+        sprite.SliceSize = 0.5f;
+        var pieces = SceneRenderer.Build(_scene, 1).Sprites.Where(d => d.Entity == entity).ToList();
+
+        Assert.Equal(9, pieces.Count);
+        Assert.All(pieces, p => Assert.Equal("Sprites/frame.png", p.Image));
+        Assert.Equal(sprite.Pieces().Select(p => (p.World, p.Source)), pieces.Select(p => (p.World, p.Source)));
+    }
+
+    [Fact]
     public void BarsAndSliders_SortWithTheirOrder()
     {
         var back = Add("Back").AddComponent<Sprite>();

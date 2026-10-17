@@ -573,10 +573,19 @@ public sealed class Slider : Component, IDrawable
     void IDrawable.Draw(Drawing drawing)
     {
         var fraction = Fraction;
-        drawing.Bar(Size, BarDirection.Right, fraction, fraction, Background, Shade(Fill), Color.Transparent);
+        drawing.Bar(Size, BarDirection.Right, fraction, fraction, Background, Shade(Fill), Color.Transparent,
+            new BarImages(FillImage, BackgroundImage, BackgroundSlice, BackgroundSliceSize));
         var size = Vector2.Abs(Size);
         if (Knob.A > 0 && size.Y > 0)
-            drawing.Rect(new Vector2(-size.X / 2 + fraction * size.X, 0), new Vector2(size.Y * 0.5f, size.Y * 1.5f), Shade(Knob));
+        {
+            var at = new Vector2(-size.X / 2 + fraction * size.X, 0);
+            var knob = new Vector2(size.Y * 0.5f, size.Y * 1.5f);
+            if (string.IsNullOrWhiteSpace(KnobImage))
+                drawing.Rect(at, knob, Shade(Knob));
+            else
+                drawing.Image(Matrix4x4.CreateScale(knob.X, knob.Y, 1) * Matrix4x4.CreateTranslation(at.X, at.Y, 0) * Entity!.Transform.WorldMatrix,
+                    KnobImage.Trim(), Shade(Knob));
+        }
     }
 
     /// <summary>Where it's set, from <see cref="Min"/> to <see cref="Max"/>: a text inside it can show it ("{0:0} ms").</summary>
@@ -633,6 +642,35 @@ public sealed class Slider : Component, IDrawable
 
     /// <summary>Higher draws on top, like <see cref="Sprite.Order"/>.</summary>
     public int Order { get; set; } = 100;
+
+    /// <summary>
+    /// A picture for the part up to the handle instead of a plain color, e.g. "Sprites/slider_fill.png": laid over the whole
+    /// slider and shown only as far as it's set, cut off there rather than squeezed, and tinted by <see cref="Fill"/> (white
+    /// shows the picture as it is).
+    /// </summary>
+    [Group("Images")]
+    public string? FillImage { get; set; }
+
+    /// <summary>A picture for the track behind the fill, shown whole, instead of a plain color; tinted by <see cref="Background"/>.</summary>
+    public string? BackgroundImage { get; set; }
+
+    /// <summary>
+    /// For a track that stretches (nine-slice), like <see cref="Sprite.Slice"/>: how much of the <see cref="BackgroundImage"/>,
+    /// from 0 to 0.5 of its width and height, is border at each edge. Its corners then keep their shape however long the
+    /// slider is. 0 stretches the whole picture.
+    /// </summary>
+    [ShownWhen(nameof(BackgroundImage))]
+    public float BackgroundSlice { get; set; }
+
+    /// <summary>With <see cref="BackgroundSlice"/>: how big the border is drawn, in world units (never more than half the slider).</summary>
+    [ShownWhen(nameof(BackgroundSlice))]
+    public float BackgroundSliceSize { get; set; } = 0.1f;
+
+    /// <summary>
+    /// A picture for the handle instead of a plain rectangle, e.g. "Sprites/slider_knob.png": drawn at the end of the
+    /// filled part in the handle's usual box (half as wide as the slider is high, one and a half times as tall), tinted by <see cref="Knob"/>. A transparent <see cref="Knob"/> still hides it.
+    /// </summary>
+    public string? KnobImage { get; set; }
 
     /// <summary>True while the mouse is over it.</summary>
     [DoNotSerialize]

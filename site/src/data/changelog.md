@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+- A **Slider** can be drawn with pictures, as a Bar can: a **Fill Image** shown only as far as it's set (cut off, not squeezed), a **Background Image** for the track that can be a nine-slice (**Background Slice**), and a **Knob Image** at the end of the fill, each tinted by its color. With none set it looks as before.
+
 ## 0.1.0-alpha.12 - 2026-10-17
 
 - Agents change many entities in one call: `entity_update` picks them by a glob on their path (`HUD/Toolbar/Tool *`), by a component they have or by what they're inside, a batch is one undo step that changes nothing if any part fails (listing each entity as ok or with its error), and `"dryRun": true` lists each field's old and new value without changing anything (`entity_create` has it too).

@@ -197,6 +197,9 @@ public sealed partial class FieldEditorAuditTests
         Slider.SaveAs: Names:Saved
         Slider.Sound: Sound
         Slider.Size: Resizable
+        Slider.FillImage: Image
+        Slider.BackgroundImage: Image
+        Slider.KnobImage: Image
         Stars.Track: Entity
         Stars.Output: Output
         Stars.Saved: Names:Saved

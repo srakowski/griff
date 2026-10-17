@@ -10,11 +10,11 @@ namespace Griff.Editor.Diagnostics.Demo;
 internal sealed partial class DemoUi
 {
     /// <summary>The open Sound Maker, if any.</summary>
-    public static SoundMakerWindow? Maker =>
-        Application.Current.Windows.OfType<SoundMakerWindow>().FirstOrDefault(w => w.IsVisible);
+    public static SoundMakerView? Maker =>
+        DocumentOfView<SoundMakerView>();
 
     /// <summary>Waits for the Sound Maker to open (after Audio > New Sound, or a field's Sound Maker button).</summary>
-    public static async Task<SoundMakerWindow> WaitForMaker()
+    public static async Task<SoundMakerView> WaitForMaker()
     {
         var window = await WaitFor(() => Maker, "the Sound Maker");
         await Settle(400);
@@ -62,7 +62,7 @@ internal sealed partial class DemoUi
     }
 
     // A sound effect setting's row, or the tempo's.
-    private static FrameworkElement? SliderRow(SoundMakerWindow window, string label) =>
+    private static FrameworkElement? SliderRow(SoundMakerView window, string label) =>
         label.Equals("Tempo", StringComparison.OrdinalIgnoreCase)
             ? (FrameworkElement)window.FindName("TempoSlider")
             : Descendants<Grid>(window).FirstOrDefault(g => g.DataContext is SliderSetting s && s.Label.Equals(label, StringComparison.OrdinalIgnoreCase) && g.IsVisible);

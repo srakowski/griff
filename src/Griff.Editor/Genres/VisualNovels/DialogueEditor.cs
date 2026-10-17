@@ -41,7 +41,7 @@ public sealed partial class DialogueEditor : ObservableObject
     private SceneDocument? _document;
     private Entity? _entity;
     private int _selectedIndex = -1;
-    private DialogueEditorWindow? _window;
+    private Core.Documents.EditorDocument? _tab;
     private string _newKind = "Show";
     private string? _newWho;
     private string? _newPosition;
@@ -50,11 +50,11 @@ public sealed partial class DialogueEditor : ObservableObject
     private string _newTransition = AsIs;
     private bool _rebuilding;
 
-    private readonly Core.EditorWindow _editorWindow;
-    public DialogueEditor(ISceneDocuments sceneDocuments, IProjectSession projectSession, ISelection selection, EditorArt art, Core.EditorWindow editorWindow)
+    private readonly Lazy<Core.Documents.EditorDocuments> _documents;
+    public DialogueEditor(ISceneDocuments sceneDocuments, IProjectSession projectSession, ISelection selection, EditorArt art, Lazy<Core.Documents.EditorDocuments> documents)
     {
         _projectSession = projectSession;
-        _editorWindow = editorWindow;
+        _documents = documents;
         _selection = selection;
         _art = art;
         AddLineCommand = new RelayCommand(() => AddLine(), () => Dialogue is not null);
@@ -295,26 +295,33 @@ public sealed partial class DialogueEditor : ObservableObject
 
     public IRelayCommand<DirectionRow> RemoveDirectionCommand { get; }
 
-    /// <summary>The Dialogue Editor's window, while it's open.</summary>
-    public DialogueEditorWindow? Window => _window;
+    /// <summary>The Dialogue Editor's view, while its tab is open in the document area.</summary>
+    public DialogueEditorView? View => _tab?.View as DialogueEditorView;
 
-    /// <summary>Opens the Dialogue Editor's window (or brings it to the front).</summary>
+    /// <summary>Opens the Dialogue Editor in a tab of its own in the document area, beside the scene (or brings its tab to the front).</summary>
     public void Open()
     {
-        if (_window is null)
+        if (_tab is null)
         {
-            _window = new DialogueEditorWindow(this) { Owner = _editorWindow.Main };
-            _window.Closed += (_, _) => _window = null;
-            _window.Show();
+            var document = new Core.Documents.EditorDocument("Dialogue Editor", this, () =>
+            {
+                var view = new DialogueEditorView(this);
+                view.CloseRequested += (_, _) => Close();
+                return view;
+            }, Themes.Icons.Rename);
+            document.Closed += (_, _) => _tab = null;
+            _tab = document;
         }
-        else
-        {
-            _window.Activate();
-        }
+
+        _documents.Value.Show(_tab);
     }
 
-    /// <summary>Closes the Dialogue Editor's window, if it's open.</summary>
-    public void Close() => _window?.Close();
+    /// <summary>Closes the Dialogue Editor's tab, if it's open.</summary>
+    public void Close()
+    {
+        if (_tab is { } document)
+            _documents.Value.Close(document);
+    }
 
     // ----- Editing -----
 

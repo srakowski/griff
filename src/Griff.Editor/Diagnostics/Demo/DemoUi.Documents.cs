@@ -52,6 +52,22 @@ internal sealed partial class DemoUi
         }
     }
 
+    /// <summary>
+    /// The Scene view, its tab brought to the front first when an editor open as a document (the Sprite Painter, the Clip
+    /// Editor, a table) or a panel among the documents is in front of it, as their windows used to sit beside it.
+    /// </summary>
+    public Features.SceneView.SceneViewControl ShownScene()
+    {
+        if (!sceneView.IsVisible && sceneView.Parent is TabItem tab && ItemsControl.ItemsControlFromItemContainer(tab) is TabControl tabs
+            && tabs.SelectedItem is TabItem { Tag: EditorDocument or string })
+        {
+            tabs.SelectedItem = tab;
+            tabs.UpdateLayout();
+        }
+
+        return sceneView;
+    }
+
     /// <summary>The view of type <typeparamref name="T"/> in the document tab in front, if one is.</summary>
     public static T? ShowingDocument<T>() where T : FrameworkElement =>
         Roots().SelectMany(Descendants<Shell.FitScroller>).Select(f => f.Content).OfType<T>().FirstOrDefault(v => v.IsVisible);

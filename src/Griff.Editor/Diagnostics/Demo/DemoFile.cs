@@ -201,9 +201,14 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
             case "key":
                 var (key, modifiers) = ParseKey(a);
                 // With the Add Component list or the Add Entity palette open, keys go to its search box (Enter adds, Down
-                // moves); with New Project open, to that window; with the Sprite Painter worked in last (it's the active
-                // window), to it (Ctrl+Z there undoes a stroke).
-                if (!DemoUi.IsAddListOpen && !DemoUi.IsEntityListOpen && DemoUi.NewProject is null && DemoUi.Painter is not { IsActive: true })
+                // moves); with New Project open, to that window; with the Sprite Painter's tab in front, to it (its canvas has
+                // the keyboard, and Ctrl+Z there undoes a stroke).
+                if (DemoUi.ShowingDocument<Features.Art.SpritePainterView>() is { } painterTab)
+                {
+                    if (!painterTab.IsKeyboardFocusWithin && painterTab.FindName("Canvas") is IInputElement canvas)
+                        Keyboard.Focus(canvas);
+                }
+                else if (!DemoUi.IsAddListOpen && !DemoUi.IsEntityListOpen && DemoUi.NewProject is null)
                     await ui.FocusEditor();
                 await ui.Shortcut(key, modifiers);
                 break;
@@ -1842,7 +1847,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
             "float" => (FrameworkElement?)ui.FloatingWindow(name) ?? throw new InvalidOperationException($"{name} isn't floating."),
             "logo" => (FrameworkElement)ui.Main.Template.FindName("AppMark", ui.Main),
             "rewind" => RewindBar(),
-            "scene" => sceneView,
+            "scene" => ui.ShownScene(),
             "game" => (FrameworkElement)ui.Main.GameTab.Content,
             "player" when int.TryParse(name, out var number) && number == 1 => (FrameworkElement)ui.Main.GameTab.Content,
             "player" when int.TryParse(name, out var number) => play.PlayerSurface(number) ?? throw new InvalidOperationException($"There's no player {name}."),
@@ -1961,6 +1966,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
 
     private Rect CodeCardRect()
     {
+        ui.ShownScene();
         var scene = DemoUi.ScreenRect(sceneView);
         var width = Math.Min(scene.Width * 0.78, 1500);
         return new Rect(scene.Left + (scene.Width - width) / 2, scene.Top + 30, width, scene.Height * 0.7);

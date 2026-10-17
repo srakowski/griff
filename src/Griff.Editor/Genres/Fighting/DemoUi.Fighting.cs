@@ -10,11 +10,11 @@ namespace Griff.Editor.Diagnostics.Demo;
 internal sealed partial class DemoUi
 {
     /// <summary>The open Move List, if any.</summary>
-    public static MoveListWindow? MoveList =>
-        Application.Current.Windows.OfType<MoveListWindow>().FirstOrDefault(w => w.IsVisible);
+    public static MoveListView? MoveList =>
+        DocumentOfView<MoveListView>();
 
     /// <summary>Waits for the Move List to open (after Entity > Edit Moves).</summary>
-    public static async Task<MoveListWindow> WaitForMoveList()
+    public static async Task<MoveListView> WaitForMoveList()
     {
         var window = await WaitFor(() => MoveList, "the Move List");
         await Settle(400);
@@ -173,7 +173,7 @@ internal sealed partial class DemoUi
     }
 
     /// <summary>The open Clip Editor's boxes.</summary>
-    public static HitboxOverlay ClipBoxes(ClipEditorWindow window) =>
+    public static HitboxOverlay ClipBoxes(ClipEditorView window) =>
         window.Model.Overlay<HitboxOverlay>() ?? throw new InvalidOperationException("The Clip Editor has no boxes.");
 }
 #endif

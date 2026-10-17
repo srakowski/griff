@@ -98,8 +98,8 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     /// <summary>Where a world position is on screen in the Scene view.</summary>
     public Point World(float x, float y)
     {
-        var local = sceneView.Viewport.ToScreen(new Vector2(x, y));
-        return sceneView.PointToScreen(local);
+        var local = ShownScene().Viewport.ToScreen(new Vector2(x, y));
+        return ShownScene().PointToScreen(local);
     }
 
     /// <summary>
@@ -107,11 +107,11 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     /// palette by its number ("3"). Null when nothing is being painted.
     /// </summary>
     public Rect? TileOverlay(string part) =>
-        sceneView.PaintOverlayBounds(part) is { } box ? new Rect(sceneView.PointToScreen(box.TopLeft), sceneView.PointToScreen(box.BottomRight)) : null;
+        sceneView.PaintOverlayBounds(part) is { } box ? new Rect(ShownScene().PointToScreen(box.TopLeft), ShownScene().PointToScreen(box.BottomRight)) : null;
 
     /// <summary>Where the Scene view's rotate handle (its knob) is on screen, or null when it isn't showing.</summary>
     public Point? RotateKnob() =>
-        sceneView.Handles.RotateHandle() is (_, var knob) ? sceneView.PointToScreen(knob) : null;
+        sceneView.Handles.RotateHandle() is (_, var knob) ? ShownScene().PointToScreen(knob) : null;
 
     /// <summary>
     /// Where one of the Scene view's scale handles is on screen, by its place on the selection ("top-left", "top",
@@ -121,7 +121,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     {
         var spot = HandleSpot(name);
         var handles = sceneView.Handles.ScaleHandles();
-        return handles.Where(h => h.Spot == spot).Select(h => (Point?)sceneView.PointToScreen(h.Screen)).FirstOrDefault();
+        return handles.Where(h => h.Spot == spot).Select(h => (Point?)ShownScene().PointToScreen(h.Screen)).FirstOrDefault();
     }
 
     /// <summary>
@@ -137,7 +137,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         var handles = sceneView.Handles.ResizeHandles();
         return handles
             .Where(h => h.Spot == spot && (component is null || h.Shape.GetType().Name.Equals(component, StringComparison.OrdinalIgnoreCase)))
-            .Select(h => ((Griff.Scenes.Component, Vector2, Point)?)(h.Shape, h.Spot, sceneView.PointToScreen(h.Screen)))
+            .Select(h => ((Griff.Scenes.Component, Vector2, Point)?)(h.Shape, h.Spot, ShownScene().PointToScreen(h.Screen)))
             .FirstOrDefault();
     }
 
@@ -150,7 +150,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         var arrows = sceneView.Handles.LinkArrows();
         return arrows
             .Where(a => a.From.Name == from.Trim() && a.To.Name == to.Trim())
-            .Select(a => ((string, Point)?)(a.Fields, sceneView.PointToScreen(a.Middle)))
+            .Select(a => ((string, Point)?)(a.Fields, ShownScene().PointToScreen(a.Middle)))
             .FirstOrDefault();
     }
 
@@ -163,7 +163,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         var handles = sceneView.Handles.DistanceHandles();
         return handles
             .Where(h => h.Distance.Key.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase))
-            .Select(h => ((SceneDistance, Point)?)(h.Distance, sceneView.PointToScreen(h.Screen)))
+            .Select(h => ((SceneDistance, Point)?)(h.Distance, ShownScene().PointToScreen(h.Screen)))
             .FirstOrDefault();
     }
 
@@ -174,7 +174,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     public (SceneVector Vector, Point Screen)? VectorKnob(string name) =>
         sceneView.Handles.VectorHandles()
             .Where(h => h.Vector.Key.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase))
-            .Select(h => ((SceneVector, Point)?)(h.Vector, sceneView.PointToScreen(h.Screen)))
+            .Select(h => ((SceneVector, Point)?)(h.Vector, ShownScene().PointToScreen(h.Screen)))
             .FirstOrDefault();
 
     /// <summary>
@@ -188,7 +188,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         var handles = sceneView.Handles.PathHandles();
         return handles
             .Where(h => h.Key.Equals(key, StringComparison.OrdinalIgnoreCase))
-            .Select(h => ((PathHandle, Point)?)(h, sceneView.PointToScreen(h.Screen)))
+            .Select(h => ((PathHandle, Point)?)(h, ShownScene().PointToScreen(h.Screen)))
             .FirstOrDefault();
     }
 

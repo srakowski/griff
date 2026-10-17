@@ -1,5 +1,5 @@
 title: The Clip Editor
-intro: See a sprite's animation clips play, pick their frames off the sprite sheet, and set how fast they go, without leaving the scene.
+intro: See a sprite's animation clips play, pick their frames off the sprite sheet, and set how fast they go, in a tab beside the scene.
 project: Platformer | Clip Kit
 
 # Give the slime a four-frame sheet to animate: the painter's creature breathing, then two frames wearing a hat.
@@ -23,7 +23,7 @@ chapter: Watch it play | Art, Animation Clips
 say: The slime has a sprite sheet now, four frames, and an Animation to play them. To see what it plays, open the Clip Editor from the Art menu.
 menu: Art > Animation Clips...
 clips
-explain: clips:entity | Follows the selection | It shows the clips of whatever is selected, so it can stay open beside the scene.
+explain: clips:entity | Follows the selection | It shows the clips of whatever is selected in the Hierarchy, so its tab can stay open while you work.
 explain: clips:clip:(own frames) | Own frames | With no clips yet, the animation plays its own frames, all four of them. That's what the game starts with.
 explain: clips:preview | Preview | The preview plays it the way the game will, at the same speed, cut from the sheet the same way.
 click: clips:play

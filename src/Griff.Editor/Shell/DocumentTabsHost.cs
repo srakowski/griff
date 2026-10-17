@@ -174,8 +174,12 @@ public sealed class FitScroller : ScrollViewer
     }
 
     // Arrow keys and Page Up/Down belong to what's in it (the painter's frames, the Clip Editor's steps), not to scrolling.
+    // And Delete and F2 it leaves are its own: in the Sprite Painter they mustn't delete or rename what's selected in the
+    // scene. Other shortcuts (F5 plays, Ctrl+Z undoes what was worked in last) still reach the editor.
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        if (Keyboard.Modifiers == ModifierKeys.None && e.Key is Key.Delete or Key.F2)
+            e.Handled = true;
     }
 
     private void Fit()

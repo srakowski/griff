@@ -4,7 +4,7 @@ using Vector2 = System.Numerics.Vector2;
 namespace Griff.Editor.Features.Art;
 
 /// <summary>
-/// Where the Clip Editor's frame is on something laid over it (see <see cref="ClipEditorWindow.FrameArea"/>), for an
+/// Where the Clip Editor's frame is on something laid over it (see <see cref="ClipEditorView.FrameArea"/>), for an
 /// overlay to draw over it and take the mouse there: the picture's top-left corner and size there, how big it is in world
 /// units (the sprite's Size, what overlays measure in, from the entity's middle), and its pixels.
 /// </summary>

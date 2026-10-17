@@ -167,14 +167,23 @@ public sealed class DialogueEditorTests : IDisposable
     });
 
     [Fact]
-    public void Close_IsReachableByAgentsThroughUiInvoke_AndDoesNothingWithoutAWindow() => EditorHost.Run(services =>
+    public void Close_IsReachableByAgentsThroughUiInvoke_AndDoesNothingWithoutATab() => EditorHost.Run(services =>
     {
         var editor = services.GetRequiredService<DialogueEditor>();
         var surface = services.GetServices<Griff.Agent.IAgentToolSource>().OfType<SurfaceTools>().Single();
         Assert.Contains(surface.All(), r => r.Name == "DialogueEditor" && r.Target == editor);
         Assert.Contains(typeof(DialogueEditor).GetMethods(), m => m.Name == nameof(DialogueEditor.Close) && m.GetParameters().Length == 0);
 
-        Assert.Null(editor.Window);
+        Assert.Null(editor.View);
         editor.Close();
+
+        // Open, it's a tab of its own in the document area (one, however often it's opened), and Close closes it.
+        var documents = services.GetRequiredService<Griff.Editor.Core.Documents.EditorDocuments>();
+        editor.Open();
+        editor.Open();
+        Assert.Equal(["Dialogue Editor"], documents.Names);
+        Assert.Contains(surface.All(), r => r.Name == "Dialogue Editor" && r.Kind == "document" && r.Target == editor);
+        editor.Close();
+        Assert.Empty(documents.Open);
     });
 }

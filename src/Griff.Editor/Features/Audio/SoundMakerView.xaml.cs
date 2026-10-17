@@ -1,17 +1,16 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using Griff.Editor.Themes.Controls;
 
 namespace Griff.Editor.Features.Audio;
 
 /// <summary>
-/// Makes sound effects and music for the game, saved straight into the project. Not modal, so a sound can be made,
-/// saved, and heard in the running game without closing it.
+/// Makes sound effects and music for the game, saved straight into the project: a document of its own in the document
+/// area, one tab per sound, so a sound can be made, saved, and heard in the running game a tab away.
 /// </summary>
-public partial class SoundMakerWindow : ChromeWindow
+public partial class SoundMakerView : UserControl
 {
-    public SoundMakerWindow(SoundMakerViewModel model)
+    public SoundMakerView(SoundMakerViewModel model)
     {
         InitializeComponent();
         DataContext = model;
@@ -19,6 +18,9 @@ public partial class SoundMakerWindow : ChromeWindow
     }
 
     public SoundMakerViewModel Model => (SoundMakerViewModel)DataContext;
+
+    /// <summary>Raised by its Close button; the tab it's in closes (asking about unsaved changes).</summary>
+    public event EventHandler? CloseRequested;
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
@@ -32,12 +34,7 @@ public partial class SoundMakerWindow : ChromeWindow
             Model.Play();
             e.Handled = true;
         }
-        else if (e.Key == Key.Escape)
-        {
-            Close();
-            e.Handled = true;
-        }
     }
 
-    private void OnClose(object sender, RoutedEventArgs e) => Close();
+    private void OnClose(object sender, RoutedEventArgs e) => CloseRequested?.Invoke(this, EventArgs.Empty);
 }

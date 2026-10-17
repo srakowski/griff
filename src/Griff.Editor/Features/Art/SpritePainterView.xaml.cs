@@ -1,26 +1,27 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using Griff.Editor.Themes.Controls;
 
 namespace Griff.Editor.Features.Art;
 
 /// <summary>
-/// Paints pixel art for sprites and tilemaps, saved straight into the project. Not modal, so a sprite can be painted,
-/// saved, and seen in the scene (or the running game) without closing it. Undo and Redo are the editor's (its view model
-/// is the document they go to while it's in front).
+/// Paints pixel art for sprites and tilesets, saved straight into the project: a document of its own in the document area,
+/// one tab per picture, so a sprite can be painted, saved, and seen in the scene (or the running game) a tab away. Undo
+/// and Redo are the editor's (its view model is the document they go to while it's worked in).
 /// </summary>
-public partial class SpritePainterWindow : ChromeWindow
+public partial class SpritePainterView : UserControl
 {
-    public SpritePainterWindow(SpritePainterViewModel model)
+    public SpritePainterView(SpritePainterViewModel model)
     {
         InitializeComponent();
         DataContext = model;
         PreviewKeyDown += OnKeyDown;
-        Closed += (_, _) => model.Stop();
     }
 
     public SpritePainterViewModel Model => (SpritePainterViewModel)DataContext;
+
+    /// <summary>Raised by its Close button; the tab it's in closes (asking about unsaved changes).</summary>
+    public event EventHandler? CloseRequested;
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
@@ -32,8 +33,6 @@ public partial class SpritePainterWindow : ChromeWindow
             return;
         else if (modifiers != ModifierKeys.None)
             return;
-        else if (e.Key == Key.Escape)
-            Close();
         else if (e.Key is Key.Left or Key.OemComma)
             Model.Frame--;
         else if (e.Key is Key.Right or Key.OemPeriod)
@@ -47,5 +46,5 @@ public partial class SpritePainterWindow : ChromeWindow
         e.Handled = true;
     }
 
-    private void OnClose(object sender, RoutedEventArgs e) => Close();
+    private void OnClose(object sender, RoutedEventArgs e) => CloseRequested?.Invoke(this, EventArgs.Empty);
 }

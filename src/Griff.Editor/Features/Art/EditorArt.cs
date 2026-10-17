@@ -4,6 +4,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Griff.Art;
 using Griff.Editing;
+using Griff.Editor.Core.Documents;
 using Griff.Editor.Core.Workspace;
 using Griff.Scenes;
 
@@ -20,14 +21,16 @@ public sealed class EditorArt
     private readonly IProjectSession _projectSession;
     private readonly ISceneDocuments _sceneDocuments;
     private readonly Dictionary<string, (DateTime Stamp, BitmapSource? Image)> _thumbnails = new(StringComparer.OrdinalIgnoreCase);
-    private SpritePainterWindow? _painter;
+    private readonly Lazy<EditorDocuments> _documents;
 
-    private readonly Core.EditorWindow _editorWindow;
-    public EditorArt(IProjectSession projectSession, ISceneDocuments sceneDocuments, Core.EditorWindow editorWindow)
+    /// <summary>What the Sprite Painter's tabs are called ("Sprite Painter: slime.png").</summary>
+    public const string PainterKind = "Sprite Painter";
+
+    public EditorArt(IProjectSession projectSession, ISceneDocuments sceneDocuments, Lazy<EditorDocuments> documents)
     {
         _projectSession = projectSession;
         _sceneDocuments = sceneDocuments;
-        _editorWindow = editorWindow;
+        _documents = documents;
     }
 
     public string? AssetsPath => _projectSession.Project?.AssetsPath;
@@ -178,40 +181,65 @@ public sealed class EditorArt
     }
 
     /// <summary>
-    /// Opens the Sprite Painter: on <paramref name="editing"/> (an image in the project) to paint over, or on a new
-    /// picture laid out as <paramref name="layout"/>. <paramref name="saved"/> is called with the asset path and layout
-    /// of each picture it saves.
+    /// Opens the Sprite Painter in a tab of its own in the document area: on <paramref name="editing"/> (an image in the
+    /// project) to paint over, bringing its tab forward if it's open already, or on a new picture laid out as
+    /// <paramref name="layout"/>. <paramref name="saved"/> is called with the asset path and layout of each picture it saves.
     /// </summary>
-    public SpritePainterWindow OpenPainter(string? editing = null, SheetLayout? layout = null, Action<string, SheetLayout>? saved = null)
+    public SpritePainterViewModel OpenPainter(string? editing = null, SheetLayout? layout = null, Action<string, SheetLayout>? saved = null)
     {
-        if (_painter is null)
+        var documents = _documents.Value;
+        if (editing is not null && documents.Open.FirstOrDefault(d => d.Kind == PainterKind && string.Equals(((SpritePainterViewModel)d.Model).Editing, editing, StringComparison.OrdinalIgnoreCase)) is { } open)
         {
-            var model = new SpritePainterViewModel(this, layout ?? SheetLayout.Sprite());
-            _painter = new SpritePainterWindow(model) { Owner = _editorWindow.Main };
-            _painter.Closed += (_, _) => _painter = null;
-            _painter.Show();
-        }
-        else
-        {
-            if (editing is null)
-                _painter.Model.New(layout ?? SheetLayout.Sprite());
-            _painter.Activate();
+            var painting = (SpritePainterViewModel)open.Model;
+            painting.Saved = saved;
+            documents.Show(open);
+            return painting;
         }
 
-        if (editing is not null && !_painter.Model.Open(editing, layout))
+        var model = new SpritePainterViewModel(this, layout ?? SheetLayout.Sprite());
+        if (editing is not null && !model.Open(editing, layout))
         {
             // A picture that isn't there yet is painted new under that name; one that can't be read is left alone.
             var exists = Resolve(editing) is not null;
-            _painter.Model.New(layout ?? SheetLayout.Sprite(), exists ? null : editing);
+            model.New(layout ?? SheetLayout.Sprite(), exists ? null : editing);
             if (exists)
-                _painter.Model.Status = $"{editing} can't be painted here (too big, or not a picture)";
+                model.Status = $"{editing} can't be painted here (too big, or not a picture)";
         }
-        _painter.Model.Saved = saved;
-        return _painter;
+
+        model.Saved = saved;
+        var document = new EditorDocument(PainterKind, model, () =>
+        {
+            var view = new SpritePainterView(model);
+            view.CloseRequested += (_, _) => documents.Close(documents.Of(model)!);
+            return view;
+        }, Themes.Icons.Image)
+        {
+            Save = () => model.Save() is not null,
+        };
+
+        // Its tab says what it's painting and whether that's saved.
+        void Follow()
+        {
+            document.Title = $"{model.Name.Trim()}.png";
+            document.Key = model.Editing;
+            document.IsDirty = model.IsDirty;
+        }
+
+        model.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(SpritePainterViewModel.Name) or nameof(SpritePainterViewModel.Editing) or nameof(SpritePainterViewModel.IsDirty) or "" or null)
+                Follow();
+        };
+        Follow();
+        document.Closed += (_, _) => model.Stop();
+        documents.Show(document);
+        return model;
     }
 
-    /// <summary>The Sprite Painter, while it's open.</summary>
-    public SpritePainterWindow? Painter => _painter;
+    /// <summary>The Sprite Painter in front (or opened last), while one is open.</summary>
+    public SpritePainterViewModel? Painter =>
+        _documents.Value.Showing is { Kind: PainterKind, Model: SpritePainterViewModel showing } ? showing
+        : _documents.Value.Open.LastOrDefault(d => d.Kind == PainterKind)?.Model as SpritePainterViewModel;
 
     /// <summary>
     /// Opens the Sprite Painter on what <paramref name="component"/>'s image field shows (or a new picture shaped for
@@ -222,7 +250,7 @@ public sealed class EditorArt
         var current = ComponentModel.Of(component).Property(property)?.GetValue(component) as string;
         if (Resolve(current) is null)
             current = null;
-        OpenPainter(current, LayoutFor(component), (image, used) =>
+        var painter = OpenPainter(current, LayoutFor(component), (image, used) =>
         {
             if (_sceneDocuments.Scene is { } scene && ArtEdits.UseSheet(_projectSession.Components, component, property, image, used) is { } edit)
             {
@@ -230,8 +258,8 @@ public sealed class EditorArt
                 scene.History.Seal();
             }
         });
-        if (current is null && _painter is not null && component.Entity is { } entity)
-            _painter.Model.Name = _painter.Model.SuggestName(Slug(entity.Name));
+        if (current is null && component.Entity is { } entity)
+            painter.Name = painter.SuggestName(Slug(entity.Name));
     }
 
     /// <summary>

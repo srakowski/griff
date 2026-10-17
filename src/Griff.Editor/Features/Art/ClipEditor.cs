@@ -50,14 +50,14 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
     private double _time;
     private int _frame;
     private (int First, int Last)? _highlight;
-    private ClipEditorWindow? _window;
+    private Core.Documents.EditorDocument? _tab;
 
-    private readonly Core.EditorWindow _editorWindow;
-    public ClipEditor(ISceneDocuments sceneDocuments, IProjectSession projectSession, ISelection selection, EditorArt art, IDialogService dialogs, Core.EditorWindow editorWindow,
+    private readonly Lazy<Core.Documents.EditorDocuments> _documents;
+    public ClipEditor(ISceneDocuments sceneDocuments, IProjectSession projectSession, ISelection selection, EditorArt art, IDialogService dialogs, Lazy<Core.Documents.EditorDocuments> documents,
         IEnumerable<IClipOverlayMaker> overlays)
     {
         _projectSession = projectSession;
-        _editorWindow = editorWindow;
+        _documents = documents;
         _selection = selection;
         _art = art;
         _dialogs = dialogs;
@@ -231,20 +231,31 @@ public sealed class ClipEditor : ObservableObject, IDocumentEditor
 
     public IRelayCommand<ClipFrame> ShowFrameCommand { get; }
 
-    /// <summary>The Clip Editor's window, while it's open.</summary>
-    public ClipEditorWindow? Window => _window;
+    /// <summary>The Clip Editor's view, while its tab is open in the document area.</summary>
+    public ClipEditorView? View => _tab?.View as ClipEditorView;
 
-    /// <summary>Opens the Clip Editor's window (or brings it to the front).</summary>
+    /// <summary>Opens the Clip Editor in a tab of its own in the document area, beside the scene (or brings its tab to the front).</summary>
     public void Open()
     {
-        if (_window is null)
+        if (_tab is null)
         {
-            _window = new ClipEditorWindow(this) { Owner = _editorWindow.Main };
-            _window.Closed += (_, _) => _window = null;
-            _window.Show();
+            var document = new Core.Documents.EditorDocument("Clip Editor", this, () =>
+            {
+                var view = new ClipEditorView(this);
+                return view;
+            }, Themes.Icons.Play);
+            document.Closed += (_, _) => _tab = null;
+            _tab = document;
         }
-        else
-            _window.Activate();
+
+        _documents.Value.Show(_tab);
+    }
+
+    /// <summary>Closes the Clip Editor's tab, if it's open.</summary>
+    public void Close()
+    {
+        if (_tab is { } document)
+            _documents.Value.Close(document);
     }
 
     /// <summary>Previews the clip called <paramref name="name"/> (or <see cref="OwnFrames"/>).</summary>

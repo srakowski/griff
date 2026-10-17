@@ -1,4 +1,4 @@
-<controls:ChromeWindow x:Class="Griff.Editor.Genres.VisualNovels.DialogueEditorWindow"
+<UserControl x:Class="Griff.Editor.Genres.VisualNovels.DialogueEditorView"
                        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -9,15 +9,10 @@
                        xmlns:theme="clr-namespace:Griff.Editor.Themes"
                        mc:Ignorable="d"
                        d:DataContext="{d:DesignInstance Type=story:DialogueEditor}"
-                       Title="Dialogue Editor"
-                       Width="1060"
-                       Height="720"
                        MinWidth="760"
-                       MinHeight="520"
-                       ShowInTaskbar="False"
-                       WindowStartupLocation="CenterOwner">
+                       MinHeight="520">
 
-    <Window.Resources>
+    <UserControl.Resources>
         <converters:BoolToVisibilityConverter x:Key="Visible" />
         <converters:BoolToVisibilityConverter x:Key="Hidden" Invert="True" />
 
@@ -37,7 +32,7 @@
             <Setter Property="Margin" Value="0,0,8,6" />
             <Setter Property="MinWidth" Value="110" />
         </Style>
-    </Window.Resources>
+    </UserControl.Resources>
 
     <Grid Background="{DynamicResource Brush.Surface.Panel}">
         <Grid.RowDefinitions>
@@ -48,7 +43,7 @@
 
         <!-- Whose lines these are -->
         <DockPanel Margin="16,12,16,0">
-            <Button x:Name="CloseButton" Click="OnClose" Content="Close" DockPanel.Dock="Right" IsCancel="True" Style="{StaticResource Small}" ToolTip="Close the Dialogue Editor (Esc)" />
+            <Button x:Name="CloseButton" Click="OnClose" Content="Close" DockPanel.Dock="Right" Style="{StaticResource Small}" ToolTip="Close the Dialogue Editor (Esc)" />
             <TextBlock VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="Lines of" />
             <TextBlock x:Name="EntityName" Margin="6,0,0,0" VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding EntityName}" />
         </DockPanel>
@@ -281,4 +276,4 @@
             </DockPanel>
         </Grid>
     </Grid>
-</controls:ChromeWindow>
+</UserControl>

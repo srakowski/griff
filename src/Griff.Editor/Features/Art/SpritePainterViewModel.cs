@@ -80,6 +80,7 @@ public sealed partial class SpritePainterViewModel : ObservableObject, IDocument
         SaveCommand = new RelayCommand(() => Save(), () => _art.AssetsPath is not null);
 
         _name = SuggestName("sprite");
+        _history.Changed += (_, _) => OnPropertyChanged(nameof(IsDirty));
         RebuildSwatches();
         RebuildFrames();
         RestartPreview();
@@ -375,6 +376,12 @@ public sealed partial class SpritePainterViewModel : ObservableObject, IDocument
         ? editing[..editing.LastIndexOf('/')]
         : Layout.Kind == SheetKind.Tileset ? "Tiles" : "Sprites";
 
+    /// <summary>The picture in the project it paints over (saving writes over it), or null for a new one not saved yet.</summary>
+    public string? Editing => _editing;
+
+    /// <summary>Whether it has changes since it was opened or last saved: its tab shows a dot, and closing it asks.</summary>
+    public bool IsDirty => _history.IsDirty;
+
     /// <summary>Where Save puts it, e.g. "Sprites/slime.png".</summary>
     public string SavePath => $"{Folder}/{Name.Trim()}.png";
 
@@ -412,7 +419,10 @@ public sealed partial class SpritePainterViewModel : ObservableObject, IDocument
         }
 
         _editing = assetPath;
+        _history.MarkSaved();
         OnPropertyChanged(nameof(Folder));
+        OnPropertyChanged(nameof(Editing));
+        OnPropertyChanged(nameof(IsDirty));
         Status = $"Saved {assetPath}";
         Saved?.Invoke(assetPath, Layout);
         return assetPath;
@@ -426,6 +436,7 @@ public sealed partial class SpritePainterViewModel : ObservableObject, IDocument
         Replace(sheet);
         _editing = assetPath;
         Name = Path.GetFileNameWithoutExtension(assetPath);
+        OnPropertyChanged(nameof(Editing));
         OnPropertyChanged(nameof(Folder));
         OnPropertyChanged(nameof(SavePath));
         Status = $"Editing {assetPath}";
@@ -438,6 +449,7 @@ public sealed partial class SpritePainterViewModel : ObservableObject, IDocument
         Replace(new PixelSheet(layout));
         _editing = assetPath;
         Name = assetPath is null ? SuggestName(layout.Kind == SheetKind.Tileset ? "tiles" : "sprite") : Path.GetFileNameWithoutExtension(assetPath);
+        OnPropertyChanged(nameof(Editing));
         OnPropertyChanged(nameof(Folder));
         OnPropertyChanged(nameof(SavePath));
         Status = assetPath is null ? null : $"New picture for {assetPath}";
@@ -611,6 +623,7 @@ public sealed partial class SpritePainterViewModel : ObservableObject, IDocument
         var before = _sheet.Layout;
         _sheet = sheet;
         _history.Clear();
+        OnPropertyChanged(nameof(IsDirty));
         _frame = 0;
         AfterLayoutChange(before);
     }

@@ -1,4 +1,4 @@
-<controls:ChromeWindow x:Class="Griff.Editor.Genres.Fighting.MoveListWindow"
+<UserControl x:Class="Griff.Editor.Genres.Fighting.MoveListView"
                        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -9,15 +9,10 @@
                        xmlns:theme="clr-namespace:Griff.Editor.Themes"
                        mc:Ignorable="d"
                        d:DataContext="{d:DesignInstance Type=fighting:MoveListEditor}"
-                       Title="Move List"
-                       Width="1000"
-                       Height="680"
                        MinWidth="760"
-                       MinHeight="480"
-                       ShowInTaskbar="False"
-                       WindowStartupLocation="CenterOwner">
+                       MinHeight="480">
 
-    <Window.Resources>
+    <UserControl.Resources>
         <converters:BoolToVisibilityConverter x:Key="Visible" />
 
         <Style x:Key="Heading" TargetType="TextBlock" BasedOn="{StaticResource Style.Text.Overline}">
@@ -40,7 +35,7 @@
             <Setter Property="Margin" Value="0,0,8,6" />
             <Setter Property="MinWidth" Value="90" />
         </Style>
-    </Window.Resources>
+    </UserControl.Resources>
 
     <Grid Background="{DynamicResource Brush.Surface.Panel}">
         <Grid.RowDefinitions>
@@ -51,7 +46,7 @@
 
         <!-- Whose moves these are -->
         <DockPanel Margin="16,12,16,0">
-            <Button x:Name="CloseButton" Click="OnClose" Content="Close" DockPanel.Dock="Right" IsCancel="True" Style="{StaticResource Small}" ToolTip="Close the Move List (Esc)" />
+            <Button x:Name="CloseButton" Click="OnClose" Content="Close" DockPanel.Dock="Right" Style="{StaticResource Small}" ToolTip="Close the Move List (Esc)" />
             <TextBlock VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="Moves of" />
             <TextBlock x:Name="EntityName" Margin="6,0,0,0" VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding EntityName}" />
             <TextBlock Margin="16,0,0,0" VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="{Binding ButtonsNote}" />
@@ -233,4 +228,4 @@
             </ScrollViewer>
         </Grid>
     </Grid>
-</controls:ChromeWindow>
+</UserControl>

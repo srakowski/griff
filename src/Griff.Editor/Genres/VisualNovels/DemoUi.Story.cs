@@ -10,11 +10,11 @@ namespace Griff.Editor.Diagnostics.Demo;
 internal sealed partial class DemoUi
 {
     /// <summary>The open Dialogue Editor, if any.</summary>
-    public static DialogueEditorWindow? DialogueEditor =>
-        Application.Current.Windows.OfType<DialogueEditorWindow>().FirstOrDefault(w => w.IsVisible);
+    public static DialogueEditorView? DialogueEditor =>
+        DocumentOfView<DialogueEditorView>();
 
     /// <summary>Waits for the Dialogue Editor to open (after Entity > Edit Dialogue).</summary>
-    public static async Task<DialogueEditorWindow> WaitForDialogueEditor()
+    public static async Task<DialogueEditorView> WaitForDialogueEditor()
     {
         var window = await WaitFor(() => DialogueEditor, "the Dialogue Editor");
         await Settle(400);

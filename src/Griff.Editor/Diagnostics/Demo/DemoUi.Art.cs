@@ -13,11 +13,11 @@ namespace Griff.Editor.Diagnostics.Demo;
 internal sealed partial class DemoUi
 {
     /// <summary>The open Sprite Painter, if any.</summary>
-    public static SpritePainterWindow? Painter =>
-        Application.Current.Windows.OfType<SpritePainterWindow>().FirstOrDefault(w => w.IsVisible);
+    public static SpritePainterView? Painter =>
+        DocumentOfView<SpritePainterView>();
 
     /// <summary>Waits for the Sprite Painter to open (after Art > New Sprite, or an image field's Paint button).</summary>
-    public static async Task<SpritePainterWindow> WaitForPainter()
+    public static async Task<SpritePainterView> WaitForPainter()
     {
         var window = await WaitFor(() => Painter, "the Sprite Painter");
         await Settle(400);
@@ -75,11 +75,11 @@ internal sealed partial class DemoUi
     }
 
     /// <summary>The open Clip Editor, if any.</summary>
-    public static ClipEditorWindow? ClipEditor =>
-        Application.Current.Windows.OfType<ClipEditorWindow>().FirstOrDefault(w => w.IsVisible);
+    public static ClipEditorView? ClipEditor =>
+        DocumentOfView<ClipEditorView>();
 
     /// <summary>Waits for the Clip Editor to open (after Art > Animation Clips).</summary>
-    public static async Task<ClipEditorWindow> WaitForClipEditor()
+    public static async Task<ClipEditorView> WaitForClipEditor()
     {
         var window = await WaitFor(() => ClipEditor, "the Clip Editor");
         await Settle(400);
@@ -133,7 +133,7 @@ internal sealed partial class DemoUi
         };
     }
 
-    private static Border SheetCellOf(ClipEditorWindow window, int frame) =>
+    private static Border SheetCellOf(ClipEditorView window, int frame) =>
         Descendants<Border>((FrameworkElement)window.FindName("SheetGrid")).FirstOrDefault(b => b.DataContext is SheetCell c && c.Index == frame)
         ?? throw new InvalidOperationException($"No frame {frame} on the Clip Editor's sheet.");
 

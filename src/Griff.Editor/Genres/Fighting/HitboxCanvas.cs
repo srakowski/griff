@@ -28,7 +28,7 @@ public sealed class HitboxCanvas : Canvas
     private static readonly Brush Handle = Frozen(Colors.White);
 
     private HitboxOverlay? _overlay;
-    private ClipEditorWindow? _window;
+    private ClipEditorView? _window;
     private BoxDrag? _drag;
 
     // A drag over the frame: drawing a new box from a corner, moving a box, or resizing one by a corner (the other stays put).
@@ -76,7 +76,7 @@ public sealed class HitboxCanvas : Canvas
         if (_overlay is not null || DataContext is not HitboxDrawing { Overlay: var overlay })
             return;
         _overlay = overlay;
-        _window = Window.GetWindow(this) as ClipEditorWindow;
+        _window = Ancestor(this);
         overlay.PropertyChanged += OnChanged;
         overlay.Clips.PropertyChanged += OnChanged;
         overlay.Boxes.CollectionChanged += OnBoxesChanged;
@@ -85,6 +85,18 @@ public sealed class HitboxCanvas : Canvas
         if (_window is not null)
             _window.FramePicture.SizeChanged += OnPictureSized;
         Draw();
+    }
+
+    // The Clip Editor it's drawn in.
+    private static ClipEditorView? Ancestor(DependencyObject element)
+    {
+        for (var node = VisualTreeHelper.GetParent(element); node is not null; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is ClipEditorView view)
+                return view;
+        }
+
+        return null;
     }
 
     private void Detach()

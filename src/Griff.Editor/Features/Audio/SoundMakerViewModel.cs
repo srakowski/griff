@@ -107,6 +107,18 @@ public sealed partial class SoundMakerViewModel : ObservableObject
     /// <summary>Called with the asset path of each sound saved, e.g. to set it on the field that asked for it.</summary>
     public Action<string>? Saved { get; set; }
 
+    /// <summary>The sound in the project it tweaks (saving writes over it), or null for a new one not saved yet.</summary>
+    public string? Editing => _editing;
+
+    /// <summary>Whether it has changes since it was opened or last saved: its tab shows a dot, and closing it asks.</summary>
+    public bool IsDirty
+    {
+        get => _isDirty;
+        private set => SetProperty(ref _isDirty, value);
+    }
+
+    private bool _isDirty;
+
     public SoundMakerMode Mode
     {
         get => _mode;
@@ -115,6 +127,7 @@ public sealed partial class SoundMakerViewModel : ObservableObject
             if (!SetProperty(ref _mode, value))
                 return;
             _editing = null;
+            OnPropertyChanged(nameof(Editing));
             Name = SuggestName(value == SoundMakerMode.Music ? _music.Mood.ToString().ToLowerInvariant() : "sound");
             OnPropertyChanged(nameof(IsEffect));
             OnPropertyChanged(nameof(IsMusic));
@@ -322,11 +335,13 @@ public sealed partial class SoundMakerViewModel : ObservableObject
 
         _editing = assetPath;
         Name = Path.GetFileNameWithoutExtension(assetPath);
+        OnPropertyChanged(nameof(Editing));
         OnPropertyChanged(nameof(Folder));
         OnPropertyChanged(nameof(SavePath));
         Status = $"Editing {assetPath}";
         RefreshSettings();
         Render(play: true);
+        IsDirty = false;
         return true;
     }
 
@@ -347,6 +362,8 @@ public sealed partial class SoundMakerViewModel : ObservableObject
         var bytes = IsMusic ? Wav.Encode(clip, music: _music) : Wav.Encode(clip, _sound);
         File.WriteAllBytes(path, bytes);
         _editing = assetPath;
+        OnPropertyChanged(nameof(Editing));
+        IsDirty = false;
         Status = $"Saved {assetPath}";
         Saved?.Invoke(assetPath);
         return assetPath;
@@ -360,6 +377,7 @@ public sealed partial class SoundMakerViewModel : ObservableObject
 
     internal void SetSound(SoundRecipe recipe)
     {
+        IsDirty = true;
         _sound = recipe.Clamped();
         RefreshSettings();
         Render(play: PlayOnChange);
@@ -370,6 +388,7 @@ public sealed partial class SoundMakerViewModel : ObservableObject
         var clamped = recipe.Clamped();
         if (clamped == _music)
             return;
+        IsDirty = true;
         _music = clamped;
         RefreshSettings();
         Render(play: PlayOnChange);

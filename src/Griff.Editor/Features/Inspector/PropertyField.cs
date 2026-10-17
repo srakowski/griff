@@ -203,7 +203,7 @@ public sealed class PropertyField : ObservableObject
         var current = fresh || IsMixed || art.Resolve(Value as string) is null ? null : (string)Value!;
         var painter = art.OpenPainter(current, Art.EditorArt.LayoutFor(components[0]), (image, used) => host.UseImage(components, property, image, used));
         if (current is null && components[0].Entity is { } entity)
-            painter.Model.Name = painter.Model.SuggestName(Art.EditorArt.Slug(entity.Name));
+            painter.Name = painter.SuggestName(Art.EditorArt.Slug(entity.Name));
     }
 
     public IRelayCommand PaintImageCommand => _paintImage ??= new RelayCommand(PaintImage);

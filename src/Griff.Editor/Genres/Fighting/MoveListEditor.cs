@@ -40,13 +40,13 @@ public sealed class MoveListEditor : ObservableObject
     private Entity? _entity;
     private int _selectedIndex = -1;
     private bool _rebuilding;
-    private MoveListWindow? _window;
+    private Core.Documents.EditorDocument? _tab;
 
-    private readonly Core.EditorWindow _editorWindow;
-    public MoveListEditor(ISceneDocuments sceneDocuments, IProjectSession projectSession, ISelection selection, TableStore tables, Core.EditorWindow editorWindow)
+    private readonly Lazy<Core.Documents.EditorDocuments> _documents;
+    public MoveListEditor(ISceneDocuments sceneDocuments, IProjectSession projectSession, ISelection selection, TableStore tables, Lazy<Core.Documents.EditorDocuments> documents)
     {
         _projectSession = projectSession;
-        _editorWindow = editorWindow;
+        _documents = documents;
         _selection = selection;
         _tables = tables;
         AddMoveCommand = new RelayCommand(() => AddMove(), () => Fighter is not null);
@@ -308,22 +308,32 @@ public sealed class MoveListEditor : ObservableObject
 
     public IRelayCommand MakeTableCommand { get; }
 
-    /// <summary>The Move List's window, while it's open.</summary>
-    public MoveListWindow? Window => _window;
+    /// <summary>The Move List's view, while its tab is open in the document area.</summary>
+    public MoveListView? View => _tab?.View as MoveListView;
 
-    /// <summary>Opens the Move List's window (or brings it to the front).</summary>
+    /// <summary>Opens the Move List in a tab of its own in the document area, beside the scene (or brings its tab to the front).</summary>
     public void Open()
     {
-        if (_window is null)
+        if (_tab is null)
         {
-            _window = new MoveListWindow(this) { Owner = _editorWindow.Main };
-            _window.Closed += (_, _) => _window = null;
-            _window.Show();
+            var document = new Core.Documents.EditorDocument("Move List", this, () =>
+            {
+                var view = new MoveListView(this);
+                view.CloseRequested += (_, _) => Close();
+                return view;
+            }, Themes.Icons.Rename);
+            document.Closed += (_, _) => _tab = null;
+            _tab = document;
         }
-        else
-        {
-            _window.Activate();
-        }
+
+        _documents.Value.Show(_tab);
+    }
+
+    /// <summary>Closes the Move List's tab, if it's open.</summary>
+    public void Close()
+    {
+        if (_tab is { } document)
+            _documents.Value.Close(document);
     }
 
     // ----- Editing -----

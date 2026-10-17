@@ -1,4 +1,4 @@
-<controls:ChromeWindow x:Class="Griff.Editor.Features.Art.ClipEditorWindow"
+<UserControl x:Class="Griff.Editor.Features.Art.ClipEditorView"
                        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -10,15 +10,10 @@
                        xmlns:theme="clr-namespace:Griff.Editor.Themes"
                        mc:Ignorable="d"
                        d:DataContext="{d:DesignInstance Type=art:ClipEditor}"
-                       Title="Clip Editor"
-                       Width="1100"
-                       Height="700"
                        MinWidth="880"
-                       MinHeight="540"
-                       ShowInTaskbar="False"
-                       WindowStartupLocation="CenterOwner">
+                       MinHeight="540">
 
-    <Window.Resources>
+    <UserControl.Resources>
         <ResourceDictionary>
             <!-- The overlays' templates: each genre's Templates.xaml -->
             <ResourceDictionary.MergedDictionaries>
@@ -36,7 +31,7 @@
                 <Setter Property="Padding" Value="8,0" />
             </Style>
         </ResourceDictionary>
-    </Window.Resources>
+    </UserControl.Resources>
 
     <Grid Background="{DynamicResource Brush.Surface.Panel}">
         <Grid.RowDefinitions>
@@ -335,4 +330,4 @@
             </DockPanel>
         </Grid>
     </Grid>
-</controls:ChromeWindow>
+</UserControl>

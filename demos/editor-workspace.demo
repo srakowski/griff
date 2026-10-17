@@ -35,3 +35,21 @@ click: tables:addrow
 explain: tables:grid | Edited the same way | Edits are saved as they're made, and undo takes them back. The Data menu works on the table you used last, here or in the panel.
 explain: menu:Data | Open Tables in Tabs | Turn on Open Tables in Tabs, and opening or double-clicking a table in Assets opens it in a tab like this.
 closedocument: Loot
+
+chapter: Editors in tabs | The Sprite Painter and Sound Maker beside the scene
+say: The asset editors open in the middle too, as tabs beside the scene, not in windows over it.
+menu: Art > New Sprite...
+painter
+click: painter:idea:Creature
+explain: doctab:Sprite Painter | A tab of its own | The Hierarchy and Inspector stay beside it. A dot on its tab says it has changes that aren't saved, and closing it asks, as a scene does.
+artname: critter
+click: painter:save
+expectart: Sprites/critter.png
+menu: Audio > New Sound...
+maker
+click: maker:preset:Coin
+explain: doctab:Sound Maker | One tab each | Every picture and sound you open gets a tab of its own. Open one that's already open, and its tab comes forward.
+click: maker:save
+closedocument: Sound Maker
+closedocument: critter.png
+explain: scene | Back to the scene | Close a tab with its cross, or a middle-click. The Clip Editor, the Move List and the Dialogue Editor open as tabs too.

@@ -13,15 +13,17 @@ public sealed class EditorAudio
 {
     private readonly IProjectSession _projectSession;
     private Voice? _preview;
-    private SoundMakerWindow? _maker;
 
-    private readonly Core.EditorWindow _editorWindow;
+    private readonly Lazy<Core.Documents.EditorDocuments> _documents;
     private readonly SoundOutput _sound;
 
-    public EditorAudio(IProjectSession projectSession, Core.EditorWindow editorWindow, SoundOutput sound)
+    /// <summary>What the Sound Maker's tabs are called ("Sound Maker: coin.wav").</summary>
+    public const string MakerKind = "Sound Maker";
+
+    public EditorAudio(IProjectSession projectSession, Lazy<Core.Documents.EditorDocuments> documents, SoundOutput sound)
     {
         _projectSession = projectSession;
-        _editorWindow = editorWindow;
+        _documents = documents;
         _sound = sound;
     }
 
@@ -92,37 +94,57 @@ public sealed class EditorAudio
     }
 
     /// <summary>
-    /// Opens the Sound Maker: on <paramref name="editing"/> (a sound made in it) to tweak, or on a new sound or tune.
-    /// <paramref name="saved"/> is called with the asset path of each sound it saves.
+    /// Opens the Sound Maker in a tab of its own in the document area: on <paramref name="editing"/> (a sound made in it)
+    /// to tweak, bringing its tab forward if it's open already, or on a new sound or tune. <paramref name="saved"/> is
+    /// called with the asset path of each sound it saves.
     /// </summary>
-    public SoundMakerWindow OpenMaker(SoundMakerMode mode = SoundMakerMode.Effect, string? editing = null, Action<string>? saved = null)
+    public SoundMakerViewModel OpenMaker(SoundMakerMode mode = SoundMakerMode.Effect, string? editing = null, Action<string>? saved = null)
     {
-        if (_maker is not null)
+        var documents = _documents.Value;
+        if (editing is not null && documents.Open.FirstOrDefault(d => d.Kind == MakerKind && string.Equals(((SoundMakerViewModel)d.Model).Editing, editing, StringComparison.OrdinalIgnoreCase)) is { } open)
         {
-            _maker.Model.Saved = saved;
-            if (editing is not null)
-                _maker.Model.Open(editing);
-            else
-                _maker.Model.Mode = mode;
-            _maker.Activate();
-            return _maker;
+            var making = (SoundMakerViewModel)open.Model;
+            making.Saved = saved;
+            documents.Show(open);
+            return making;
         }
 
         var model = new SoundMakerViewModel(this, mode) { Saved = saved };
         if (editing is not null)
             model.Open(editing);
-        _maker = new SoundMakerWindow(model) { Owner = _editorWindow.Main };
-        _maker.Closed += (_, _) =>
+        var document = new Core.Documents.EditorDocument(MakerKind, model, () =>
         {
-            _maker = null;
-            StopPreview();
+            var view = new SoundMakerView(model);
+            view.CloseRequested += (_, _) => documents.Close(documents.Of(model)!);
+            return view;
+        }, model.IsMusic ? Themes.Icons.Music : Themes.Icons.Audio)
+        {
+            Save = () => model.Save() is not null,
         };
-        _maker.Show();
-        return _maker;
+
+        // Its tab says what it's making and whether that's saved.
+        void Follow()
+        {
+            document.Title = $"{model.Name.Trim()}.wav";
+            document.Key = model.Editing;
+            document.IsDirty = model.IsDirty;
+        }
+
+        model.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(SoundMakerViewModel.Name) or nameof(SoundMakerViewModel.Editing) or nameof(SoundMakerViewModel.IsDirty) or "" or null)
+                Follow();
+        };
+        Follow();
+        document.Closed += (_, _) => StopPreview();
+        documents.Show(document);
+        return model;
     }
 
-    /// <summary>The Sound Maker, while it's open.</summary>
-    public SoundMakerWindow? Maker => _maker;
+    /// <summary>The Sound Maker in front (or opened last), while one is open.</summary>
+    public SoundMakerViewModel? Maker =>
+        _documents.Value.Showing is { Kind: MakerKind, Model: SoundMakerViewModel showing } ? showing
+        : _documents.Value.Open.LastOrDefault(d => d.Kind == MakerKind)?.Model as SoundMakerViewModel;
 
     /// <summary>Whether a sound file was made in the Sound Maker, so it can be opened there again.</summary>
     public bool CanEdit(string? assetPath) => Resolve(assetPath) is { } path &&

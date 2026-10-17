@@ -10,24 +10,31 @@ using Vector2 = System.Numerics.Vector2;
 namespace Griff.Editor.Features.Art;
 
 /// <summary>
-/// The Clip Editor's window: the selected entity's clips beside a preview of the one picked, playing, with what the
-/// modules add for the frame (<see cref="ClipEditor.Overlays"/>, a fighting game's hitboxes and hurtboxes) drawn over it and
-/// listed beside it. Not modal, and it follows the selection, so it can stay open while the scene is edited.
+/// The Clip Editor: the selected entity's clips beside a preview of the one picked, playing, with what the modules add for
+/// the frame (<see cref="ClipEditor.Overlays"/>, a fighting game's hitboxes and hurtboxes) drawn over it and listed beside
+/// it. A document of its own in the document area, which follows the selection, so it can stay open while the scene is
+/// edited (with the Hierarchy and Inspector beside it).
 /// </summary>
-public partial class ClipEditorWindow : ChromeWindow
+public partial class ClipEditorView : UserControl
 {
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private TimeSpan _last;
     private int? _pickFrom;
     private int _pickTo;
 
-    public ClipEditorWindow(ClipEditor model)
+    public ClipEditorView(ClipEditor model)
     {
         InitializeComponent();
         DataContext = model;
         PreviewKeyDown += OnKeyDown;
-        CompositionTarget.Rendering += OnRendering;
-        Closed += (_, _) => CompositionTarget.Rendering -= OnRendering;
+        // The preview plays while its tab is showing.
+        Loaded += (_, _) =>
+        {
+            CompositionTarget.Rendering -= OnRendering;
+            CompositionTarget.Rendering += OnRendering;
+            _last = _clock.Elapsed;
+        };
+        Unloaded += (_, _) => CompositionTarget.Rendering -= OnRendering;
     }
 
     public ClipEditor Model => (ClipEditor)DataContext;
@@ -75,9 +82,7 @@ public partial class ClipEditorWindow : ChromeWindow
 
         if (Keyboard.Modifiers != ModifierKeys.None || e.OriginalSource is TextBox)
             return;
-        if (e.Key == Key.Escape)
-            Close();
-        else if (e.Key == Key.Space)
+        if (e.Key == Key.Space)
             Model.PlayCommand.Execute(null);
         else if (e.Key == Key.Left)
             Model.Step(-1);

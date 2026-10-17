@@ -26,6 +26,9 @@ public sealed class PixelCanvas : FrameworkElement
         RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.NearestNeighbor);
         ClipToBounds = true;
         Cursor = Cursors.Cross;
+        // Clicking it takes the keyboard, so the painter's keys (B, E, G..., Ctrl+Z) work in its tab.
+        Focusable = true;
+        FocusVisualStyle = null;
     }
 
     public SpritePainterViewModel? Painter

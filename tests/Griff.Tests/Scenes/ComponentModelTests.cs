@@ -194,7 +194,7 @@ public class ComponentModelTests
         Assert.NotEmpty(reloaded.Replaced);
         game.Tick(1 / 60.0);
         var second = new WeakReference(AssemblyLoadContext.GetLoadContext(host.Assembly!));
-        Touch(registry, scene, 2);
+        Touch(registry, scene, 2, game);
         game.Tick(1 / 60.0);
 
         Assert.True(host.Reload([new ScriptSource("Gadget.cs", Gadget(3))], [scene]).Success);
@@ -202,9 +202,10 @@ public class ComponentModelTests
         return ([old, second], game);
     }
 
-    // Everything that reads a component reads the script's.
+    // Everything that reads a component reads the script's. In a game that's playing, a script added is read once it has
+    // started, a step later.
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void Touch(ComponentRegistry registry, Scene scene, int version)
+    private static void Touch(ComponentRegistry registry, Scene scene, int version, Game? game = null)
     {
         var descriptor = registry.Find("Gadget")!;
         var entity = new Entity("Thing");
@@ -214,6 +215,7 @@ public class ComponentModelTests
         var values = new TableValues { Table = "Gadgets", Sets = ["Gadget.Power"] };
         entity.AddComponent(values);
         _ = scene.All<Behavior>();
+        game?.Tick(1 / 60.0);
 
         Assert.NotNull(ComponentActions.Find(gadget, "Boost"));
         Assert.Equal(version, ComponentOutputs.Read(entity, "Level"));

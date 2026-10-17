@@ -10,6 +10,7 @@
 - Camera Controls pans with four new built-in actions, **PanUp**, **PanDown**, **PanLeft** and **PanRight** (WASD, the arrows and the D-pad as before), so **Game > Controls** and players can rebind them, and a game can take W or S for something else.
 - A button's **Shortcut Action** clicks it with an input action instead of a fixed key, so a menu key shows in **Game > Controls** and players can rebind it.
 - A **Bar** can be drawn with pictures: its **Fill Image** is revealed as it fills, in its **Direction**, cut off rather than squeezed, over a **Background Image** that can be a nine-slice. Its colors tint them.
+- A script spawned during the game no longer stops it with "The behavior isn't running in a game yet" when a **Tooltip**, **Text**, **Counter**, **Bar** or wire shows one of its outputs that uses `Game`: a script's outputs are read once it has started, from the next step. A **Tooltip** now reads its output only while it's the one hovered.
 
 ## 0.1.0-alpha.8 - 2026-10-17
 

@@ -230,10 +230,90 @@ public class TooltipTests
         tip.Output = "Cards";
         tip.Value = "Left: {0}";
         var game = CreateGame();
+        MouseAt(Vector2.Zero);
 
         Tick(game);
 
         Assert.Equal("Left: 4", tip.Shown);
+    }
+
+    // A script whose output uses the game it runs in, as a deck summing up its cards does; it counts how often it's read.
+    private sealed class Summary : Behavior
+    {
+        internal int Reads { get; private set; }
+
+        [Output]
+        public string Says
+        {
+            get
+            {
+                Reads++;
+                return $"Frame {Game.Time.Frame}";
+            }
+        }
+    }
+
+    // Spawns what it's handed in its Update, as a script making a machine or a card does.
+    private sealed class Maker : Behavior
+    {
+        internal List<Entity> ToSpawn { get; } = [];
+
+        protected override void Update()
+        {
+            foreach (var entity in ToSpawn)
+                Game.Spawn(entity);
+            ToSpawn.Clear();
+        }
+    }
+
+    private static (Tooltip Tip, Summary Summary) SummedUp(string name, Vector2 at)
+    {
+        var entity = new Entity(name);
+        entity.Transform.Position = new Vector3(at, 0);
+        entity.AddComponent<Sprite>().Size = new Vector2(2, 2);
+        var summary = entity.AddComponent<Summary>();
+        var tip = entity.AddComponent<Tooltip>();
+        (tip.Output, tip.Value, tip.Delay) = ("Says", "{0}", 0);
+        return (tip, summary);
+    }
+
+    [Fact]
+    public void Tooltip_SpawnedUnderTheMouse_ReadsItsScriptsOutputOnceTheScriptHasStarted()
+    {
+        var maker = new Entity("Maker").AddComponent<Maker>();
+        _scene.Add(maker.Entity!);
+        var game = CreateGame();
+        MouseAt(Vector2.Zero);
+        Tick(game);
+
+        var (tip, summary) = SummedUp("Deck", Vector2.Zero);
+        maker.ToSpawn.Add(tip.Entity!);
+        Tick(game);
+        Assert.True(tip.IsHovered);
+        Assert.Equal(0, summary.Reads);
+
+        Tick(game);
+        Assert.StartsWith("Frame ", tip.Shown);
+    }
+
+    [Fact]
+    public void Tooltip_OnlyTheHoveredOneReadsItsOutput()
+    {
+        var maker = new Entity("Maker").AddComponent<Maker>();
+        _scene.Add(maker.Entity!);
+        var game = CreateGame();
+        MouseAt(new Vector2(-4, 0));
+        Tick(game);
+
+        var (far, farSummary) = SummedUp("Far Deck", new Vector2(4, 0));
+        var (near, nearSummary) = SummedUp("Near Deck", new Vector2(-4, 0));
+        maker.ToSpawn.AddRange([far.Entity!, near.Entity!]);
+        Tick(game, 5);
+
+        Assert.Equal(0, farSummary.Reads);
+        Assert.Equal("{0}", far.Shown);
+        Assert.True(nearSummary.Reads > 0);
+        Assert.StartsWith("Frame ", near.Shown);
     }
 
     [Fact]

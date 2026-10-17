@@ -354,7 +354,7 @@ internal sealed class MinigameSystem : GameSystem, IMinigames
         foreach (var entity in root.SelfAndDescendants())
         {
             if (ComponentOutputs.Find(entity, "Score") is var (component, output) && output.IsNumber)
-                return (int)MathF.Round(output.ReadNumber(component));
+                return ComponentOutputs.CanRead(component) ? (int)MathF.Round(output.ReadNumber(component)) : 0;
             counter ??= entity.GetComponent<Counter>();
         }
 

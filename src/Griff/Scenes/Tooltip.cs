@@ -86,7 +86,7 @@ public sealed class Tooltip : Component
     /// <summary>True while it shows: hovered for its <see cref="Delay"/>.</summary>
     public bool IsShowing => IsHovered && HoveredFor >= Delay;
 
-    /// <summary>What it says now: <see cref="Value"/>, with its <see cref="Output"/> filled in while the game runs.</summary>
+    /// <summary>What it says now: <see cref="Value"/>, with its <see cref="Output"/> filled in while it's hovered in the game.</summary>
     public string? Shown => _readout ?? Value;
 
     private string? _readout;

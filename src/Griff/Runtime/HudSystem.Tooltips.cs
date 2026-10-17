@@ -18,8 +18,9 @@ internal sealed partial class HudSystem
 
     protected override void SceneChanged() => (_writtenInto, _before) = (null, null);
 
-    // The topmost tooltip under the mouse counts the time it's rested there, each fills in the output it shows, and the one
-    // showing with a Text to write into writes into it.
+    // The topmost tooltip under the mouse counts the time it's rested there and fills in the output it shows (only that one:
+    // the others aren't read, so a prefab just spawned with one costs nothing), and the one showing with a Text to write
+    // into writes into it.
     internal void RunTooltips()
     {
         var tips = Game.Showing<Tooltip>();
@@ -31,7 +32,6 @@ internal sealed partial class HudSystem
         var warm = false;
         foreach (var tip in tips)
         {
-            ReadOutput(tip);
             if (tip == hovered)
                 continue;
             warm |= tip.IsShowing;
@@ -40,6 +40,7 @@ internal sealed partial class HudSystem
 
         if (hovered is not null)
         {
+            ReadOutput(hovered);
             hovered.HoveredFor = !hovered.IsHovered ? (warm ? Math.Max(hovered.Delay, 0) : 0) : hovered.HoveredFor + Game.Time.UnscaledDelta;
             hovered.IsHovered = true;
         }

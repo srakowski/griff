@@ -31,12 +31,13 @@ public sealed class OutputReader
 
     /// <summary>
     /// Finds the output <paramref name="output"/> names on the entity <paramref name="track"/> names (or
-    /// <paramref name="owner"/>'s own), unless it already has; true once it has one to read.
+    /// <paramref name="owner"/>'s own), unless it already has; true once it has one to read. A script's isn't read until
+    /// it has started (see <see cref="ComponentOutputs.CanRead"/>): false till then, as though it weren't there yet.
     /// </summary>
     public bool Find(Entity owner, string? track, string? output)
     {
         if (_resolved && owner == _owner && ReferenceEquals(track, _track) && ReferenceEquals(output, _output) && StillThere(owner, track))
-            return _found is not null;
+            return _found is not null && ComponentOutputs.CanRead(_component!);
 
         (_owner, _track, _output, _resolved) = (owner, track, output, true);
         (_entity, _component, _found, _key) = (null, null, null, null);
@@ -74,17 +75,17 @@ public sealed class OutputReader
         // Not found: look again next time (it may be spawned, renamed or given the component).
         if (_found is null)
             _resolved = false;
-        return _found is not null;
+        return _found is not null && ComponentOutputs.CanRead(_component!);
     }
 
-    /// <summary>What the output gives now, as a number (true is 1); 0 before it's found.</summary>
-    public float Number => _found is { } output ? output.ReadNumber(_component!, _key) : 0;
+    /// <summary>What the output gives now, as a number (true is 1); 0 before it's found or can be read.</summary>
+    public float Number => _found is { } output && ComponentOutputs.CanRead(_component!) ? output.ReadNumber(_component!, _key) : 0;
 
     /// <summary>What the output gives now, for one that gives a name; null for a number, or before it's found.</summary>
-    public string? Text => _found is { } output ? output.ReadText(_component!, _key) : null;
+    public string? Text => _found is { } output && ComponentOutputs.CanRead(_component!) ? output.ReadText(_component!, _key) : null;
 
     /// <summary>What the output is out of now (see <see cref="OutputAttribute.OutOf"/>); 0 for nothing.</summary>
-    public float OutOf => _found is { } output ? output.ReadOutOf(_component!, _key) : 0;
+    public float OutOf => _found is { } output && ComponentOutputs.CanRead(_component!) ? output.ReadOutOf(_component!, _key) : 0;
 
     // What it found is still in the scene with its component, and still the one a network game's own player would pick.
     private bool StillThere(Entity owner, string? track)

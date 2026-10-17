@@ -221,10 +221,16 @@ public static class ComponentOutputs
     /// </summary>
     public static float Read(Entity entity, string? reference)
     {
-        if (string.IsNullOrWhiteSpace(reference) || Find(entity, reference) is not { } found)
+        if (string.IsNullOrWhiteSpace(reference) || Find(entity, reference) is not { } found || !CanRead(found.Component))
             return 0;
         return found.Output.ReadNumber(found.Component, found.Output.IsKeyed ? KeyOf(reference) : null);
     }
+
+    /// <summary>
+    /// False for a script still to start in a running game (one spawned this step starts on the next): its outputs aren't
+    /// read until it has, as their getters may use the game it isn't running in yet. Anything else can always be read.
+    /// </summary>
+    internal static bool CanRead(Component component) => component is not { IsWaitingToStart: true, Entity.Scene.Services: not null };
 
     /// <summary>The output's name in a reference: "Amount" of "Amount:Gold".</summary>
     public static ReadOnlySpan<char> NameOf(ReadOnlySpan<char> reference)

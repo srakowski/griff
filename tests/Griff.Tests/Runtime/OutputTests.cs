@@ -396,6 +396,62 @@ public sealed class OutputTests
         Assert.StartsWith("Orcs's turn", label.Shown);
     }
 
+    // A script whose outputs use the game it runs in.
+    private sealed class Supplies : Behavior
+    {
+        [Output(OutOf = nameof(Room))]
+        public int Crates => (int)Game.Time.Frame;
+
+        public int Room => Game.Time.Frame >= 0 ? 100 : 0;
+
+        [Output]
+        public string Name => $"Frame {Game.Time.Frame}";
+    }
+
+    // Spawns what it's handed in its Update.
+    private sealed class Maker : Behavior
+    {
+        internal List<Entity> ToSpawn { get; } = [];
+
+        protected override void Update()
+        {
+            foreach (var entity in ToSpawn)
+                Game.Spawn(entity);
+            ToSpawn.Clear();
+        }
+    }
+
+    [Fact]
+    public void AScriptSpawnedThisStep_IsntRead_TillItStarts_ByATextACounterABarOrAWire()
+    {
+        var maker = Add("Maker").AddComponent<Maker>();
+        Run();
+
+        // The crate and what reads it, all spawned in the same step.
+        var crate = new Entity("Crate");
+        crate.AddComponent<Supplies>();
+        var label = new Entity("Label").AddComponent<Text>();
+        (label.Track, label.Output, label.Value) = ("Crate", "Name", "{0}");
+        var counter = new Entity("Count").AddComponent<Counter>();
+        (counter.Track, counter.Output) = ("Crate", "Crates");
+        var bar = new Entity("Fill").AddComponent<Bar>();
+        (bar.Track, bar.Output) = ("Crate", "Crates");
+        var wire = new Entity("Wire").AddComponent<Wire>();
+        (wire.From, wire.Output) = ("Crate", "Crates");
+        maker.ToSpawn.AddRange([crate, label.Entity!, counter.Entity!, bar.Entity!, wire.Entity!]);
+        Run();
+        Assert.DoesNotContain("Frame", label.Shown);
+        Assert.Equal(0, ComponentOutputs.Read(crate, "Crates"));
+
+        Run();
+        Assert.StartsWith("Frame ", label.Shown);
+        Assert.True(counter.Value > 0);
+        Assert.Equal(100, counter.Total);
+        Assert.True(bar.Value > 0);
+        Assert.True(wire.Signal > 0);
+        Assert.True(ComponentOutputs.Read(crate, "Crates") > 0);
+    }
+
     // ----- Network games -----
 
     [Fact]

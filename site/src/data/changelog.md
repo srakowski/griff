@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.13 - 2026-10-17
+
 - A **Slider** can be drawn with pictures, as a Bar can: a **Fill Image** shown only as far as it's set (cut off, not squeezed), a **Background Image** for the track that can be a nine-slice (**Background Slice**), and a **Knob Image** at the end of the fill, each tinted by its color. With none set it looks as before.
 - Display settings for options menus, with no code: a **Choice** set to **Window Size** offers the 16:9 window sizes that fit the player's screen and resizes the built game's window (which opens at it next time; fullscreen stays borderless at the screen's resolution), one set to **Frame Cap** offers Off, 30, 60, 120, 144, 165 and 240, a **Toggle** set to **VSync** draws frames as fast as the cap allows when off, and a **Slider** set to **UI Scale** makes the HUD and tooltips bigger or smaller. All are remembered, off or as before by default, and scripts have them as `Game.WindowSize`, `Game.VSync`, `Game.FrameCap` and `Game.UiScale`. A built game left fullscreen now opens fullscreen again.
 - A **Controls List** makes a game's controls screen by itself: put it on an entity with a Layout (an options panel) and while the game runs it makes a row for every input action, its name and a Rebind button showing all its keys, made again when the actions change. **Actions** picks which and in what order (`DropTool, Pan*`), **Show** lists only the game's own, **Hide** leaves some out (`Debug*`), **Labels** renames them, **Slots** gives each row a button per key, and a **Template** entity styles the rows. The Scene view shows sample rows.

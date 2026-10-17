@@ -313,7 +313,7 @@ public sealed class Button : Component, IDrawEffect
     internal void RaiseClicked() => Clicked?.Invoke(this);
 }
 
-/// <summary>A setting of the game itself that a <see cref="Slider"/> or <see cref="Toggle"/> can change with no code.</summary>
+/// <summary>A setting of the game itself that a <see cref="Slider"/>, <see cref="Toggle"/> or <see cref="Choice"/> can change with no code.</summary>
 public enum GameSetting
 {
     /// <summary>None: the control just keeps its own value (and saves it, with SaveAs).</summary>
@@ -360,6 +360,34 @@ public enum GameSetting
     /// is it (say 0.5 to 3, in steps of 0.25, with a text showing "{0:0.00}x").
     /// </summary>
     NoteSpeed,
+
+    /// <summary>
+    /// The size of the built game's window, in pixels of the game (<c>Game.WindowSize</c>): a <see cref="Choice"/> set
+    /// to it offers the common 16:9 sizes that fit the screen ("1280x720", "1600x900"...) in place of its own Options.
+    /// Fullscreen stays at the screen's own resolution, borderless: the display's mode is never changed. In the editor
+    /// and a browser there's no window to size: the choice is kept for the built game, and nothing changes.
+    /// </summary>
+    WindowSize,
+
+    /// <summary>
+    /// Frames in step with the screen (<c>Game.VSync</c>), on by default: off draws them as fast as the computer can,
+    /// up to <see cref="FrameCap"/>. A toggle's setting. The game's steps are the same either way.
+    /// </summary>
+    VSync,
+
+    /// <summary>
+    /// The most frames drawn a second (<c>Game.FrameCap</c>): a <see cref="Choice"/> set to it offers Off, 30, 60, 120,
+    /// 144, 165 and 240 in place of its own Options. Off (the default) draws every frame the screen shows. The game's
+    /// steps are the same either way.
+    /// </summary>
+    FrameCap,
+
+    /// <summary>
+    /// How many times its size the HUD is drawn (<c>Game.UiScale</c>), for players who want it bigger or smaller:
+    /// everything pinned with a <see cref="ScreenAnchor"/>, and tooltips. A slider bound to it is set in times, its Min
+    /// to its Max (say 0.75 to 1.5, in steps of 0.05, with a text showing "{0:0%}"); 1 by default.
+    /// </summary>
+    UiScale,
 }
 
 /// <summary>Which way a <see cref="Bar"/> fills up.</summary>
@@ -722,7 +750,7 @@ public sealed class Toggle : Component
     /// <summary>Whether it's on now; each click flips it.</summary>
     public bool IsOn { get; set; } = true;
 
-    /// <summary>A setting of the game it switches: Sound or Fullscreen. While set, the toggle always shows that setting.</summary>
+    /// <summary>A setting of the game it switches: Sound, Fullscreen or VSync. While set, the toggle always shows that setting.</summary>
     public GameSetting Setting { get; set; }
 
     /// <summary>A name to keep it under in <c>Game.SaveData</c>, e.g. "screenShake"; read it with <c>GetBool</c>.</summary>
@@ -854,6 +882,13 @@ public sealed class Choice : Component
 
     /// <summary>Which option is picked, from 0.</summary>
     public int Index { get; set; } = 1;
+
+    /// <summary>
+    /// A setting of the game it picks, with no code: Window Size or Frame Cap. While set, its options are the setting's
+    /// own (the window sizes that fit the screen, or the frame caps) in place of <see cref="Options"/>, it always shows
+    /// the setting, and the game remembers it next time.
+    /// </summary>
+    public GameSetting Setting { get; set; }
 
     /// <summary>What the entity's <see cref="Text"/> says, with {0} for the option: "Difficulty: &lt; {0} &gt;". Empty leaves the text alone.</summary>
     [Format("{0} the option picked", Preview = nameof(ReadsAs), Replaced = true)]

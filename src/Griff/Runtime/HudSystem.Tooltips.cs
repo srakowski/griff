@@ -162,11 +162,12 @@ internal sealed partial class HudSystem
         }
     }
 
-    private static void DrawBox(FrameDrawing frame, Tooltip tip, Vector2 cursor)
+    private void DrawBox(FrameDrawing frame, Tooltip tip, Vector2 cursor)
     {
         var (lines, columns, rows) = LinesOf(tip);
-        // Drawn on the screen as the HUD is, so with the camera's Hud Size it keeps its size as the camera zooms.
-        var hud = frame.Camera?.GetComponent<Camera>()?.HudScale ?? 1;
+        // Drawn on the screen as the HUD is, so with the camera's Hud Size it keeps its size as the camera zooms, and the
+        // player's UI Scale makes it bigger or smaller.
+        var hud = (frame.Camera?.GetComponent<Camera>()?.HudScale ?? 1) * Game.UiScale;
         var size = tip.Size * hud;
         var offset = tip.Offset * hud;
         var pad = size * BoxPadding;

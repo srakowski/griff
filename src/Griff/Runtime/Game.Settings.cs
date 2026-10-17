@@ -1,7 +1,8 @@
 namespace Griff.Runtime;
 
-// The player's settings (volumes, sound on or off, fullscreen, how dialogue skips and reads on by itself, audio and visual
-// offsets, how fast rhythm notes come), kept in the save data so they come back next time.
+// The player's settings (volumes, sound on or off, fullscreen, the window's size, VSync and a frame cap, the HUD's
+// size, how dialogue skips and reads on by itself, audio and visual offsets, how fast rhythm notes come), kept in the
+// save data so they come back next time.
 public sealed partial class Game
 {
     /// <summary>Where <see cref="IAudio.Volume"/> is kept in <see cref="SaveData"/>.</summary>
@@ -24,6 +25,18 @@ public sealed partial class Game
 
     /// <summary>Where <see cref="VisualOffset"/> is kept in <see cref="SaveData"/>.</summary>
     public const string VisualOffsetSaveKey = "griff.visualOffset";
+
+    /// <summary>Where <see cref="WindowSize"/> is kept in <see cref="SaveData"/>, as "1600x900".</summary>
+    public const string WindowSizeSaveKey = "griff.windowSize";
+
+    /// <summary>Where <see cref="VSync"/> is kept in <see cref="SaveData"/>.</summary>
+    public const string VSyncSaveKey = "griff.vsync";
+
+    /// <summary>Where <see cref="FrameCap"/> is kept in <see cref="SaveData"/>.</summary>
+    public const string FrameCapSaveKey = "griff.frameCap";
+
+    /// <summary>Where <see cref="UiScale"/> is kept in <see cref="SaveData"/>.</summary>
+    public const string UiScaleSaveKey = "griff.uiScale";
 
     /// <summary>The furthest either offset goes, in milliseconds, early or late.</summary>
     public const float MaxOffset = 1000;
@@ -71,5 +84,85 @@ public sealed partial class Game
     {
         add => _settings.FullscreenChanged += value;
         remove => _settings.FullscreenChanged -= value;
+    }
+
+    /// <summary>
+    /// The size of the built game's window, in pixels of the game inside it (not counting its frame): null until the
+    /// player picks one (a <see cref="Scenes.Choice"/> set to Window Size offers <see cref="WindowSizes"/>), when the
+    /// window opens at 1280x720. Setting it resizes the window, and it's remembered: the window opens at it next time.
+    /// Fullscreen is always the screen's own resolution, borderless (the display's mode never changes); a size picked
+    /// while fullscreen is the window's once it's windowed again. In the editor and a browser there's no window to
+    /// size, so it's kept for the built game and nothing changes.
+    /// </summary>
+    public WindowSize? WindowSize
+    {
+        get => _settings.WindowSize;
+        set => _settings.WindowSize = value;
+    }
+
+    /// <summary>Raised when <see cref="WindowSize"/> changes, for the host to resize its window.</summary>
+    public event EventHandler? WindowSizeChanged
+    {
+        add => _settings.WindowSizeChanged += value;
+        remove => _settings.WindowSizeChanged -= value;
+    }
+
+    /// <summary>
+    /// The window sizes a player can pick (<see cref="WindowSize"/>), smallest first: the common 16:9 ones (960x540 up
+    /// to 3840x2160) that fit on the screen, as <see cref="DisplayRoom"/> says, and the one picked now if it isn't
+    /// among them.
+    /// </summary>
+    public IReadOnlyList<WindowSize> WindowSizes => _settings.WindowSizes;
+
+    /// <summary>
+    /// The most room the screen has for the game in a window, in pixels: its work area (without the taskbar) less the
+    /// window's frame. The host sets it (the built game and the editor, from the screen their window is on); null where
+    /// it can't say (a browser), when <see cref="WindowSizes"/> goes up to 1920x1080.
+    /// </summary>
+    public WindowSize? DisplayRoom
+    {
+        get => _settings.DisplayRoom;
+        set => _settings.DisplayRoom = value;
+    }
+
+    /// <summary>
+    /// Whether frames keep in step with the screen, one for each it shows (a <see cref="Scenes.Toggle"/> set to VSync
+    /// turns it on and off). On (the default) is how Griff has always drawn, tear-free. Off draws each frame as soon as
+    /// the last is done, as many as the computer can (up to <see cref="FrameCap"/>), for a game that feels quicker to
+    /// the hand on a fast computer; the screen still shows only its own rate. The game's steps are the same either way:
+    /// frames only change how often the picture is drawn. A browser always draws in step with its screen, and the
+    /// editor's Game tab keeps in step too (the editor shares its thread), so there it only counts for the built game.
+    /// Remembered next time.
+    /// </summary>
+    public bool VSync
+    {
+        get => _settings.VSync;
+        set => _settings.VSync = value;
+    }
+
+    /// <summary>
+    /// The most frames drawn a second, 0 for no cap (the default): 30 or 60 to save a laptop's battery or keep a fan
+    /// quiet, or a high one with <see cref="VSync"/> off. With VSync on, frames still come on the screen's beat,
+    /// skipping some to keep under the cap (30 on a 60 Hz screen draws every other frame). A
+    /// <see cref="Scenes.Choice"/> set to Frame Cap offers Off, 30, 60, 120, 144, 165 and 240. The game's steps are the
+    /// same whatever the cap: a frame takes the steps its time holds, so a capped game plays at the same speed, drawn
+    /// less often. It counts in the built game, the editor's Game tab and a browser, and is remembered next time.
+    /// </summary>
+    public int FrameCap
+    {
+        get => _settings.FrameCap;
+        set => _settings.FrameCap = value;
+    }
+
+    /// <summary>
+    /// How many times its size the HUD is drawn, for a player who wants it bigger or smaller: everything pinned with a
+    /// <see cref="Scenes.ScreenAnchor"/> (drawn, placed from its corner and clicked at this size, with what's inside
+    /// it) and tooltips. It multiplies the camera's <see cref="Scenes.Camera.HudScale"/>. A <see cref="Scenes.Slider"/>
+    /// set to UI Scale changes it; from 0.25 to 4, 1 by default, and remembered next time.
+    /// </summary>
+    public float UiScale
+    {
+        get => _settings.UiScale;
+        set => _settings.UiScale = value;
     }
 }

@@ -576,6 +576,8 @@ internal sealed class MenuSystem : GameSystem
         if (choice.Options.Count == 0 || index == choice.Index)
             return;
         choice.Index = index;
+        if (choice.Setting != GameSetting.None && choice.Value is { } picked)
+            Game.SettingsSystem.ApplyChoice(choice.Setting, picked);
         if (!string.IsNullOrWhiteSpace(choice.SaveAs) && choice.Value is { } value)
             Game.SaveData.Set(choice.SaveAs.Trim(), value);
         if (!string.IsNullOrWhiteSpace(choice.Sound))
@@ -590,13 +592,25 @@ internal sealed class MenuSystem : GameSystem
             text.Value = label;
     }
 
-    // Controls bound to a setting always show it (a volume from 0 to 1 is the whole of a slider's range); ones that save
-    // their value pick it up the first time they're seen.
+    // Controls bound to a setting always show it (a volume from 0 to 1 is the whole of a slider's range; a choice
+    // offers the setting's own options); ones that save their value pick it up the first time they're seen.
     private void SyncControls(List<Slider> sliders, List<Toggle> toggles, List<Choice> choices)
     {
         foreach (var choice in choices)
         {
-            if (_controlsSeen.Add(choice) && !string.IsNullOrWhiteSpace(choice.SaveAs) && Game.SaveData.GetString(choice.SaveAs.Trim()) is { } saved)
+            var first = _controlsSeen.Add(choice);
+            if (Game.SettingsSystem.ChoiceOptions(choice.Setting) is { } options)
+            {
+                if (!ReferenceEquals(choice.Options, options))
+                    choice.Options = options;
+                var now = Game.SettingsSystem.ChoiceValue(choice.Setting);
+                for (var i = 0; i < options.Count; i++)
+                {
+                    if (options[i] == now)
+                        choice.Index = i;
+                }
+            }
+            else if (first && !string.IsNullOrWhiteSpace(choice.SaveAs) && Game.SaveData.GetString(choice.SaveAs.Trim()) is { } saved)
             {
                 var index = choice.Options.ToList().FindIndex(o => string.Equals(o.Trim(), saved.Trim(), StringComparison.OrdinalIgnoreCase));
                 if (index >= 0)
@@ -635,6 +649,8 @@ internal sealed class MenuSystem : GameSystem
         GameSetting.SoundVolume => Game.Audio.SoundVolume,
         GameSetting.Sound => Game.Audio.Muted ? 0 : 1,
         GameSetting.Fullscreen => Game.Fullscreen ? 1 : 0,
+        GameSetting.VSync => Game.VSync ? 1 : 0,
+        GameSetting.UiScale => Game.UiScale,
         GameSetting.Skip => Game.IsSkipping ? 1 : 0,
         GameSetting.Auto => Game.AutoReading ? 1 : 0,
         GameSetting.AudioOffset => Game.AudioOffset,
@@ -658,7 +674,7 @@ internal sealed class MenuSystem : GameSystem
     // the rest, from 0 to 1, fill it.
     private bool InOwnUnits(GameSetting setting)
     {
-        if (setting is GameSetting.AudioOffset or GameSetting.VisualOffset)
+        if (setting is GameSetting.AudioOffset or GameSetting.VisualOffset or GameSetting.UiScale)
             return true;
         for (var i = 0; i < Game.Systems.Count; i++)
         {
@@ -687,6 +703,12 @@ internal sealed class MenuSystem : GameSystem
                 break;
             case GameSetting.Fullscreen:
                 Game.Fullscreen = value >= 0.5f;
+                break;
+            case GameSetting.VSync:
+                Game.VSync = value >= 0.5f;
+                break;
+            case GameSetting.UiScale:
+                Game.UiScale = value;
                 break;
             case GameSetting.Skip:
                 Game.Skipping = value >= 0.5f;

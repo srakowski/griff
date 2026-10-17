@@ -38,6 +38,8 @@ public static partial class WebPlayer
     private static WebView? s_view;
     private static WebSound? s_sound;
     private static double s_lastTime = -1;
+    // The game's frame cap (VSync is always on in a browser: its animation frames come with the screen's).
+    private static readonly FrameSchedule s_schedule = new();
     private static Vector2? s_pointer;
     private static bool s_faulted, s_quit, s_noticed, s_syncingFullscreen;
     private static readonly float[] s_rumble = new float[InputState.MaxGamepads];
@@ -144,6 +146,14 @@ public static partial class WebPlayer
     {
         if (s_loop is not { } loop || s_view is not { } view || s_faulted || s_quit)
             return;
+        // A frame the game's frame cap skips only keeps the sound going; the next one takes the steps of both.
+        s_schedule.Cap = loop.Game.FrameCap;
+        if (s_still is null && !s_schedule.Take(now / 1000))
+        {
+            s_sound?.Pump();
+            return;
+        }
+
         var seconds = s_lastTime < 0 ? 0 : (now - s_lastTime) / 1000;
         s_lastTime = now;
         view.Size = (width, height);

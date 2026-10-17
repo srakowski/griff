@@ -11,7 +11,8 @@ namespace Griff.Platform.Windows;
 
 /// <summary>
 /// Plays a <see cref="Game"/> its host made (<see cref="LoadedGame.NewGame"/>) in a WPF window: the core's
-/// <see cref="GameLoop"/> takes a frame each time the screen shows one (see <see cref="FramePacer"/>) and draws it on the
+/// <see cref="GameLoop"/> takes a frame each time the screen shows one (see <see cref="FramePacer"/>; or as the game's
+/// <see cref="Game.VSync"/> and <see cref="Game.FrameCap"/> say) and draws it on the
 /// <see cref="GameSurface"/>; this hands it keyboard input from <c>keySource</c>, the mouse and touch from the surface and
 /// the controllers, holds the mouse for a first-person game and shows the pointer the game asks for. The game's sound is
 /// its host's (a <see cref="SoundOutput"/>'s mixer, see <see cref="WindowsAudio.Create"/>).
@@ -77,6 +78,13 @@ public sealed class GameRunner : IDisposable
     public Func<bool>? TakesKeys { get; set; }
 
     /// <summary>
+    /// Keeps frames in step with the screen whatever the game's <see cref="Game.VSync"/> says (its
+    /// <see cref="Game.FrameCap"/> still counts): the editor's, whose own window shares the thread the game's frames
+    /// are drawn on.
+    /// </summary>
+    public bool KeepsToScreen { get; init; }
+
+    /// <summary>
     /// Where its keys come from: its window, or the editor's. The editor hands it the window it moves the game into to play
     /// it fullscreen, and back; the keys held down are let go as it changes.
     /// </summary>
@@ -117,6 +125,14 @@ public sealed class GameRunner : IDisposable
         Loop.Start();
         _lastShown = Stopwatch.GetTimestamp();
         _pacer = new FramePacer(_surface.Dispatcher, OnFrame);
+        Pace(_pacer);
+    }
+
+    // How the game's settings say its frames come, read again after each frame (an options menu changes them).
+    private void Pace(FramePacer pacer)
+    {
+        pacer.ToScreen = KeepsToScreen || Game.VSync;
+        pacer.Cap = Game.FrameCap;
     }
 
     /// <summary>Takes exactly one step of the game (for stepping through it while paused).</summary>
@@ -162,6 +178,8 @@ public sealed class GameRunner : IDisposable
 
         Loop.Frame(seconds);
         ShowPointer();
+        if (_pacer is { } pacer)
+            Pace(pacer);
     }
 
     // Read before the game's steps: the mouse held for a first-person game, and the controllers.

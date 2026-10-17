@@ -1,0 +1,48 @@
+title: Display settings
+intro: An options menu picks the window's size, VSync and a frame cap with no code, and the game remembers them.
+project: Arcade | Display Options
+
+chapter: A window size | Choice > Setting = Window Size
+scene: Options
+say: The Arcade template's options menu has a choice for the difficulty. Any choice can pick one of the game's own settings instead.
+select: Difficulty
+rename: Window Size
+set: Choice.Setting = WindowSize
+set: Choice.Format = < {0} >
+explain: field:Choice.Setting | Setting | Set to Window Size, it offers the common 16:9 window sizes that fit the player's screen in place of its own options, and picking one resizes the built game's window there and then.
+expectvalue: Window Size.Choice.Setting = WindowSize
+say: Fullscreen stays borderless at the screen's own resolution: Griff never changes the display's mode. The window opens at the size picked next time.
+
+chapter: VSync and a frame cap | Toggle > VSync, Choice > Frame Cap
+select: Sound
+rename: VSync
+set: Toggle.Setting = VSync
+set: Toggle.OnText = VSync: On
+set: Toggle.OffText = VSync: Off
+explain: field:Toggle.Setting | VSync | A toggle set to VSync keeps frames in step with the screen while it's on, as Griff always has. Off, the game draws each frame as soon as the last is done.
+expectvalue: VSync.Toggle.Setting = VSync
+deselect
+create: Choice
+rename: Frame Cap
+set: Transform.Position = 5.5, 1.4, 0
+set: Choice.Setting = FrameCap
+set: Choice.Format = Cap: < {0} >
+explain: field:Choice.Setting | Frame cap | A choice set to Frame Cap offers Off, 30, 60, 120, 144, 165 and 240 frames a second. With VSync on, a cap of 30 on a 60 hertz screen draws every other frame.
+expectvalue: Frame Cap.Choice.Setting = FrameCap
+say: The cap only changes how often the picture is drawn. The game's steps stay at its step rate, so a capped game plays at the same speed.
+
+chapter: Pick them | Play
+play
+wait: 1
+gameclick: Window Size
+wait: 0.5
+expectvalue: Window Size.Choice.Value = 1366x768
+say: Picked in the editor, the size is kept for the built game: there's no window of its own to resize here.
+gameclick: Frame Cap
+wait: 0.5
+expectvalue: Frame Cap.Choice.Value = 30
+gameclick: VSync
+wait: 0.5
+expectvalue: VSync.Toggle.IsOn = false
+say: The editor's Game tab keeps in step with the screen whatever VSync says, since the editor shares the game's thread, but the cap counts here too. All of them are remembered next time, and scripts have them as Game dot Window Size, VSync and Frame Cap. A slider set to UI Scale makes the HUD bigger or smaller the same way.
+stop

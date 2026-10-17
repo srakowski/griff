@@ -546,9 +546,13 @@ public sealed class PlayMode : ObservableObject, IDisposable
         // setting it goes fullscreen and back.
         game.Fullscreen = _fullscreen;
         game.FullscreenChanged += OnGameFullscreenChanged;
+        // There's no window to size here (Window Size is kept for the built game), but an options menu offers the sizes
+        // that fit this screen, as the built game would.
+        game.DisplayRoom = _editorWindow.Main is { } main ? GameWindowSizing.Room(main) : null;
         // Keys come from the whole window (or, with no window, as in tests, the game's own view), or the window it's
-        // fullscreen in.
-        _runner = new GameRunner(game, Surface, KeySource) { IsPaused = paused, TakesKeys = NotTypingCode };
+        // fullscreen in. Frames keep in step with the screen (the editor's own window shares the thread) whatever the
+        // game's VSync; its frame cap still counts.
+        _runner = new GameRunner(game, Surface, KeySource) { IsPaused = paused, TakesKeys = NotTypingCode, KeepsToScreen = true };
         // The editor's own hooks in its loop, which an exported game's has none of: the debugger, and where an agent points.
         _pointer = new PlaytestPointer();
         _runner.Loop.Add(Debugging.DebuggerLoopHooks.Instance);
@@ -797,7 +801,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         game.Network.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
         game.Network.PlayerName = $"Player {number}";
         ShowDrawings(game);
-        var runner = new GameRunner(game, surface, window);
+        var runner = new GameRunner(game, surface, window) { KeepsToScreen = true };
         runner.Loop.Add(Debugging.DebuggerLoopHooks.Instance);
         game.Network.Join(_network!.Open(), new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, NetSession.DefaultPort));
         runner.Loop.Faulted += OnFaulted;

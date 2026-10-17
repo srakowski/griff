@@ -19,6 +19,8 @@ internal sealed partial class HudSystem : GameSystem
             return;
 
         var (center, half, scale) = ScreenLayout.ViewOf(Views.FindCamera(Game.Scene), Game.ViewAspect);
+        // The player's own UI Scale makes it all bigger or smaller, as the camera's Hud Size does.
+        scale *= Game.UiScale;
         // What's behind the minigame that has the screen isn't seen, so it isn't pinned to its camera either.
         var shown = Game.Minigame;
         foreach (var anchor in anchors)

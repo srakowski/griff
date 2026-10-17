@@ -11,13 +11,17 @@ namespace Griff.Player;
 /// <summary>
 /// The player's window: the game (see <see cref="Program"/>) drawn on a <see cref="GameSurface"/> and played by a
 /// <see cref="GameRunner"/>, its sound through the player's own <see cref="SoundOutput"/>. F11 toggles fullscreen, as
-/// does the game itself (<see cref="Game.Fullscreen"/>), and the choice is remembered.
+/// does the game itself (<see cref="Game.Fullscreen"/>), and the choice is remembered. The window opens at the size the
+/// player picked (<see cref="Game.WindowSize"/>; 1280x720 until they do) and takes a new one as they pick it;
+/// fullscreen is borderless at the screen's own resolution.
 /// </summary>
 public sealed class App(PlayerOptions options) : Application, IDisposable
 {
     private GameRunner? _runner;
     private SoundOutput? _sound;
     private WindowState _windowedState;
+    // A window size picked while fullscreen, for the window once it's windowed again.
+    private bool _resizeWindowed;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -49,6 +53,8 @@ public sealed class App(PlayerOptions options) : Application, IDisposable
         // An exported game's files don't change while it plays: they're read once, never watched.
         var assets = new Griff.Projects.AssetFolder(project.AssetsPath);
         var surface = new GameSurface { Assets = assets };
+            // A smoke test's game stays on this machine and keeps its saves to itself.
+        var saves = smokeOutput is null ? new SaveData(SaveData.PlayerPath(project.Name)) : null;
         var window = new Window
         {
             Title = project.Name,
@@ -74,6 +80,11 @@ public sealed class App(PlayerOptions options) : Application, IDisposable
             window.Left = -30000;
         }
 
+        // The size the player picked last time, before the window shows (the game reads it from the same saves as it
+        // starts).
+        if (WindowSize.TryParse(saves?.GetString(Game.WindowSizeSaveKey), out var picked))
+            window.SourceInitialized += (_, _) => GameWindowSizing.Resize(window, picked);
+
         MainWindow = window;
         window.Show();
 
@@ -81,13 +92,19 @@ public sealed class App(PlayerOptions options) : Application, IDisposable
         var game = loaded.NewGame(new GameHostOptions
         {
             Audio = WindowsAudio.Create(_sound, WindowsAudio.Library(assets)),
-            // A smoke test's game stays on this machine and keeps its saves to itself.
-            SaveData = smokeOutput is null ? new SaveData(SaveData.PlayerPath(project.Name)) : null,
+            SaveData = saves,
             OverNetwork = smokeOutput is null,
             Problems = p => Trace.TraceWarning(p.Message),
         });
         game.QuitRequested += (_, _) => Dispatcher.BeginInvoke(window.Close);
-        game.FullscreenChanged += (_, _) => SetFullscreen(window, game.Fullscreen);
+        game.FullscreenChanged += (_, _) => SetFullscreen(window, game);
+        game.WindowSizeChanged += (_, _) => SetWindowSize(window, game);
+        // The window sizes a player can pick are those that fit the screen the window's on.
+        game.DisplayRoom = GameWindowSizing.Room(window);
+        window.LocationChanged += (_, _) => game.DisplayRoom = GameWindowSizing.Room(window);
+        window.DpiChanged += (_, _) => game.DisplayRoom = GameWindowSizing.Room(window);
+        // Fullscreen as the player left it last time (read as the game was made, before it could say so).
+        SetFullscreen(window, game);
         var runner = _runner = new GameRunner(game, surface, window);
         runner.Loop.Faulted += (_, ex) =>
         {
@@ -150,8 +167,11 @@ public sealed class App(PlayerOptions options) : Application, IDisposable
         return true;
     }
 
-    private void SetFullscreen(Window window, bool fullscreen)
+    // Fullscreen is the window without its frame, maximized: borderless at the screen's own resolution, never changing
+    // the display's mode.
+    private void SetFullscreen(Window window, Game game)
     {
+        var fullscreen = game.Fullscreen;
         if (fullscreen == (window.WindowStyle == WindowStyle.None))
             return;
 
@@ -159,6 +179,9 @@ public sealed class App(PlayerOptions options) : Application, IDisposable
         {
             window.WindowStyle = WindowStyle.SingleBorderWindow;
             window.WindowState = _windowedState;
+            if (_resizeWindowed && game.WindowSize is { } size)
+                GameWindowSizing.Resize(window, size);
+            _resizeWindowed = false;
         }
         else
         {
@@ -167,5 +190,16 @@ public sealed class App(PlayerOptions options) : Application, IDisposable
             window.WindowState = WindowState.Normal;
             window.WindowState = WindowState.Maximized;
         }
+    }
+
+    // The player picked a window size: the window takes it now, or once it's windowed again.
+    private void SetWindowSize(Window window, Game game)
+    {
+        if (game.WindowSize is not { } size)
+            return;
+        if (window.WindowStyle == WindowStyle.None)
+            _resizeWindowed = true;
+        else
+            GameWindowSizing.Resize(window, size);
     }
 }

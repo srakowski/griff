@@ -7,7 +7,7 @@ Griff exports a game from the **Build** menu two ways: as a Windows program, and
 
 ## On the desktop
 
-**Build → Build Game** (Ctrl+B) makes a single `.exe` that carries everything, .NET included, so players install nothing. Zip it and upload it to your jam's page. **Build → Build Small Game** (Ctrl+Shift+B) makes a 4 MB `.exe` for players who have the .NET Desktop Runtime. Built games go fullscreen with F11.
+**Build → Build Game** (Ctrl+B) makes a single `.exe` that carries everything, .NET included, so players install nothing. Zip it and upload it to your jam's page. **Build → Build Small Game** (Ctrl+Shift+B) makes a 4 MB `.exe` for players who have the .NET Desktop Runtime. Built games open in a 1280x720 window, or at the size the player picked in an options menu (a Choice set to Window Size; see [Options menus](/docs/ui/#options-menus)), and go fullscreen with F11: borderless at the screen's own resolution, never changing the display's mode.
 
 Exported games' scripts are compiled optimized, like a Release build; the editor compiles them for debugging, with a breakpoint probe on each line (see [The script editor](/docs/scripting/#the-script-editor)), which makes saving a script take a little longer there (about 50 ms for the Arcade template's five scripts, against 15). Exported games are self-contained: they include the .NET runtime and run on any 64-bit Windows PC without installing anything (expect a zipped download of about 60 MB).
 
@@ -48,7 +48,8 @@ What players get:
   screen (up to 4096 pixels along its longer side, then scaled up), its view as wide as the page as on the desktop.
 - **Fullscreen.** The game's Fullscreen (a toggle set to it, or `Game.Fullscreen`) fills the screen, from the click or
   key that asked for it (browsers allow it only then), and leaving it with Esc turns the setting off. F11 is the
-  browser's own.
+  browser's own. The page is the game's window, so a Window Size an options menu picks is kept for the desktop and
+  changes nothing here, and frames always come with the browser's (VSync off doesn't apply); a Frame Cap still counts.
 - **A loading screen** with the game's name and a bar while .NET and the game come; if something goes wrong it says
   what. Quitting (a Quit button) stops the game and says so, since a page can't close itself.
 

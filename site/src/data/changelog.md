@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.8 - 2026-10-17
+
 - **Camera Controls**: put it on the camera and the player pans with the arrow keys or WASD, drags the world with the middle or right mouse button, zooms toward the mouse with the wheel between a smallest and largest size, and can pan at the screen's edge. **Stay Inside** keeps the view inside a level, even as the level grows. No code needed.
 - A camera's **Hud Size** keeps the HUD the same size and in the same place on the screen while the camera zooms, and its buttons still click where they're drawn.
 - The Scene view shows anything pinned with a **Screen Anchor** where the game will show it, in its corner of the camera's frame, and dragging it there sets its **Offset**.

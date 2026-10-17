@@ -207,6 +207,38 @@ public sealed class AgentGapTests : IDisposable
     });
 
     [Fact]
+    public void UiInvoke_OnTheProject_ChangesAndSavesItsSettings_AsTheMenuDoes() => EditorHost.Run(services =>
+    {
+        var (_, project) = Open(services);
+        var tools = services.GetRequiredService<AgentServer>().Tools;
+        string Invoke(string json) => Wait(tools["ui_invoke"].Invoke(ToolArgs.Parse(json))).Text;
+
+        Invoke("""{"target": "ProjectSession", "path": "Project.SetNewRandomEachGame", "args": [true]}""");
+        Invoke("""{"target": "ProjectSession", "path": "Project.SetControlsAsync", "args": [{"PauseTime": ["Space"]}]}""");
+
+        Assert.True(project.NewRandomEachGame);
+        Assert.Equal(["Space"], project.Controls["PauseTime"].Select(b => b.ToString()));
+        var saved = File.ReadAllText(project.ManifestPath);
+        Assert.Contains("NewRandomEachGame", saved, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PauseTime", saved, StringComparison.Ordinal);
+    });
+
+    [Fact]
+    public void UiInvoke_OnAProperty_IsRefused_NotAnsweredWithWhatItHolds() => EditorHost.Run(services =>
+    {
+        var (_, project) = Open(services);
+        var tools = services.GetRequiredService<AgentServer>().Tools;
+
+        // As an agent called it, with the method in an argument the tool doesn't take: the path names only the project.
+        var refused = Assert.ThrowsAny<AgentException>(() => Wait(tools["ui_invoke"].Invoke(ToolArgs.Parse(
+            """{"target": "ProjectSession", "path": "Project", "args": [true]}"""))));
+
+        Assert.Contains("Project is a property", refused.Message);
+        Assert.Contains("SetNewRandomEachGame", refused.Message);
+        Assert.False(project.NewRandomEachGame);
+    });
+
+    [Fact]
     public void ReloadingScripts_ReachesLiveScenes_OutsideTheWorkspace() => EditorHost.Run(services =>
     {
         var (workspace, project) = Open(services);

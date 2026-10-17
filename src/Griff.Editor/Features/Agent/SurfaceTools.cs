@@ -86,7 +86,7 @@ public sealed class SurfaceTools(ServiceCatalog catalog, IEnumerable<PanelDescri
                 "change those, so the change can be undone.",
             InputSchema = Schema.Object([
                 ("target", target),
-                ("path", Schema.String("The command or method, e.g. \"SaveCommand\" or \"Presets[Coin].Command\" or \"Generate\".")),
+                ("path", Schema.String("The command or method, after the path to what has it, e.g. \"SaveCommand\", \"Presets[Coin].Command\", \"Generate\" or \"Project.SetNewRandomEachGame\" (on ProjectSession).")),
                 ("args", Schema.Any("Arguments: an array in order, or an object by parameter name.")),
                 ("answers", Schema.Map("Answers to questions it asks, by the question's label.")),
                 ("wait", Schema.Number("Seconds to wait for it to finish (default 10).")),
@@ -176,7 +176,8 @@ public sealed class SurfaceTools(ServiceCatalog catalog, IEnumerable<PanelDescri
         var wait = TimeSpan.FromSeconds(Math.Clamp(args.Number("wait", 10), 0, 300));
 
         // Queued, so something that opens a modal window returns while the window is open.
-        var run = Application.Current.Dispatcher.InvokeAsync(() => ObjectSurface.InvokeAsync(root, path, arguments, _entities), DispatcherPriority.Normal).Task.Unwrap();
+        var dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
+        var run = dispatcher.InvokeAsync(() => ObjectSurface.InvokeAsync(root, path, arguments, _entities), DispatcherPriority.Normal).Task.Unwrap();
         if (await Task.WhenAny(run, Task.Delay(wait)) != run)
         {
             var windows = editorWindow.OtherWindows.Select(w => $"\"{w.Title}\"");

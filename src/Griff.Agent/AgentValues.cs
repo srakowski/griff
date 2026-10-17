@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Globalization;
 using System.Numerics;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Griff.Scenes;
@@ -69,6 +70,32 @@ public static class AgentValues
                 var entity = ResolveEntity(element, entities);
                 return entity?.Components.FirstOrDefault(type.IsInstanceOfType)
                     ?? throw new AgentException($"{entity?.Name} has no {type.Name}.");
+            }
+
+            // Lists, and objects by name, of anything this reads (a project's controls: each action's keys by name), and a
+            // value written as text that reads itself from it (a key or button, "Space").
+            if (element.ValueKind == JsonValueKind.Array && ItemOf(type) is { } item)
+            {
+                var array = Array.CreateInstance(item, element.GetArrayLength());
+                var i = 0;
+                foreach (var e in element.EnumerateArray())
+                    array.SetValue(FromJson(e, item, entities), i++);
+                return type.IsArray ? array : Activator.CreateInstance(typeof(List<>).MakeGenericType(item), array);
+            }
+
+            if (element.ValueKind == JsonValueKind.Object && ByNameOf(type) is { } value)
+            {
+                var named = (IDictionary)Activator.CreateInstance(typeof(Dictionary<,>).MakeGenericType(typeof(string), value))!;
+                foreach (var p in element.EnumerateObject())
+                    named[p.Name] = FromJson(p.Value, value, entities);
+                return named;
+            }
+
+            if (element.ValueKind == JsonValueKind.String && type.GetMethod("TryParse", BindingFlags.Public | BindingFlags.Static,
+                    [typeof(string), type.MakeByRefType()]) is { ReturnType: var returns } tryParse && returns == typeof(bool))
+            {
+                object?[] call = [element.GetString(), null];
+                return (bool)tryParse.Invoke(null, call)! ? call[1] : throw new FormatException();
             }
 
             return element.Deserialize(type);
@@ -147,6 +174,8 @@ public static class AgentValues
             : typeof(Component).IsAssignableFrom(type) ? $"an entity with a {type.Name}: its name, id or path"
             : IsTuple(type) && type.GetGenericArguments() is [var x, var y] && x == typeof(int) && y == typeof(int) ? "[x, y], whole numbers"
             : IsTuple(type) ? $"[{string.Join(", ", type.GetGenericArguments().Select(Describe))}]"
+            : ItemOf(type) is { } item ? $"an array of {Describe(item)}"
+            : ByNameOf(type) is { } value ? $"an object of {Describe(value)} by name"
             : type.Name;
     }
 
@@ -208,6 +237,17 @@ public static class AgentValues
     private static int Count(IEnumerable items) => items is ICollection c ? c.Count : items.Cast<object?>().Count();
 
     // Entity[], List<Entity>, IEnumerable<Entity>, IReadOnlyList<Entity> and the like: what a List<Entity> can be passed as.
+    // What a list of type holds (an array, or a list interface a List<T> fills), or null.
+    private static Type? ItemOf(Type type) =>
+        type.IsArray ? type.GetElementType()
+        : type.IsGenericType && type.GetGenericArguments() is [var item] && type.IsAssignableFrom(typeof(List<>).MakeGenericType(item)) ? item
+        : null;
+
+    // What a dictionary by name of type holds (one a Dictionary<string, T> fills), or null.
+    private static Type? ByNameOf(Type type) =>
+        type.IsGenericType && type.GetGenericArguments() is [var key, var value] && key == typeof(string)
+            && type.IsAssignableFrom(typeof(Dictionary<,>).MakeGenericType(key, value)) ? value : null;
+
     private static bool IsEntityList(Type type) =>
         type == typeof(Entity[]) || (type.IsGenericType && type.GetGenericArguments() is [var item] && item == typeof(Entity)
             && type.IsAssignableFrom(typeof(List<Entity>)));

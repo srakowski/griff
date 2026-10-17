@@ -199,9 +199,11 @@ public class ObjectSurfaceTests
     }
 
     [Fact]
-    public async Task Invoke_OnAPlainProperty_SaysWhatItHolds()
+    public async Task Invoke_OnAPlainProperty_IsRefused_SayingWhatItHolds_NotAnsweredAsThoughCalled()
     {
-        Assert.Equal(120, (await ObjectSurface.InvokeAsync(new Maker(), "Tempo", null))!.GetValue<double>());
+        var error = await Assert.ThrowsAsync<AgentException>(() => ObjectSurface.InvokeAsync(new Maker(), "Tempo", null));
+
+        Assert.Equal("Tempo is a property (120), not a command or method, so nothing was called. ui_set changes it.", error.Message);
     }
 
     [Fact]
@@ -223,6 +225,21 @@ public class ObjectSurfaceTests
         Assert.Equal(lines, (string[])AgentValues.FromJson(Json("\"a\\nb\""), typeof(IReadOnlyList<string>))!);
         Assert.Equal(3, AgentValues.FromJson(Json("\"3\""), typeof(int)));
         Assert.Null(AgentValues.FromJson(Json("null"), typeof(int?)));
+    }
+
+    [Fact]
+    public void ListsAndObjectsByName_AreReadItemByItem_AndAValueWrittenAsTextReadsItself()
+    {
+        // A project's controls, as Project.SetControlsAsync takes them: each action's keys and buttons by name.
+        var controls = (IReadOnlyDictionary<string, IReadOnlyList<Griff.Input.InputBinding>>)AgentValues.FromJson(
+            Json("""{"PauseTime": ["Space", "P"], "Build": []}"""), typeof(IReadOnlyDictionary<string, IReadOnlyList<Griff.Input.InputBinding>>))!;
+
+        Assert.Equal(["Space", "P"], controls["PauseTime"].Select(b => b.ToString()));
+        Assert.Empty(controls["Build"]);
+        Assert.Equal([2, 3], (int[])AgentValues.FromJson(Json("[2, \"3\"]"), typeof(int[]))!);
+        var wrong = Assert.Throws<AgentException>(() => AgentValues.FromJson(Json("""{"Jump": ["Nope"]}"""), typeof(Dictionary<string, List<Griff.Input.InputBinding>>)));
+        Assert.Equal("Expected InputBinding but got \"Nope\".", wrong.Message);
+        Assert.Equal("an object of an array of InputBinding by name", AgentValues.Describe(typeof(IReadOnlyDictionary<string, IReadOnlyList<Griff.Input.InputBinding>>)));
     }
 
     [Fact]

@@ -178,6 +178,13 @@ public sealed class McpServer
             throw new RpcException(-32602, $"Unknown tool: {name}");
 
         var args = parameters["arguments"] is JsonObject arguments ? ToolArgs.Parse(arguments.ToJsonString()) : ToolArgs.Empty;
+        // An argument the tool doesn't take would be dropped without a word, and the call seem to do what it asked.
+        if (Unknown(tool, args) is { } unknown)
+        {
+            ToolCalled?.Invoke(name, true);
+            return ToolResult.Error(unknown).ToJson();
+        }
+
         var result = await _dispatch(tool, args, async () =>
         {
             try
@@ -201,6 +208,18 @@ public sealed class McpServer
 
         ToolCalled?.Invoke(name, result.IsError);
         return result.ToJson();
+    }
+
+    // What's wrong with arguments that the tool's schema doesn't list (unless it takes any), or null when there are none.
+    private static string? Unknown(AgentTool tool, ToolArgs args)
+    {
+        if (tool.InputSchema["properties"] is not JsonObject properties || tool.InputSchema["additionalProperties"]?.GetValue<bool>() == true)
+            return null;
+        var unknown = args.Root.EnumerateObject().Select(p => p.Name).Where(n => !properties.ContainsKey(n)).ToList();
+        if (unknown.Count == 0)
+            return null;
+        var takes = properties.Count == 0 ? "no arguments" : string.Join(", ", properties.Select(p => $"\"{p.Key}\""));
+        return $"{tool.Name} doesn't take {string.Join(", ", unknown.Select(n => $"\"{n}\""))}: it takes {takes}.";
     }
 
     private static JsonObject ErrorResponse(JsonNode? id, int code, string message) => new()

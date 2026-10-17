@@ -103,6 +103,34 @@ public class McpServerTests
     }
 
     [Fact]
+    public async Task ToolsCall_WithAnArgumentTheToolDoesntTake_IsRefused_NotDropped()
+    {
+        var called = false;
+        var echo = new AgentTool
+        {
+            Name = "echo",
+            Description = "Says it back.",
+            InputSchema = Schema.Object([("text", Schema.String("What to say."))], "text"),
+            Invoke = args =>
+            {
+                called = true;
+                return Task.FromResult(ToolResult.Ok(args.String("text")));
+            },
+        };
+        var server = new McpServer([new Source(echo)], "griff", "1.0");
+
+        var result = (await Call(server, "tools/call", new JsonObject
+        {
+            ["name"] = "echo",
+            ["arguments"] = new JsonObject { ["text"] = "hi", ["method"] = "Shout" },
+        }))["result"]!;
+
+        Assert.True((bool)result["isError"]!);
+        Assert.Equal("echo doesn't take \"method\": it takes \"text\".", (string?)result["content"]![0]!["text"]);
+        Assert.False(called);
+    }
+
+    [Fact]
     public async Task ToolsCall_AnUnknownTool_IsAProtocolError()
     {
         var server = new McpServer([new Source(Echo())], "griff", "1.0");

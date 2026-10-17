@@ -178,9 +178,19 @@ public static partial class ObjectSurface
         var candidates = Methods(owner.GetType()).Where(m => m.Name.Equals(member, StringComparison.OrdinalIgnoreCase)).ToList();
         if (candidates.Count == 0)
         {
-            // A plain property: there's nothing to call, so say what it holds.
-            if (FindProperty(owner.GetType(), member) is { } plain && TryGet(plain, owner, out var value))
-                return Shown(value, depth: 1);
+            // A plain property: there's nothing to call. Answering with what it holds would read as though a call had been
+            // made (a method named in an argument ui_invoke doesn't take, the path ending at what has it), so it's refused,
+            // saying how to call something of what it holds, or to set it.
+            if (FindProperty(owner.GetType(), member) is { } plain)
+            {
+                var held = TryGet(plain, owner, out var value) ? value : null;
+                if (held is null || IsLeaf(held.GetType()))
+                    throw new AgentException($"{plain.Name} is a property ({Shown(held)?.ToJsonString() ?? "null"}), not a command or method, so nothing was called. ui_set changes it.");
+                var example = Methods(held.GetType()).FirstOrDefault()?.Name ?? "Method";
+                throw new AgentException($"{plain.Name} is a property, not a command or method, so nothing was called. Name the method " +
+                    $"after it in the path, e.g. \"{path.Trim()}.{example}\". {Listing(held)}");
+            }
+
             throw new AgentException($"{owner.GetType().Name} has no command or method \"{member}\". {Listing(owner)}");
         }
 

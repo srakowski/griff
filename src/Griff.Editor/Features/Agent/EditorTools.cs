@@ -78,6 +78,7 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
                 ("hold", Schema.Array(Schema.String("key"), "One step: keys to hold for \"seconds\".")),
                 ("tap", Schema.Array(Schema.String("key"), "One step: keys to tap.")),
                 ("seconds", Schema.Number("How long to hold, or to drag for (default 0.5).")),
+                ("wait", Schema.Number("One step: let the game run this many seconds.")),
                 ("point", Schema.Any("One step: move the mouse to [x, y] or an entity's name.")),
                 ("click", Schema.Any("One step: click at [x, y] or an entity's name.")),
                 ("drag", Schema.Map("One step: {\"from\": point, \"to\": point}, pressing at from and letting go at to (unless \"release\": false).")),

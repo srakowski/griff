@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.Json;
 using Griff.Agent;
 using Griff.Editing;
@@ -77,5 +78,37 @@ public class AgentSurfaceTests
             dialogs.ShowError("Oops", "It broke.");
             Assert.Equal(["Oops: It broke."], AgentDialogs.Reported);
         }
+    });
+
+    // The MCP server refuses an argument a tool doesn't take, so a demo's or tutorial's agent call with one would fail as it
+    // plays: each names only what its tool takes.
+    [Fact]
+    public void DemosAgentCalls_PassOnlyArgumentsTheirToolsTake() => OnUiThread(services =>
+    {
+        var tools = services.GetRequiredService<AgentServer>().Tools;
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "griff.slnx")))
+            root = root.Parent;
+        Assert.NotNull(root);
+
+        var scripts = Directory.GetFiles(Path.Combine(root.FullName, "demos"), "*.demo")
+            .Concat(Directory.GetFiles(Path.Combine(root.FullName, "site", "tutorials"), "*.demo"));
+        var calls = 0;
+        foreach (var script in scripts)
+        {
+            foreach (var line in File.ReadLines(script).Select(l => l.Trim()).Where(l => l.StartsWith("agent:", StringComparison.Ordinal)))
+            {
+                var call = line["agent:".Length..].Trim();
+                var space = call.IndexOf(' ');
+                var (name, json) = space < 0 ? (call, "{}") : (call[..space], call[(space + 1)..]);
+                if (!tools.TryGetValue(name, out var tool) || tool.InputSchema["properties"] is not System.Text.Json.Nodes.JsonObject properties)
+                    continue;
+                calls++;
+                foreach (var argument in JsonDocument.Parse(json).RootElement.EnumerateObject())
+                    Assert.True(properties.ContainsKey(argument.Name), $"{Path.GetFileName(script)}: {name} doesn't take \"{argument.Name}\"");
+            }
+        }
+
+        Assert.True(calls > 0);
     });
 }

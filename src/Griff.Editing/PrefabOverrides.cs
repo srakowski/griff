@@ -51,14 +51,19 @@ public static class PrefabOverrides
 
     /// <summary>
     /// True if <paramref name="property"/> of <paramref name="component"/> is set differently from the prefab's
-    /// <paramref name="prefabComponent"/>. A copy's own position and rotation never count.
+    /// <paramref name="prefabComponent"/>. A copy's own position and rotation never count, nor the position of a part
+    /// pinned to the screen.
     /// </summary>
     public static bool Differs(Component component, Component prefabComponent, PropertyDescriptor property) =>
         !IsOwn(component, property) && !ValueCodec.AreEqual(property.GetValue(component), property.GetValue(prefabComponent));
 
-    /// <summary>True for a copy's position and rotation, which are where it's placed rather than something it changes.</summary>
+    /// <summary>
+    /// True for a copy's position and rotation, which are where it's placed rather than something it changes, and for the
+    /// position of anything a <see cref="ScreenAnchor"/> places, which is worked out from its anchor.
+    /// </summary>
     public static bool IsOwn(Component component, PropertyDescriptor property) =>
-        component is Transform && component.Entity?.Prefab is not null && property.Name is nameof(Transform.Position) or nameof(Transform.Rotation);
+        component is Transform && (component.Entity?.Prefab is not null && property.Name is nameof(Transform.Position) or nameof(Transform.Rotation) ||
+                                   component.Entity?.GetComponent<ScreenAnchor>() is not null && property.Name is nameof(Transform.Position));
 
     /// <summary>A property value from one component that's safe to put on another (a list is copied).</summary>
     public static object? CopyValue(object? value) => value is IReadOnlyList<string> lines ? lines.ToArray() : value;

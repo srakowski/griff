@@ -205,7 +205,8 @@ public sealed partial class SceneViewModel(IProjectSession projectSession, IScen
         // Snapping lines up the one picked last (or the selected parent it's inside); the rest keep their distance.
         var anchor = moving.FirstOrDefault(e => selection.Entity is { } primary && primary.IsSelfOrDescendantOf(e)) ?? moving[^1];
         var position = projectSession.Components.Get(typeof(Transform)).Properties.Single(p => p.Name == nameof(Transform.Position));
-        return new SelectionMove(document, moving, anchor, position);
+        var offset = projectSession.Components.Get(typeof(ScreenAnchor)).Properties.Single(p => p.Name == nameof(ScreenAnchor.Offset));
+        return new SelectionMove(document, moving, anchor, position, offset);
     }
 
     /// <summary>
@@ -457,11 +458,13 @@ public sealed partial class SceneViewModel(IProjectSession projectSession, IScen
         private readonly List<(Transform Transform, Vector3 Start, Matrix4x4 ParentInverse)> _moving;
         private readonly int _anchor;
         private readonly PropertyDescriptor _position;
+        private readonly PropertyDescriptor _offset;
 
-        internal SelectionMove(SceneDocument document, IReadOnlyList<Entity> entities, Entity anchor, PropertyDescriptor position)
+        internal SelectionMove(SceneDocument document, IReadOnlyList<Entity> entities, Entity anchor, PropertyDescriptor position, PropertyDescriptor offset)
         {
             _document = document;
             _position = position;
+            _offset = offset;
             _anchor = entities.ToList().IndexOf(anchor);
             _moving = entities.Select(e => (e.Transform, e.Transform.Position,
                 e.Parent is { } parent && Matrix4x4.Invert(parent.Transform.WorldMatrix, out var inverse) ? inverse : Matrix4x4.Identity)).ToList();
@@ -491,10 +494,30 @@ public sealed partial class SceneViewModel(IProjectSession projectSession, IScen
 
             if (_moving.Select((m, i) => m.Transform.Position == targets[i]).All(same => same))
                 return;
-            if (_moving.Count == 1)
-                _document.Execute(new SetPropertyEdit(_moving[0].Transform, _position, targets[0]));
+
+            // What's pinned to the screen is placed by its anchor, so it moves by its anchor's offset.
+            var camera = Views.FindCamera(_document.Scene);
+            var (transforms, positions, anchors, offsets) = (new List<Transform>(), new List<Vector3>(), new List<ScreenAnchor>(), new List<Vector2>());
+            for (var i = 0; i < _moving.Count; i++)
+            {
+                if (_moving[i].Transform.Entity?.GetComponent<ScreenAnchor>() is { } pin)
+                {
+                    anchors.Add(pin);
+                    offsets.Add(pin.OffsetFor(targets[i], camera, (float)CameraAspect));
+                }
+                else
+                {
+                    transforms.Add(_moving[i].Transform);
+                    positions.Add(targets[i]);
+                }
+            }
+
+            if (transforms.Count == 1 && anchors.Count == 0)
+                _document.Execute(new SetPropertyEdit(transforms[0], _position, positions[0]));
+            else if (transforms.Count == 0 && anchors.Count == 1)
+                _document.Execute(new SetPropertyEdit(anchors[0], _offset, offsets[0]));
             else
-                _document.Execute(new SetPositionsEdit(_moving.Select(m => m.Transform).ToList(), targets));
+                _document.Execute(new SetPositionsEdit(transforms, positions, anchors, offsets));
         }
 
         /// <summary>Ends the drag, so the next move is its own undo step.</summary>

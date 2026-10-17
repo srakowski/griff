@@ -136,44 +136,64 @@ public sealed class SetPropertiesEdit : IComponentEdit
 }
 
 /// <summary>
-/// Moves several entities at once (dragging or nudging a selection), as one step. Consecutive moves of the same
-/// entities merge, so a whole drag undoes in one go.
+/// Moves several entities at once (dragging or nudging a selection), as one step: each one's position, or for one pinned
+/// to the screen, its anchor's offset. Consecutive moves of the same entities merge, so a whole drag undoes in one go.
 /// </summary>
 public sealed class SetPositionsEdit : IEdit
 {
     private readonly IReadOnlyList<Transform> _transforms;
     private readonly System.Numerics.Vector3[] _old;
     private System.Numerics.Vector3[] _new;
+    private readonly IReadOnlyList<ScreenAnchor> _anchors;
+    private readonly System.Numerics.Vector2[] _oldOffsets;
+    private System.Numerics.Vector2[] _newOffsets;
 
     public SetPositionsEdit(IReadOnlyList<Transform> transforms, IReadOnlyList<System.Numerics.Vector3> positions)
+        : this(transforms, positions, [], [])
+    {
+    }
+
+    /// <summary>Moves <paramref name="transforms"/> to <paramref name="positions"/> and <paramref name="anchors"/> to <paramref name="offsets"/>.</summary>
+    public SetPositionsEdit(IReadOnlyList<Transform> transforms, IReadOnlyList<System.Numerics.Vector3> positions, IReadOnlyList<ScreenAnchor> anchors,
+        IReadOnlyList<System.Numerics.Vector2> offsets)
     {
         if (transforms.Count != positions.Count)
             throw new ArgumentException("One position per transform.", nameof(positions));
+        if (anchors.Count != offsets.Count)
+            throw new ArgumentException("One offset per anchor.", nameof(offsets));
         _transforms = transforms;
         _old = transforms.Select(t => t.Position).ToArray();
         _new = positions.ToArray();
+        _anchors = anchors;
+        _oldOffsets = anchors.Select(a => a.Offset).ToArray();
+        _newOffsets = offsets.ToArray();
     }
 
-    public string Description => $"Move {_transforms.Count} entities";
+    public string Description => $"Move {_transforms.Count + _anchors.Count} entities";
 
     public void Apply()
     {
         for (var i = 0; i < _transforms.Count; i++)
             _transforms[i].Position = _new[i];
+        for (var i = 0; i < _anchors.Count; i++)
+            _anchors[i].Offset = _newOffsets[i];
     }
 
     public void Revert()
     {
+        for (var i = _anchors.Count - 1; i >= 0; i--)
+            _anchors[i].Offset = _oldOffsets[i];
         for (var i = _transforms.Count - 1; i >= 0; i--)
             _transforms[i].Position = _old[i];
     }
 
     public bool TryMerge(IEdit next)
     {
-        if (next is not SetPositionsEdit other || !other._transforms.SequenceEqual(_transforms))
+        if (next is not SetPositionsEdit other || !other._transforms.SequenceEqual(_transforms) || !other._anchors.SequenceEqual(_anchors))
             return false;
 
         _new = other._new;
+        _newOffsets = other._newOffsets;
         return true;
     }
 }

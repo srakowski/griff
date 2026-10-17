@@ -1,6 +1,7 @@
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editing;
+using Griff.Editor.Features.SceneView;
 using Griff.Scenes;
 
 namespace Griff.Editor.Core.Workspace;
@@ -16,13 +17,24 @@ public sealed class SceneDocument : ObservableObject
         Scene = scene;
         FilePath = filePath;
         IsRuntime = isRuntime;
+        LayOutScreen();
         History.Changed += (_, e) =>
         {
             // A tilemap lined up with another stays on its cells, however it was set, moved or undone.
             Tilemap.LineUpAll(Scene);
+            LayOutScreen();
             OnPropertyChanged(nameof(IsDirty));
             Changed?.Invoke(this, e);
         };
+    }
+
+    // What's pinned to the screen (ScreenAnchor) shows where the game puts it on the main camera's frame, however its
+    // anchor, the camera or what it's in was set, moved or undone. The game lays out its own copy as it plays, and a prefab
+    // in its own tab has no screen to be pinned to.
+    private void LayOutScreen()
+    {
+        if (!IsRuntime && !IsPrefab)
+            ScreenAnchor.LayOutAll(Scene, (float)SceneViewModel.CameraAspect);
     }
 
     /// <summary>Raised after any edit is executed, undone or redone.</summary>

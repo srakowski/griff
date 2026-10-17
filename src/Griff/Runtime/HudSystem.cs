@@ -18,26 +18,15 @@ internal sealed class HudSystem : GameSystem
         if (anchors.Count == 0)
             return;
 
-        var camera = Views.FindCamera(Game.Scene);
+        var (center, half, scale) = ScreenAnchor.ViewOf(Views.FindCamera(Game.Scene), Game.ViewAspect);
         // What's behind the minigame that has the screen isn't seen, so it isn't pinned to its camera either.
         var shown = Game.Minigame;
-        var component = camera?.GetComponent<Camera>();
-        var center = camera is null ? Vector2.Zero : new Vector2(camera.Transform.WorldPosition.X, camera.Transform.WorldPosition.Y);
-        center += component?.ShakeOffset ?? Vector2.Zero;
-        var halfHeight = component?.Size ?? Views.DefaultCameraSize;
-        var half = new Vector2(halfHeight * (Game.ViewAspect > 0 ? Game.ViewAspect : 1), halfHeight);
-
         foreach (var anchor in anchors)
         {
             // An entity's first anchor places it.
             if (anchor.Entity!.GetComponent<ScreenAnchor>() != anchor || MinigameRoot.IsBehind(anchor.Entity, shown))
                 continue;
-            var transform = anchor.Entity!.Transform;
-            var world = center + ScreenAnchor.Direction(anchor.Anchor) * half + anchor.Offset;
-            var target = new Vector3(world, transform.WorldPosition.Z);
-            if (anchor.Entity.Parent is { } parent && Matrix4x4.Invert(parent.Transform.WorldMatrix, out var inverse))
-                target = Vector3.Transform(target, inverse);
-            transform.Position = new Vector3(target.X, target.Y, transform.Position.Z);
+            anchor.Place(center, half, scale);
         }
     }
 

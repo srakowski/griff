@@ -1,0 +1,33 @@
+title: A HUD where the game shows it
+intro: The Scene view puts what's pinned to the screen where the game will, dragging it moves its anchor, and a zooming camera can keep the HUD the same size.
+
+project: Empty | Pinned HUD
+
+chapter: In its corner | The Scene view lays out Screen Anchors
+select: Main Camera
+set: Transform.Position.X = 0
+set: Transform.Position.Y = 0
+set: Camera.Size = 5
+look: 0, 0, 6
+deselect
+create: Text
+rename: Score
+set: Text.Value = Score: 0
+add: ScreenAnchor
+set: ScreenAnchor.Offset = 1.5, -0.6
+expectat: Score = -7.39, 4.4
+explain: component:ScreenAnchor | Screen Anchor | A Screen Anchor pins the score to the top left corner of the screen. The Scene view puts it there too, on the camera's frame, just where the game will show it.
+
+chapter: Drag it into place | Dragging it sets its offset
+say: Dragging it in the Scene view moves it from its corner, so the drag sets the anchor's offset rather than a position the game would throw away.
+scenedrag: Score > -6, 3.5
+expectat: Score = -6, 3.5
+explain: field:ScreenAnchor.Offset | Offset | The offset now says how far it sits from the corner.
+
+chapter: Zoom without the HUD | Hud Size keeps it the same size on screen
+select: Main Camera
+explain: field:Camera.HudSize | Hud Size | For a camera that zooms, set Hud Size to the size the HUD was laid out at. Left at zero, the HUD is in world units and zooms with the world.
+set: Camera.HudSize = 5
+set: Camera.Size = 10
+look: 0, 0, 11
+say: The camera now shows twice as much of the world, and the score is drawn twice as big, so on the screen it's the same size and in the same place. Its buttons click where they're drawn, too.

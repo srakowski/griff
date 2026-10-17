@@ -16,6 +16,20 @@ public sealed class Camera : Component
         set => _size.Set(this, value);
     }
 
+    /// <summary>
+    /// The <see cref="Size"/> the HUD is laid out at, for a camera that zooms: set it (usually to Size) and everything
+    /// pinned with a <see cref="ScreenAnchor"/> keeps its size and place on the screen as Size changes, drawn, placed and
+    /// clicked at Size / HudSize times its size, its anchor's offset and what's inside it too. 0 (the default): the HUD is
+    /// in world units, so it zooms with the world.
+    /// </summary>
+    public float HudSize { get; set; }
+
+    /// <summary>
+    /// How many times its own size the HUD is drawn so it keeps its size on the screen: Size / <see cref="HudSize"/>, or
+    /// 1 with no HudSize.
+    /// </summary>
+    public float HudScale => HudSize > 0 && Size > 0 ? Size / HudSize : 1;
+
     /// <summary>The color behind everything, where nothing is drawn.</summary>
     public Color Background
     {

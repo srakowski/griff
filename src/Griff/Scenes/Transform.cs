@@ -14,6 +14,11 @@ public sealed class Transform : Component
     private Vector3 _rotation;
     private Vector3 _scale = Vector3.One;
 
+    // How many times bigger than its Scale a HUD is drawn, so it keeps its size on screen as the camera zooms (see
+    // Camera.HudSize): set by its ScreenAnchor as it's laid out, and 1 for everything else.
+    [NotState("set again by its ScreenAnchor as the screen is laid out")]
+    private float _screenScale = 1;
+
     // The matrices, kept until something moves: this transform's own, and the world one with the parent's it was made from.
     [NotState("worked out again from its position, rotation and scale")]
     private Matrix4x4 _local;
@@ -42,6 +47,8 @@ public sealed class Transform : Component
     private Vector3 _fromRotation;
     [NotState("where it's drawn between two steps: drawn as it is once put back")]
     private Vector3 _fromScale = Vector3.One;
+    [NotState("where it's drawn between two steps: drawn as it is once put back")]
+    private float _fromScreenScale = 1;
     [NotState("where it's drawn between two steps: drawn as it is once put back")]
     private long _movedStep = -1;
     [NotState("where it's drawn between two steps: drawn as it is once put back")]
@@ -95,6 +102,20 @@ public sealed class Transform : Component
         }
     }
 
+    // See _screenScale.
+    internal float ScreenScale
+    {
+        get => _screenScale;
+        set
+        {
+            if (_screenScale == value)
+                return;
+            Moving();
+            _screenScale = value;
+            Moved();
+        }
+    }
+
     [DoNotSerialize]
     public Quaternion RotationQuaternion
     {
@@ -119,14 +140,15 @@ public sealed class Transform : Component
     private Matrix4x4 Local()
     {
         // Most things in a 2D game never turn: they're only scaled and moved, with no turn to work out.
+        var scale = _scale * _screenScale;
         if (_rotation == Vector3.Zero)
         {
-            var local = Matrix4x4.CreateScale(_scale);
+            var local = Matrix4x4.CreateScale(scale);
             local.Translation = _position;
             return local;
         }
 
-        return Matrix4x4.CreateScale(_scale) *
+        return Matrix4x4.CreateScale(scale) *
                Matrix4x4.CreateFromQuaternion(RotationQuaternion) *
                Matrix4x4.CreateTranslation(_position);
     }
@@ -186,7 +208,7 @@ public sealed class Transform : Component
     {
         if (Entity?.Scene is not { } scene || scene.Step == _movedStep)
             return;
-        (_fromPosition, _fromRotation, _fromScale, _movedStep) = (_position, _rotation, _scale, scene.Step);
+        (_fromPosition, _fromRotation, _fromScale, _fromScreenScale, _movedStep) = (_position, _rotation, _scale, _screenScale, scene.Step);
     }
 
     // Where it's drawn in the frame being drawn: glided from where it was to where it is if it moved in the last step, in
@@ -242,8 +264,9 @@ public sealed class Transform : Component
             ? Vector3.Lerp(_fromPosition, _position, t)
             : _position;
         var rotation = GlidedRotation(t);
-        var scale = _fromScale == _scale || !SameSigns(_fromScale, _scale) ? _scale : Vector3.Lerp(_fromScale, _scale, t);
-        if (rotation == _rotation && scale == _scale)
+        var (from, to) = (_fromScale * _fromScreenScale, _scale * _screenScale);
+        var scale = from == to || !SameSigns(from, to) ? to : Vector3.Lerp(from, to, t);
+        if (rotation == _rotation && scale == to)
         {
             var local = LocalNow();
             local.Translation = position;

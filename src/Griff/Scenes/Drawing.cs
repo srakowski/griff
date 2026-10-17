@@ -41,6 +41,51 @@ public readonly record struct SpriteDraw(Matrix4x4 World, string? Image, Color T
     /// a fraction of the quad's half-width), with no image: the iris of a scene change.
     /// </summary>
     public float HoleRadius { get; init; }
+
+    /// <summary>
+    /// A part of the world it's cut to: nothing of it is drawn outside it (a child of a <see cref="Layout"/> with Clip).
+    /// Null draws it all.
+    /// </summary>
+    public ClipArea? Clip { get; init; }
+}
+
+/// <summary>
+/// A part of the world draws are cut to (see <see cref="SpriteDraw.Clip"/>): a scrolling <see cref="Layout"/>'s area. It
+/// never changes once made, so a frame can be drawn while the game goes on, and draws cut to the same one are drawn
+/// together.
+/// </summary>
+public sealed class ClipArea(Box area)
+{
+    // The last part of it inside an outer area worked out, and that outer area: the same one again while they stay.
+    private (ClipArea Outer, ClipArea Part)? _within;
+
+    /// <summary>The area, in the world.</summary>
+    public Box Area { get; } = area;
+
+    /// <summary>The part of it inside <paramref name="outer"/> (none if they don't overlap): the same one while both stay the same.</summary>
+    public ClipArea Within(ClipArea outer)
+    {
+        if (_within is { } within && within.Outer == outer)
+            return within.Part;
+        var min = Vector2.Max(Area.Min, outer.Area.Min);
+        var max = Vector2.Max(min, Vector2.Min(Area.Max, outer.Area.Max));
+        var part = new ClipArea(new Box((min + max) / 2, (max - min) / 2));
+        _within = (outer, part);
+        return part;
+    }
+}
+
+/// <summary>
+/// A component that cuts what's drawn inside its entity (its children, and theirs) to an area: a <see cref="Layout"/>
+/// with Clip. A script's component can too. Inside several, what's drawn is cut to where they all overlap.
+/// </summary>
+public interface IClipsChildren
+{
+    /// <summary>
+    /// The area what's inside it is cut to, in the world where it's drawn now, or null to cut nothing. Give back the same one
+    /// while it stays the same: draws cut to one are drawn together.
+    /// </summary>
+    ClipArea? ChildClip { get; }
 }
 
 /// <summary>

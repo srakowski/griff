@@ -34,7 +34,9 @@ public enum DrawOp
     /// Draws only into a part of the target from here on: <see cref="DrawCommand.Value"/> is where its
     /// <see cref="PixelArea"/> starts in <see cref="DrawList.Values"/> (left, top, width, height, in pixels from the
     /// target's top left). Clip space (-1..1) still covers the whole target: a view's frame is projected onto its part
-    /// (as a viewport's camera is), and nothing outside the part is touched, the light map's included.
+    /// (as a viewport's camera is), and nothing outside the part is touched, the light map's included. Within a view, it
+    /// also cuts the quads after it to a part of it (a <see cref="SpriteDraw.Clip"/>, a scrolling layout's), until the
+    /// next one.
     /// </summary>
     View,
 
@@ -165,6 +167,10 @@ public sealed class DrawList
     private string? _lastImage;
     private int _lastTexture;
 
+    // The view being drawn, and the area its quads are cut to now (see SpriteDraw.Clip): null for the whole view.
+    private PixelArea _view;
+    private ClipArea? _clip;
+
     /// <param name="imageTexture">The texture of an image (a path in the game's Assets), more than 0; asked when the image drawn changes.</param>
     /// <param name="glyphs">The atlas text's glyphs are drawn from; its pages are the textures <see cref="GlyphTexture"/> numbers.</param>
     public DrawList(Func<string, int> imageTexture, GlyphAtlas glyphs)
@@ -230,6 +236,7 @@ public sealed class DrawList
 
     public void AddView(RenderFrame frame, PixelArea area)
     {
+        (_view, _clip) = (area, null);
         Add(DrawOp.View, value: Value(area.Left, area.Top, area.Width, area.Height));
         var background = frame.Background;
         Add(DrawOp.Clear, value: Value(background.R, background.G, background.B));
@@ -253,6 +260,8 @@ public sealed class DrawList
                     AddLight(frame);
                 if (i == views)
                     AddViewports(frame, area);
+                if (!ReferenceEquals(sprites[i].Clip, _clip))
+                    Clip(sprites[i].Clip, viewProjection);
                 Add(sprites[i], viewProjection);
             }
         }
@@ -265,10 +274,13 @@ public sealed class DrawList
                     AddLight(frame);
                 if (i == views)
                     AddViewports(frame, area);
+                if (!ReferenceEquals(sprites[i].Clip, _clip))
+                    Clip(sprites[i].Clip, viewProjection);
                 Add(sprites[i], viewProjection);
             }
         }
 
+        Clip(null, viewProjection);
         var count = frame.Sprites.Count;
         if (dark && lit >= count)
             AddLight(frame);
@@ -280,6 +292,7 @@ public sealed class DrawList
     // then its sprites, lit by itself if it's dark; then drawing goes on in the whole of `area` again.
     private void AddViewports(RenderFrame frame, PixelArea area)
     {
+        Clip(null, Matrix4x4.Identity);
         var views = frame.Views;
         for (var v = 0; v < views.Count; v++)
         {
@@ -293,7 +306,38 @@ public sealed class DrawList
             AddView(view.Frame, new PixelArea(left, top, right - left, bottom - top));
         }
 
+        _view = area;
         Add(DrawOp.View, value: Value(area.Left, area.Top, area.Width, area.Height));
+    }
+
+    // Cuts the quads from here on to `clip` (a part of the world, through `viewProjection`), within the view; null draws
+    // them in the whole view again.
+    private void Clip(ClipArea? clip, in Matrix4x4 viewProjection)
+    {
+        if (ReferenceEquals(clip, _clip))
+            return;
+        _clip = clip;
+        var view = _view;
+        if (clip is not null)
+        {
+            // The box round the area's corners, in pixels from the target's top left.
+            var (min, max) = (clip.Area.Min, clip.Area.Max);
+            var (left, top, right, bottom) = (float.MaxValue, float.MaxValue, float.MinValue, float.MinValue);
+            foreach (var corner in (ReadOnlySpan<Vector2>)[min, new(max.X, min.Y), max, new(min.X, max.Y)])
+            {
+                var at = ToClip(corner.X, corner.Y, viewProjection);
+                var (x, y) = ((at.X + 1) / 2 * Width, (1 - at.Y) / 2 * Height);
+                (left, top, right, bottom) = (MathF.Min(left, x), MathF.Min(top, y), MathF.Max(right, x), MathF.Max(bottom, y));
+            }
+
+            var l = Math.Clamp((int)MathF.Round(left), view.Left, view.Left + view.Width);
+            var t = Math.Clamp((int)MathF.Round(top), view.Top, view.Top + view.Height);
+            var r = Math.Clamp((int)MathF.Round(right), l, view.Left + view.Width);
+            var b = Math.Clamp((int)MathF.Round(bottom), t, view.Top + view.Height);
+            view = new PixelArea(l, t, r - l, b - t);
+        }
+
+        Add(DrawOp.View, value: Value(view.Left, view.Top, view.Width, view.Height));
     }
 
     /// <summary>Ends the frame: if it has screen effects, the picture goes onto the screen through <paramref name="frame"/>'s.</summary>
@@ -361,6 +405,7 @@ public sealed class DrawList
     // light with shadows on its own, after its shadows mark where it can't reach; then it darkens what's drawn so far.
     private void AddLight(RenderFrame frame)
     {
+        Clip(null, Matrix4x4.Identity);
         var ambient = frame.Ambient;
         Add(DrawOp.BeginLight, value: Value(ambient.R, ambient.G, ambient.B));
         var viewProjection = frame.ViewProjection;

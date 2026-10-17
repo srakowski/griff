@@ -57,7 +57,8 @@ public abstract class Component
                 (this is Parallax ? ComponentRoles.Parallax : 0) |
                 (this is ScreenAnchor ? ComponentRoles.ScreenAnchor : 0) |
                 (this is Viewport ? ComponentRoles.Viewport : 0) |
-                (this is SortGroup ? ComponentRoles.SortGroup : 0);
+                (this is SortGroup ? ComponentRoles.SortGroup : 0) |
+                (this is IClipsChildren ? ComponentRoles.ClipsChildren : 0);
 }
 
 /// <summary>What a component is, for code that asks of every entity every frame (see <see cref="Component.Roles"/>, <see cref="Entity.Roles"/>).</summary>
@@ -86,6 +87,8 @@ internal enum ComponentRoles : byte
 
     /// <summary>A <see cref="Scenes.SortGroup"/>: it and what's inside it sort as one.</summary>
     SortGroup = 64,
+    /// <summary>An <see cref="IClipsChildren"/>: it may cut what's drawn inside it to an area.</summary>
+    ClipsChildren = 128,
 }
 
 /// <summary>

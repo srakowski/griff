@@ -178,6 +178,7 @@ public sealed partial class FieldEditorAuditTests
         Choice.Format: Format
         Choice.SaveAs: Names:Saved
         Choice.Sound: Sound
+        Layout.Size: Resizable
         Panel.Pauses: Entity
         Panel.OpenOn: Names:Action
         Panel.OpenMessage: Names:Message

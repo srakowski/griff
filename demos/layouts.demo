@@ -1,0 +1,48 @@
+title: Lists and grids that lay themselves out
+intro: A Layout lines up an entity's children in a list, a row or a grid. Spawn a card into it and it takes its place; destroy one and the rest close up. With Clip, what doesn't fit is cut off and the mouse wheel scrolls it.
+project: Empty | Contract Board
+
+chapter: A board of cards | Laid out in the Scene view
+agent: entity_create {"entity": {"name": "Board", "components": {"Sprite": {"tint": "#2E3440", "size": [7, 5]}}}}
+look: 0, 0, 4
+say: Here's a board for a factory game's offers: just a dark sprite for now.
+select: Board
+add: Layout
+set: Layout.Direction = Grid
+set: Layout.Columns = 3
+set: Layout.Size = 7, 5
+set: Layout.Padding = 0.3
+set: Layout.Spacing = 0.3
+agent: entity_create {"parent": "Board", "entities": [{"name": "Card 1", "components": {"Sprite": {"tint": "#E0B040", "size": [1.6, 2], "order": 1}}}, {"name": "Card 2", "components": {"Sprite": {"tint": "#D08A50", "size": [1.6, 2], "order": 1}}}, {"name": "Card 3", "components": {"Sprite": {"tint": "#C06A70", "size": [1.6, 2], "order": 1}}}, {"name": "Card 4", "components": {"Sprite": {"tint": "#8A7AC0", "size": [1.6, 2], "order": 1}}}]}
+expectat: Card 1 = -2.4, 1.2
+expectat: Card 2 = -0.5, 1.2
+expectat: Card 4 = -2.4, -1.1
+explain: scene | Placed by the layout | Four cards were added inside the board with no positions at all. The Layout puts them in a grid of three columns, from its top left corner, with padding round the edge and spacing between them.
+select: Board
+explain: label:Layout.Direction | Vertical, Horizontal or Grid | Direction says which way they go: down a list, across a row, or in a grid. Each card takes the room of its sprite, or of its button, or a fixed Cell Size.
+
+chapter: In the game | Spawned cards take their places
+write: Scripts/Dealer.cs | layouts/Dealer.cs
+code: Assets/Scripts/Dealer.cs | Dealer.cs
+say: This script deals a card into the board with Space and takes the first one away with Backspace. It never sets a position.
+hidecode
+select: Board
+add: Dealer
+play
+wait: 1
+tap: Space
+wait: 0.5
+tap: Space
+wait: 0.5
+explain: game | Dealt in order | Each card spawned into the board goes after the last.
+tap: Backspace
+wait: 0.5
+explain: game | The gap closes | Destroy one, and the rest move up to close the gap.
+stop
+
+chapter: More than fit | Clip and scroll
+select: Board
+set: Layout.Clip = true
+set: Layout.Size = 7, 2.6
+explain: scene | Cut at its edges | With Clip ticked, the cards that don't fit the layout's size are cut off at its edges, in the Scene view and in the game alike. Over the board, the mouse wheel scrolls it a row at a time, and the turn of the wheel isn't the world's.
+say: Lists of contracts, offer boards, inventories and shop shelves no longer need a script to place every row.

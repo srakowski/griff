@@ -37,7 +37,7 @@ public sealed class GameSystemsTests
         { "TouchDamage", "Combat" }, { "Health", "Combat" }, { "Respawns", "Levels" }, { "Bars", "HUD" }, { "Stars", "HUD" },
         { "Counters", "HUD" }, { "TextOutputs", "HUD" }, { "Fade", "Scenes" }, { "ScreenFlash", "Effects" },
         { "Destroys", "Lifetimes" }, { "SceneChange", "Scenes" }, { "Rooms", "Atmosphere" }, { "CameraControls", "Views" }, { "Followers", "Effects" },
-        { "LateScripts", "Scripts" }, { "ScreenAnchors", "HUD" }, { "Trails", "Effects" }, { "Lights", "Atmosphere" },
+        { "LateScripts", "Scripts" }, { "Layouts", "HUD" }, { "ScreenAnchors", "HUD" }, { "Trails", "Effects" }, { "Lights", "Atmosphere" },
         { "Weather", "Weather" }, { "PresentPrompts", "Panels" }, { "SoundSources", "Atmosphere" },
         { "SoundPlayers", "Atmosphere" }, { "PatrolWalks", "Levels" }, { "Audio", "Atmosphere" }, { "Settings", "Settings" },
         { "EndNetwork", "Network" },

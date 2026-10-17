@@ -7,7 +7,7 @@ namespace Griff.Runtime;
 /// Lays out what's on the screen: each system's HUD, bars, stars, counters and text outputs showing what they read,
 /// typewriters typing, and what's anchored to the screen.
 /// </summary>
-internal sealed class HudSystem : GameSystem
+internal sealed partial class HudSystem : GameSystem
 {
     public override string Name => "HUD";
 

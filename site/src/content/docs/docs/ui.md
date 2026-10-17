@@ -39,6 +39,19 @@ A button whose **Action** is **NewGame** starts the game over: it forgets the pr
 
 Set a sprite's **Slice** to how much of its image is border (say 0.25 for a quarter at each edge) and its **Slice Size** to how big the border is drawn: its corners then stay crisp however you stretch its **Size**, for menu panels, dialogue boxes and buttons from one small image.
 
+## Lists and grids
+
+Add a **Layout** to an entity and it lines up its children, so nothing has to place them: a board of offer cards, a list of quest rows, a shop's shelf. Its **Direction** says how: **Vertical** one under another from the top, **Horizontal** one beside another from the left, or **Grid** in rows of **Columns**, each in a cell the size of the biggest child. They start at the top left corner of its **Size** (the area the Scene view's resize handles show, centered on the entity), inside its **Padding**, with **Spacing** between them, in the Hierarchy's order. Their own positions don't matter: a child spawned into it goes after the last, one destroyed or hidden leaves no gap, and in the Scene view they're put in place as you add, move or undo them.
+
+```csharp
+// A contract board: the layout places each card, no position needed.
+var card = Game.Spawn("OfferCard", board);
+```
+
+A child takes the room of its Button's clickable area, its Sprite's **Size** or its own Layout's (a list of shelves), whichever is biggest, times its scale; one with only text takes what its letters are guessed to. Set **Cell Size** to give every child the same room (say 2 by 3 for cards). Put the background sprite on the layout's own entity: every child showing is placed.
+
+Tick **Clip** and what doesn't fit its **Size** is cut off at its edges, and the mouse wheel over it scrolls it a row at a time (a click or the wheel there isn't the world's, as on a button). Scripts read how far it can go in **Most Scroll** and set **Scroll** themselves; `layout.Arrange()` places the children straight away, for a script that wants to know where one it just spawned went (otherwise they're placed after LateUpdate, before the frame is drawn).
+
 ## HUD bars
 
 **Entity → UI → Bar** makes a bar that fills to its **Value** out of **Max**, which way its **Direction** says. Set its **Track** to an entity's name (`Player`, `Boss`) and it shows that entity's health with no code; give it an **Output** too and it shows any of that entity's outputs (see [Outputs](/docs/story/#outputs)), out of what the output says it's out of (a match board's **Score** fills towards its **Target Score**) or the bar's own **Max**: a turn's **Time Left**, a faction's **Amount:Gold**. When it goes down, the part just lost lingers in the **Trail** color for a moment before draining away.

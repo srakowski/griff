@@ -227,6 +227,9 @@ public static class Steps
     /// <summary>The "Late Scripts" step of the Present phase.</summary>
     public static readonly StepId LateScripts = new(FramePhase.Present, "Late Scripts");
 
+    /// <summary>The "Layouts" step of the Present phase.</summary>
+    public static readonly StepId Layouts = new(FramePhase.Present, "Layouts");
+
     /// <summary>The "Screen Anchors" step of the Present phase.</summary>
     public static readonly StepId ScreenAnchors = new(FramePhase.Present, "Screen Anchors");
 

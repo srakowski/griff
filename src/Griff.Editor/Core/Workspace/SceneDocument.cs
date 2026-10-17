@@ -22,6 +22,8 @@ public sealed class SceneDocument : ObservableObject
         {
             // A tilemap lined up with another stays on its cells, however it was set, moved or undone.
             Tilemap.LineUpAll(Scene);
+            // A layout's children take their places, however they were added, moved or undone.
+            Layout.ArrangeAll(Scene);
             LayOutScreen();
             OnPropertyChanged(nameof(IsDirty));
             Changed?.Invoke(this, e);

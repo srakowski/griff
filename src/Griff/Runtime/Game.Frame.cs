@@ -528,6 +528,7 @@ public sealed partial class Game
         Step(Steps.CameraControls, _views.RunCameraControls);
         Step(Steps.Followers, _effects.RunFollowers);
         Step(Steps.LateScripts, _scriptSystem.LateUpdateScripts, timesItself: true);
+        Step(Steps.Layouts, _hud.ArrangeLayouts);
         Step(Steps.ScreenAnchors, _hud.LayOutScreen);
         Step(Steps.Trails, _effects.RunTrails);
         Step(Steps.Lights, _atmosphere.RunLights);

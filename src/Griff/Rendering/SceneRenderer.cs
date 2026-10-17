@@ -708,8 +708,10 @@ public static partial class SceneRenderer
     // An entity's draws, component by component. On a parallax layer (the entity or an ancestor) they shift with it, and
     // its sprite may repeat across the view; otherwise its and its ancestors' effects move them (a shake, a beat).
     // Steps from DrawSteps.View on are drawn where they say.
+    // Inside something that clips its children (a layout with Clip), they're cut to its area.
     private static void DrawEntity(Entity entity, Sprite? sole, List<IDrawable> drawables, Drawing drawing, List<SpriteDraw> sprites, BuildTimer? timer)
     {
+        var start = sprites.Count;
         if (sole is not null)
         {
             IDrawable drawable = sole;
@@ -719,6 +721,30 @@ public static partial class SceneRenderer
         {
             DrawEntity(entity, CollectionsMarshal.AsSpan(drawables), drawing, sprites, timer);
         }
+
+        if (sprites.Count > start && entity.Parent is not null && ClipOf(entity) is { } clip)
+        {
+            for (var d = start; d < sprites.Count; d++)
+                sprites[d] = sprites[d] with { Clip = clip };
+        }
+    }
+
+    // The area what's inside clipping entities is cut to: where all of theirs overlap. Null inside none.
+    private static ClipArea? ClipOf(Entity entity)
+    {
+        ClipArea? clip = null;
+        for (var e = entity.Parent; e is not null; e = e.Parent)
+        {
+            if ((e.Roles & ComponentRoles.ClipsChildren) == 0)
+                continue;
+            foreach (var component in e.ComponentList)
+            {
+                if (component is IClipsChildren { ChildClip: { } area })
+                    clip = clip is null ? area : clip.Within(area);
+            }
+        }
+
+        return clip;
     }
 
     private static void DrawEntity(Entity entity, ReadOnlySpan<IDrawable> drawables, Drawing drawing, List<SpriteDraw> sprites, BuildTimer? timer)

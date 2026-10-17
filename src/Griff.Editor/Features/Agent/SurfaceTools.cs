@@ -27,7 +27,7 @@ public sealed class ServiceCatalog(IServiceCollection services, IServiceProvider
 /// keeps them (its services, its panels, its windows), so a new service, panel or window is reachable the moment it
 /// exists. Read with ui_inspect, change with ui_set, act with ui_invoke.
 /// </summary>
-public sealed class SurfaceTools(ServiceCatalog catalog, IEnumerable<PanelDescriptor> panels, IAgentScene scene, Core.Undo.ActiveDocument documents, Core.EditorWindow editorWindow) : IAgentToolSource
+public sealed class SurfaceTools(ServiceCatalog catalog, IEnumerable<PanelDescriptor> panels, IAgentScene scene, Core.Undo.ActiveDocument documents, Core.EditorWindow editorWindow, Core.Documents.EditorDocuments openDocuments) : IAgentToolSource
 {
     // ui_set and ui_invoke find the entities their values name as the scene tools do: a name, id or path in the open scene.
     private readonly Func<string, Griff.Scenes.Entity?> _entities = SceneTools.EntitiesIn(scene);
@@ -42,9 +42,9 @@ public sealed class SurfaceTools(ServiceCatalog catalog, IEnumerable<PanelDescri
             Name = "ui_roots",
             Title = "UI Roots",
             ReadOnly = true,
-            Description = "Lists what the ui_ tools can reach: the editor's services, its panels and its open windows (the Sprite " +
-                "Painter, Sound Maker, Controls, Component Catalog...), each with what it is. Anything the editor can do that has no " +
-                "tool of its own is reachable through one of these.",
+            Description = "Lists what the ui_ tools can reach: the editor's services, its panels, the documents open in tabs (a " +
+                "table, the Sprite Painter or Sound Maker on an asset, the Clip Editor...) and its open windows (Controls, Component " +
+                "Catalog...), each with what it is. Anything the editor can do that has no tool of its own is reachable through one of these.",
             Invoke = _ => Task.FromResult(Roots()),
         };
 
@@ -95,7 +95,7 @@ public sealed class SurfaceTools(ServiceCatalog catalog, IEnumerable<PanelDescri
         };
     }
 
-    /// <summary>Every reachable object by name: services, then panels, then open windows.</summary>
+    /// <summary>Every reachable object by name: services, then panels, then the documents open in tabs, then open windows.</summary>
     public IReadOnlyList<(string Name, string Kind, object Target)> All()
     {
         var roots = new List<(string, string, object)>();
@@ -116,6 +116,13 @@ public sealed class SurfaceTools(ServiceCatalog catalog, IEnumerable<PanelDescri
         {
             if (panel.Panel() is { } instance && seen.Add(instance.Id))
                 roots.Add((instance.Id, "panel", instance));
+        }
+
+        // A document by its tab's name ("Sprite Painter: slime.png"; "Sprite Painter" finds it too).
+        foreach (var document in openDocuments.Open)
+        {
+            if (seen.Add(document.Name))
+                roots.Add((document.Name, "document", document.Model));
         }
 
         foreach (var window in editorWindow.OtherWindows)
@@ -147,7 +154,7 @@ public sealed class SurfaceTools(ServiceCatalog catalog, IEnumerable<PanelDescri
         var text = new StringBuilder();
         foreach (var group in All().GroupBy(r => r.Kind))
         {
-            text.Append(group.Key switch { "service" => "## Services", "panel" => "## Panels", _ => "## Open windows" }).AppendLine();
+            text.Append(group.Key switch { "service" => "## Services", "panel" => "## Panels", "document" => "## Open documents (tabs)", _ => "## Open windows" }).AppendLine();
             foreach (var (name, _, target) in group)
             {
                 var summary = DocComments.Summary(target.GetType()).FirstSentence;
@@ -158,7 +165,7 @@ public sealed class SurfaceTools(ServiceCatalog catalog, IEnumerable<PanelDescri
         return ToolResult.Ok(text.ToString());
     }
 
-    // Working in a panel or window that edits a document (the Tables panel, the Sprite Painter) makes it the one Edit_Undo
+    // Working in a panel, document or window that edits a document (the Tables panel, the Sprite Painter) makes it the one Edit_Undo
     // goes to, as clicking into it does.
     private void WorkIn(object root)
     {
@@ -180,7 +187,7 @@ public sealed class SurfaceTools(ServiceCatalog catalog, IEnumerable<PanelDescri
         var run = dispatcher.InvokeAsync(() => ObjectSurface.InvokeAsync(root, path, arguments, _entities), DispatcherPriority.Normal).Task.Unwrap();
         if (await Task.WhenAny(run, Task.Delay(wait)) != run)
         {
-            var windows = editorWindow.OtherWindows.Select(w => $"\"{w.Title}\"");
+            var windows = editorWindow.OtherWindows.Select(w => $"\"{w.Title}\"").Concat(openDocuments.Names.Select(n => $"\"{n}\" (a tab)"));
             return ToolResult.Ok($"{path} is still going. Open windows: {string.Join(", ", windows)}.");
         }
 

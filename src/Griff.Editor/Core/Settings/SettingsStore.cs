@@ -19,6 +19,12 @@ public sealed class EditorSettings
     /// <summary>Whether the MCP server (for agents like Claude Code) runs while the editor is open.</summary>
     public bool AgentServer { get; set; } = true;
 
+    /// <summary>
+    /// Whether opening a table (Data > Open Table, double-clicking one in the Assets panel) opens it in a tab of its own in
+    /// the document area rather than in the Tables panel.
+    /// </summary>
+    public bool TablesInTabs { get; set; }
+
     /// <summary>Where the panels were when the editor last closed; it starts with them there again.</summary>
     public PanelLayoutData? PanelLayout { get; set; }
 

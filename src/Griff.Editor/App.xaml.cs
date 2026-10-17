@@ -128,6 +128,8 @@ public partial class App : Application
         services.AddLazyServices();
         services.AddSingleton<CommandRegistry>();
         services.AddSingleton<Core.Undo.ActiveDocument>();
+        services.AddSingleton<Core.Documents.EditorDocuments>();
+        services.AddSingleton<DocumentTabsHost>();
 
         services.AddMenu(Menus.File, "_File", order: 0);
         services.AddMenu(Menus.Edit, "_Edit", order: 1);

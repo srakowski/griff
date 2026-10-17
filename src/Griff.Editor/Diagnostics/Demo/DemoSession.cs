@@ -142,6 +142,8 @@ internal sealed class DemoSession(DemoUi ui, Workspace workspace, ISelection sel
             combo.IsDropDownOpen = false;
         foreach (var window in Application.Current.Windows.OfType<Window>().Where(w => w != ui.Main && w is not DemoOverlay and not DemoControlBar).ToList())
             window.Close();
+        // And the editors open in tabs (the Sprite Painter, a table), throwing away what they hadn't saved.
+        ui.Documents?.CloseAll(ask: false);
 
         if (play.IsPlaying)
             play.Stop();

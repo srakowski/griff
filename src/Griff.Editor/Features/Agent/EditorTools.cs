@@ -26,7 +26,7 @@ namespace Griff.Editor.Features.Agent;
 /// What an agent needs to see its work and try it: where the editor is at, pictures of the game and the editor, the
 /// Output log, and keys pressed in the running game to playtest it.
 /// </summary>
-public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments sceneDocuments, ISelection selection, PlayMode play, SceneViewControl sceneView, OutputLog log, Debugger debugger, Audio.EditorMute mute, Core.EditorWindow editorWindow) : IAgentToolSource
+public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments sceneDocuments, ISelection selection, PlayMode play, SceneViewControl sceneView, OutputLog log, Debugger debugger, Audio.EditorMute mute, Core.EditorWindow editorWindow, Core.Documents.EditorDocuments openDocuments) : IAgentToolSource
 {
     public IEnumerable<AgentTool> GetTools()
     {
@@ -47,10 +47,10 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
             Title = "Screenshot",
             ReadOnly = true,
             Description = "A picture to check your work: \"game\" is the game as the player sees it (the running game while playing, " +
-                "otherwise the scene from its camera), \"scene\" is the Scene view, \"editor\" the whole editor window, or an open " +
-                "window's title. Default: the game.",
+                "otherwise the scene from its camera), \"scene\" is the Scene view, \"editor\" the whole editor window, a document " +
+                "open in a tab by its name (\"Sprite Painter\", \"Table: Spells\"), or an open window's title. Default: the game.",
             InputSchema = Schema.Object([
-                ("view", Schema.String("\"game\", \"scene\", \"editor\" or a window's title.")),
+                ("view", Schema.String("\"game\", \"scene\", \"editor\", a document tab's name or a window's title.")),
                 ("max_width", Schema.Integer("Shrink the picture to at most this wide (default 1280).")),
             ]),
             Invoke = ScreenshotAsync,
@@ -222,6 +222,13 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
             bitmap = Render((FrameworkElement)VisualTreeHelper.GetChild(main, 0));
             caption = "The editor window (the game and OpenGL views come out blank in this picture; use \"game\" for those).";
         }
+        else if (openDocuments.Open.FirstOrDefault(d => d.Name.Contains(view, StringComparison.OrdinalIgnoreCase)) is { } document
+                 && editorWindow.DocumentTabs?.Items.OfType<System.Windows.Controls.TabItem>().FirstOrDefault(t => t.Tag == document) is { } tab)
+        {
+            // A document open in a tab (the Sprite Painter on a picture, a table): its tab is shown long enough to draw it.
+            bitmap = await WithTabAsync(editorWindow, tab, () => Render((FrameworkElement)tab.Content));
+            caption = $"The \"{document.Name}\" tab.";
+        }
         else
         {
             var window = Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsVisible && w.Title.Contains(view, StringComparison.OrdinalIgnoreCase))
@@ -249,6 +256,8 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
         var windows = editorWindow.OtherWindows.Select(DescribeWindow).ToList();
         if (windows.Count > 0)
             text.AppendLine(CultureInfo.InvariantCulture, $"Open windows: {string.Join(", ", windows)}");
+        if (openDocuments.Open.Count > 0)
+            text.AppendLine(CultureInfo.InvariantCulture, $"Open in tabs: {string.Join(", ", openDocuments.Names)}{(openDocuments.Showing is { } showing ? $" ({showing.Name} showing)" : "")} (ui_roots; editor_screenshot takes one's name)");
     }
 
     // "New Project (560 x 680)": its title and size, and whether it runs off its screen.

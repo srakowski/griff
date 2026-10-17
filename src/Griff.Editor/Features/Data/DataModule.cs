@@ -1,8 +1,10 @@
 using System.IO;
+using Griff.Editor.Core;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Modules;
 using Griff.Editor.Core.Panels;
+using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Themes;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,11 +25,15 @@ public sealed class DataModule : IEditorModule
         services.AddMenu(Menu, "_Data", order: 7);
         services.AddSingleton<TableStore>();
         services.AddPanel<TablesPanel, TablesPanelView>();
+        services.AddFactory<TablesPanelView>();
+        services.AddSingleton<TableDocuments>();
         services.AddSingleton<SimulationStore>();
         services.AddPanel<SimulationsPanel, SimulationsPanelView>();
         services
             .AddCommand<NewTableCommand>()
             .AddCommand<OpenTableCommand>()
+            .AddCommand<OpenTableInTabCommand>()
+            .AddCommand<TablesInTabsCommand>()
             .AddCommand<ShowTablesCommand>()
             .AddCommand<ImportCsvCommand>()
             .AddCommand<ExportCsvCommand>()
@@ -58,10 +64,10 @@ public sealed class DataModule : IEditorModule
 
 /// <summary>
 /// Makes a new table of game data in Assets/Tables, asking for its name (its file's name, e.g. "Spells"), and shows it in
-/// the Tables panel with a column and a row to start from. Scripts read it as Tables.Get("Spells", "Fireball"), and Table
+/// the Tables panel (or a tab of its own, with Open Tables in Tabs on) with a column and a row to start from. Scripts read it as Tables.Get("Spells", "Fireball"), and Table
 /// Values components take their values from its rows.
 /// </summary>
-public sealed class NewTableCommand(IProjectSession projectSession, TableStore store, TablesPanel panel, PanelLayout layout, IDialogService dialogs) : EditorCommand
+public sealed class NewTableCommand(IProjectSession projectSession, TableStore store, TableDocuments tables, PanelLayout layout, IDialogService dialogs) : EditorCommand
 {
     public override string Id => "Data.NewTable";
     public override string Text => "_New Table...";
@@ -76,8 +82,7 @@ public sealed class NewTableCommand(IProjectSession projectSession, TableStore s
         if (name is null)
             return Task.CompletedTask;
         store.Create(name.Trim());
-        panel.Open(name.Trim());
-        layout.Show(panel.Id);
+        tables.Open(name.Trim(), layout);
         return Task.CompletedTask;
     }
 
@@ -97,8 +102,11 @@ public sealed class NewTableCommand(IProjectSession projectSession, TableStore s
     }
 }
 
-/// <summary>Shows one of the project's tables in the Tables panel, picked by its name (or its path in Assets).</summary>
-public sealed class OpenTableCommand(TableStore store, TablesPanel panel, PanelLayout layout, IDialogService dialogs) : EditorCommand
+/// <summary>
+/// Shows one of the project's tables in the Tables panel, picked by its name (or its path in Assets); with Data &gt; Open
+/// Tables in Tabs on, it opens in a tab of its own in the document area instead.
+/// </summary>
+public sealed class OpenTableCommand(TableStore store, TablesPanel panel, TableDocuments tables, PanelLayout layout, IDialogService dialogs) : EditorCommand
 {
     public override string Id => "Data.OpenTable";
     public override string Text => "_Open Table";
@@ -118,9 +126,57 @@ public sealed class OpenTableCommand(TableStore store, TablesPanel panel, PanelL
 
     protected override Task ChooseCoreAsync(string choice)
     {
-        if (!panel.Open(choice))
+        if (!tables.Open(choice, layout))
             throw new ArgumentException($"There's no table called \"{choice}\".", nameof(choice));
-        layout.Show(panel.Id);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Opens one of the project's tables, picked by its name (or its path in Assets), in a tab of its own in the document area,
+/// beside the scene: a spreadsheet like the Tables panel's with all of the area's room, edited the same way (agents use
+/// ui_invoke on the tab, "Table: Spells", as on the Tables panel). An open one's tab comes to the front.
+/// </summary>
+public sealed class OpenTableInTabCommand(TableStore store, TablesPanel panel, TableDocuments tables, IDialogService dialogs) : EditorCommand
+{
+    public override string Id => "Data.OpenTableInTab";
+    public override string Text => "Open Table in _Tab";
+    public override MenuPlacement? Placement { get; } = new(DataModule.Menu, Group: 0, Order: 2);
+    public override IReadOnlyList<string>? Choices => store.Names;
+
+    protected override bool CanExecuteCore() => store.Names.Count > 0;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        var name = dialogs.Prompt("Open Table in Tab", "Table", tables.Current.TableName ?? panel.TableName ?? store.FirstName ?? "",
+            text => store.Entry(text) is null ? "There's no such table." : null);
+        return name is null ? Task.CompletedTask : ChooseCoreAsync(name);
+    }
+
+    protected override Task ChooseCoreAsync(string choice)
+    {
+        tables.Show(choice);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Turns on or off opening tables in tabs of their own: on, Data &gt; Open Table, New Table and double-clicking a table in
+/// the Assets panel open it in a tab in the document area, beside the scene, rather than in the Tables panel. Kept between
+/// sessions.
+/// </summary>
+public sealed class TablesInTabsCommand(TableDocuments tables, IStatusService status) : EditorCommand
+{
+    public override string Id => "Data.TablesInTabs";
+    public override string Text => "Open Tables in Ta_bs";
+    public override MenuPlacement? Placement { get; } = new(DataModule.Menu, Group: 0, Order: 3);
+
+    public override bool? IsChecked => tables.InTabs;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        tables.InTabs = !tables.InTabs;
+        status.Show(tables.InTabs ? "Tables open in tabs of their own, beside the scene" : "Tables open in the Tables panel");
         return Task.CompletedTask;
     }
 }
@@ -137,7 +193,7 @@ public sealed class ShowTablesCommand(PanelLayout layout) : EditorCommand
     public override string Id => "Data.Tables";
     public override string Text => "_Tables";
     public override string? Icon => Icons.Table;
-    public override MenuPlacement? Placement { get; } = new(DataModule.Menu, Group: 0, Order: 2);
+    public override MenuPlacement? Placement { get; } = new(DataModule.Menu, Group: 0, Order: 4);
 
     protected override Task ExecuteCoreAsync()
     {
@@ -179,18 +235,19 @@ public sealed class ImportCsvCommand(IProjectSession projectSession, TablesPanel
     }
 }
 
-/// <summary>Exports the table showing in the Tables panel to a CSV file, asking where, to open in a spreadsheet: its rows' names first, then a column each.</summary>
-public sealed class ExportCsvCommand(TablesPanel panel, IDialogService dialogs) : EditorCommand
+/// <summary>Exports the table showing in the Tables panel (or the table's tab worked in last) to a CSV file, asking where, to open in a spreadsheet: its rows' names first, then a column each.</summary>
+public sealed class ExportCsvCommand(TableDocuments tables, IDialogService dialogs) : EditorCommand
 {
     public override string Id => "Data.ExportCsv";
     public override string Text => "_Export CSV...";
     public override string? Icon => Icons.Export;
     public override MenuPlacement? Placement { get; } = new(DataModule.Menu, Group: 1, Order: 1);
 
-    protected override bool CanExecuteCore() => panel.HasTable;
+    protected override bool CanExecuteCore() => tables.Current.HasTable;
 
     protected override Task ExecuteCoreAsync()
     {
+        var panel = tables.Current;
         if (dialogs.ShowSaveFileDialog("CSV files (*.csv)|*.csv", panel.TableName + ".csv") is { } path)
         {
             try
@@ -207,12 +264,17 @@ public sealed class ExportCsvCommand(TablesPanel panel, IDialogService dialogs) 
     }
 }
 
-/// <summary>A command that changes the table showing in the Tables panel, where its cells are picked.</summary>
-public abstract class TableEditCommand(TablesPanel panel) : EditorCommand
+/// <summary>
+/// A command that changes the table showing in the Tables panel, where its cells are picked; or, when a table's tab was
+/// worked in last, that table (see <see cref="TableDocuments.Current"/>).
+/// </summary>
+public abstract class TableEditCommand(TableDocuments tables) : EditorCommand
 {
-    protected TablesPanel Panel => panel;
+    protected TablesPanel Panel => tables.Current;
 
-    protected override bool CanExecuteCore() => panel.HasTable;
+    protected TableDocuments Tables => tables;
+
+    protected override bool CanExecuteCore() => Panel.HasTable;
 
     protected override Task ExecuteCoreAsync()
     {
@@ -224,7 +286,7 @@ public abstract class TableEditCommand(TablesPanel panel) : EditorCommand
 }
 
 /// <summary>Adds a row to the table showing in the Tables panel, after the picked row (or at the bottom), named "Row 4" and so on, ready to rename.</summary>
-public sealed class AddRowCommand(TablesPanel panel) : TableEditCommand(panel)
+public sealed class AddRowCommand(TableDocuments panel) : TableEditCommand(panel)
 {
     public override string Id => "Data.AddRow";
     public override string Text => "Add _Row";
@@ -238,7 +300,7 @@ public sealed class AddRowCommand(TablesPanel panel) : TableEditCommand(panel)
 /// Adds a column to the table showing in the Tables panel, after the picked one, asking for its name. It holds numbers;
 /// change its type (whole number, text, yes/no, choice, dice, sprite, sound, prefab or a row of a table) above the grid.
 /// </summary>
-public sealed class AddColumnCommand(TablesPanel panel, IDialogService dialogs) : TableEditCommand(panel)
+public sealed class AddColumnCommand(TableDocuments panel, IDialogService dialogs) : TableEditCommand(panel)
 {
     public override string Id => "Data.AddColumn";
     public override string Text => "Add _Column...";
@@ -259,7 +321,7 @@ public sealed class AddColumnCommand(TablesPanel panel, IDialogService dialogs) 
 
 /// <summary>Deletes the picked rows of the table showing in the Tables panel (undo brings them back).</summary>
 [Destructive]
-public sealed class DeleteRowsCommand(TablesPanel panel) : TableEditCommand(panel)
+public sealed class DeleteRowsCommand(TableDocuments panel) : TableEditCommand(panel)
 {
     public override string Id => "Data.DeleteRows";
     public override string Text => "_Delete Rows";
@@ -273,7 +335,7 @@ public sealed class DeleteRowsCommand(TablesPanel panel) : TableEditCommand(pane
 
 /// <summary>Deletes the picked column of the table showing in the Tables panel, cells and all (undo brings it back).</summary>
 [Destructive]
-public sealed class DeleteColumnCommand(TablesPanel panel) : TableEditCommand(panel)
+public sealed class DeleteColumnCommand(TableDocuments panel) : TableEditCommand(panel)
 {
     public override string Id => "Data.DeleteColumn";
     public override string Text => "Delete Co_lumn";
@@ -286,7 +348,7 @@ public sealed class DeleteColumnCommand(TablesPanel panel) : TableEditCommand(pa
 }
 
 /// <summary>Moves the picked rows of the table showing in the Tables panel up a place (Alt+Up in the grid).</summary>
-public sealed class MoveRowsUpCommand(TablesPanel panel) : TableEditCommand(panel)
+public sealed class MoveRowsUpCommand(TableDocuments panel) : TableEditCommand(panel)
 {
     public override string Id => "Data.MoveRowsUp";
     public override string Text => "Move Rows _Up";
@@ -297,7 +359,7 @@ public sealed class MoveRowsUpCommand(TablesPanel panel) : TableEditCommand(pane
 }
 
 /// <summary>Moves the picked rows of the table showing in the Tables panel down a place (Alt+Down in the grid).</summary>
-public sealed class MoveRowsDownCommand(TablesPanel panel) : TableEditCommand(panel)
+public sealed class MoveRowsDownCommand(TableDocuments panel) : TableEditCommand(panel)
 {
     public override string Id => "Data.MoveRowsDown";
     public override string Text => "Move Rows Do_wn";
@@ -308,7 +370,7 @@ public sealed class MoveRowsDownCommand(TablesPanel panel) : TableEditCommand(pa
 }
 
 /// <summary>Moves the picked column of the table showing in the Tables panel left a place (Alt+Left in the grid).</summary>
-public sealed class MoveColumnLeftCommand(TablesPanel panel) : TableEditCommand(panel)
+public sealed class MoveColumnLeftCommand(TableDocuments panel) : TableEditCommand(panel)
 {
     public override string Id => "Data.MoveColumnLeft";
     public override string Text => "Move Column _Left";
@@ -319,7 +381,7 @@ public sealed class MoveColumnLeftCommand(TablesPanel panel) : TableEditCommand(
 }
 
 /// <summary>Moves the picked column of the table showing in the Tables panel right a place (Alt+Right in the grid).</summary>
-public sealed class MoveColumnRightCommand(TablesPanel panel) : TableEditCommand(panel)
+public sealed class MoveColumnRightCommand(TableDocuments panel) : TableEditCommand(panel)
 {
     public override string Id => "Data.MoveColumnRight";
     public override string Text => "Move Column _Right";
@@ -333,7 +395,7 @@ public sealed class MoveColumnRightCommand(TablesPanel panel) : TableEditCommand
 /// Sorts the rows of the table showing in the Tables panel by the picked column, lowest (or A) first: numbers by size,
 /// text alphabetically, choices in the order of their choices, empty cells last. With the rows' names picked, by name.
 /// </summary>
-public sealed class SortAscendingCommand(TablesPanel panel) : TableEditCommand(panel)
+public sealed class SortAscendingCommand(TableDocuments panel) : TableEditCommand(panel)
 {
     public override string Id => "Data.SortAscending";
     public override string Text => "Sort _Ascending";
@@ -344,7 +406,7 @@ public sealed class SortAscendingCommand(TablesPanel panel) : TableEditCommand(p
 }
 
 /// <summary>Sorts the rows of the table showing in the Tables panel by the picked column, highest (or Z) first; empty cells last.</summary>
-public sealed class SortDescendingCommand(TablesPanel panel) : TableEditCommand(panel)
+public sealed class SortDescendingCommand(TableDocuments panel) : TableEditCommand(panel)
 {
     public override string Id => "Data.SortDescending";
     public override string Text => "Sort D_escending";
@@ -358,7 +420,7 @@ public sealed class SortDescendingCommand(TablesPanel panel) : TableEditCommand(
 /// Fills down in the table showing in the Tables panel (Ctrl+D in the grid): each picked column's top picked cell is
 /// copied into the picked cells under it, or with one row picked, the cell above is copied into it.
 /// </summary>
-public sealed class FillDownCommand(TablesPanel panel) : TableEditCommand(panel)
+public sealed class FillDownCommand(TableDocuments panel) : TableEditCommand(panel)
 {
     public override string Id => "Data.FillDown";
     public override string Text => "_Fill Down";
@@ -376,7 +438,7 @@ public sealed class FillDownCommand(TablesPanel panel) : TableEditCommand(panel)
 /// curve with ui_set on the Tables panel's Curve (Kind, First, Last, Levels, Shape, RoundTo, Points), or do it all with
 /// ui_invoke Tables GenerateCurve.
 /// </summary>
-public sealed class GenerateCurveCommand(TablesPanel panel, PanelLayout layout) : TableEditCommand(panel)
+public sealed class GenerateCurveCommand(TableDocuments panel, PanelLayout layout) : TableEditCommand(panel)
 {
     public override string Id => "Data.GenerateCurve";
     public override string Text => "_Generate from Curve";
@@ -389,7 +451,8 @@ public sealed class GenerateCurveCommand(TablesPanel panel, PanelLayout layout) 
     {
         // Shows what it made, with the curve it came from.
         Panel.ShowChart = true;
-        layout.Show(Panel.Id);
+        if (!Tables.Editors.Contains(Panel))
+            layout.Show(Panel.Id);
         if (Panel.Curve.Generate())
             Panel.Curve.IsOpen = true;
     }
@@ -399,7 +462,7 @@ public sealed class GenerateCurveCommand(TablesPanel panel, PanelLayout layout) 
 /// Copies the picked cells of the table showing in the Tables panel to the clipboard as tab-separated text (Ctrl+C in the
 /// grid), as spreadsheets do, to paste into Excel, Google Sheets or another table. Picking every row copies the headings too.
 /// </summary>
-public sealed class CopyCellsCommand(TablesPanel panel) : TableEditCommand(panel)
+public sealed class CopyCellsCommand(TableDocuments panel) : TableEditCommand(panel)
 {
     public override string Id => "Data.CopyCells";
     public override string Text => "C_opy Cells";
@@ -411,7 +474,7 @@ public sealed class CopyCellsCommand(TablesPanel panel) : TableEditCommand(panel
 
 /// <summary>Copies the picked cells of the table showing in the Tables panel to the clipboard (Ctrl+X in the grid), then empties them.</summary>
 [Destructive]
-public sealed class CutCellsCommand(TablesPanel panel) : TableEditCommand(panel)
+public sealed class CutCellsCommand(TableDocuments panel) : TableEditCommand(panel)
 {
     public override string Id => "Data.CutCells";
     public override string Text => "Cu_t Cells";
@@ -426,7 +489,7 @@ public sealed class CutCellsCommand(TablesPanel panel) : TableEditCommand(panel)
 /// showing in the Tables panel at the picked cell, adding rows past the bottom. Into a table with no rows, the first line
 /// names the columns. Values that don't fit their column are left out and said.
 /// </summary>
-public sealed class PasteCellsCommand(TablesPanel panel) : TableEditCommand(panel)
+public sealed class PasteCellsCommand(TableDocuments panel) : TableEditCommand(panel)
 {
     public override string Id => "Data.PasteCells";
     public override string Text => "_Paste Cells";
@@ -438,7 +501,7 @@ public sealed class PasteCellsCommand(TablesPanel panel) : TableEditCommand(pane
 
 /// <summary>Empties the picked cells of the table showing in the Tables panel (Delete in the grid).</summary>
 [Destructive]
-public sealed class ClearCellsCommand(TablesPanel panel) : TableEditCommand(panel)
+public sealed class ClearCellsCommand(TableDocuments panel) : TableEditCommand(panel)
 {
     public override string Id => "Data.ClearCells";
     public override string Text => "Clear Cell_s";

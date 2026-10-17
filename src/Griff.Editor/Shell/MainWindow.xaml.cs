@@ -26,6 +26,7 @@ public partial class MainWindow : ChromeWindow
         MenuBuilder menuBuilder,
         ToolbarBuilder toolbarBuilder,
         PanelHost panelHost,
+        DocumentTabsHost documentTabs,
         Features.Scripts.ScriptTabs scriptTabs,
         Features.Prefabs.PrefabTabs prefabTabs,
         Features.Debugging.Debugger debugger,
@@ -70,6 +71,7 @@ public partial class MainWindow : ChromeWindow
         };
         prefabTabs.Attach(DocumentTabs, SceneTab, sceneView);
         scriptTabs.Attach(DocumentTabs);
+        documentTabs.Attach(DocumentTabs);
 
         menuBuilder.Populate(MainMenu);
         toolbarBuilder.Populate(Toolbar);

@@ -705,6 +705,10 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
                 var (moveTabPanel, moveTabIndex) = Split2(a, '>');
                 await ui.MoveTab(moveTabPanel, int.Parse(moveTabIndex, CultureInfo.InvariantCulture));
                 break;
+            case "closedocument":
+                // "closedocument: Table: Spells" (or "Spells", "Sprite Painter"): click the close button on that document's tab.
+                await ui.CloseDocument(a);
+                break;
             case "closepanel":
                 // "closepanel: Profiler": click the close button on the panel's tab (View > Panels opens it again).
                 await ui.ClosePanel(a);
@@ -1833,6 +1837,8 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
         return kind.ToLowerInvariant() switch
         {
             "panel" => DemoUi.PanelContent(name),
+            "document" => ui.DocumentView(name),
+            "doctab" => ui.DocumentTab(name),
             "float" => (FrameworkElement?)ui.FloatingWindow(name) ?? throw new InvalidOperationException($"{name} isn't floating."),
             "logo" => (FrameworkElement)ui.Main.Template.FindName("AppMark", ui.Main),
             "rewind" => RewindBar(),

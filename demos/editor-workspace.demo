@@ -24,3 +24,14 @@ explain: panel:Tables | Among the documents | Dropped on the Scene and Game tabs
 dock: Tables > Profiler
 expectlayout: Hierarchy | (Documents / Profiler, Assets, Output, Chart, Tables) | Inspector; closed: Simulations
 explain: panel:Tables | And back | Drag its tab out again to put it back among the panels. Layouts remember where it was.
+
+chapter: A table in a tab | Data > Open Table in Tab
+say: Or open just one table in a tab of its own.
+menu: Data > New Table...
+prompt: Loot
+menu: Data > Open Table in Tab > Loot
+explain: doctab:Loot | Its own tab | Data, Open Table in Tab puts a table beside the scene, the same spreadsheet as the Tables panel's, with all the room of the middle.
+click: tables:addrow
+explain: tables:grid | Edited the same way | Edits are saved as they're made, and undo takes them back. The Data menu works on the table you used last, here or in the panel.
+explain: menu:Data | Open Tables in Tabs | Turn on Open Tables in Tabs, and opening or double-clicking a table in Assets opens it in a tab like this.
+closedocument: Loot

@@ -35,10 +35,11 @@ internal static class DemoRunner
         if (string.IsNullOrEmpty(mode) || main is not MainWindow shell)
             return false;
 
-        // Demos start with the panels where they start out and every Inspector section open, and leave the user's own
-        // layout and sections alone.
+        // Demos start with the panels where they start out, every Inspector section open and tables opening in the Tables
+        // panel, and leave the user's own layout, sections and choice alone.
         services.GetRequiredService<PanelLayout>().StartOver();
         services.GetRequiredService<Features.Inspector.InspectorPanel>().StartOver();
+        services.GetRequiredService<Features.Data.TableDocuments>().StartOver();
 
         // GRIFF_DEMO=path\to\change.demo plays a demo script; GRIFF_DEMO=1 (or fast) the guided tour.
         var script = mode.EndsWith(".demo", StringComparison.OrdinalIgnoreCase) ? Path.GetFullPath(mode) : null;
@@ -133,6 +134,7 @@ internal static class DemoRunner
             ui.ScriptTabs = services.GetRequiredService<Features.Scripts.ScriptTabs>();
             ui.Debugger = services.GetRequiredService<Features.Debugging.Debugger>();
             ui.Panels = services.GetRequiredService<PanelHost>();
+            ui.Documents = services.GetRequiredService<Core.Documents.EditorDocuments>();
             var agentTools = services.GetRequiredService<IEnumerable<Griff.Agent.IAgentToolSource>>().OfType<Features.Agent.EditorTools>().First();
             var agentServer = services.GetRequiredService<Features.Agent.AgentServer>();
             var options = new DemoOptions(fast, Log, control)

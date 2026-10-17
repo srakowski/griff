@@ -6,13 +6,19 @@ using Griff.Editor.Features.Data;
 
 namespace Griff.Editor.Diagnostics.Demo;
 
-// The Tables panel: its toolbar, the column bar and the grid's cells, worked with the real mouse and keyboard.
+// The Tables panel (or a table's tab in front of the documents): its toolbar, the column bar and the grid's cells, worked
+// with the real mouse and keyboard.
 internal sealed partial class DemoUi
 {
-    /// <summary>The Tables panel's view model.</summary>
-    public static TablesPanel Tables => (TablesPanel)PanelContent("Tables").DataContext;
+    /// <summary>The view model of the table showing: in a table's tab, if one is in front, or in the Tables panel.</summary>
+    public static TablesPanel Tables => (TablesPanel)TablesView.DataContext;
 
-    private static DataGrid TableGrid => (DataGrid)PanelContent("Tables").FindName("Grid");
+    /// <summary>The spreadsheet showing: a table's tab in front of the documents, or else the Tables panel.</summary>
+    private static FrameworkElement TablesView =>
+        Roots().SelectMany(Descendants<Shell.FitScroller>).Select(f => f.Content).OfType<TablesPanelView>().FirstOrDefault(v => v.IsVisible)
+        ?? PanelContent("Tables");
+
+    private static DataGrid TableGrid => (DataGrid)TablesView.FindName("Grid");
 
     /// <summary>
     /// A part of the Tables panel, by its tag: <c>table</c> (the picker), <c>new</c>, <c>addrow</c>, <c>addcolumn</c>,
@@ -35,7 +41,7 @@ internal sealed partial class DemoUi
         }
 
         var tag = "tables:" + part;
-        return Descendants<FrameworkElement>(PanelContent("Tables")).FirstOrDefault(e => string.Equals(e.Tag as string, tag, StringComparison.OrdinalIgnoreCase) && e.IsVisible)
+        return Descendants<FrameworkElement>(TablesView).FirstOrDefault(e => string.Equals(e.Tag as string, tag, StringComparison.OrdinalIgnoreCase) && e.IsVisible)
             ?? throw new InvalidOperationException($"No tables:{part} showing.");
     }
 
@@ -129,7 +135,7 @@ internal sealed partial class DemoUi
 
     // ----- The curve editor and the chart
 
-    private static TableChart TableChartControl => (TableChart)PanelContent("Tables").FindName("Chart");
+    private static TableChart TableChartControl => (TableChart)TablesView.FindName("Chart");
 
     /// <summary>
     /// Sets one of the curve editor's settings as someone would: its kind from the list, or a number (first, last, levels,
@@ -249,7 +255,7 @@ internal sealed partial class DemoUi
     public async Task ColumnType(string column, string type)
     {
         await Click(TablesPart("header:" + column));
-        var box = (ComboBox)await WaitFor(() => Descendants<ComboBox>(PanelContent("Tables")).FirstOrDefault(c => c.Tag as string == "tables:column:type" && c.IsVisible), "the column's Type");
+        var box = (ComboBox)await WaitFor(() => Descendants<ComboBox>(TablesView).FirstOrDefault(c => c.Tag as string == "tables:column:type" && c.IsVisible), "the column's Type");
         await Click(box);
         var item = await WaitFor(() => Find<ComboBoxItem>(i => (i.Content as string ?? i.DataContext as string) == type), $"the type {type}", 3000);
         await Settle(80);

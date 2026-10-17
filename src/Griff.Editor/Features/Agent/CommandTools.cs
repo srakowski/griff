@@ -23,7 +23,7 @@ namespace Griff.Editor.Features.Agent;
 /// that opens a window returns while it's open, so the window can be worked through the ui_ tools.
 /// </summary>
 public sealed class CommandTools(Lazy<CommandRegistry> registry, Core.EditorWindow editorWindow, IEnumerable<MenuDefinition> menus, ISelection selection, IProjectSession projectSession, ISceneDocuments sceneDocuments, PlayMode play, Debugger debugger,
-    ActiveDocument documents) : IAgentToolSource
+    ActiveDocument documents, Core.Documents.EditorDocuments openDocuments) : IAgentToolSource
 {
     public IEnumerable<AgentTool> GetTools()
     {
@@ -127,6 +127,7 @@ public sealed class CommandTools(Lazy<CommandRegistry> registry, Core.EditorWind
             throw new AgentException($"{command.DisplayText.TrimEnd('.')} can't be used right now{WhyNot(command, target)}.");
 
         var before = documents.UndoDescription;
+        var tabsBefore = openDocuments.Names;
         var wait = TimeSpan.FromSeconds(Math.Clamp(args.Number("wait", 5), 0, 120));
 
         // Queued rather than called, so a command that opens a modal window doesn't hold this call until it closes.
@@ -197,6 +198,9 @@ public sealed class CommandTools(Lazy<CommandRegistry> registry, Core.EditorWind
         var newWindows = OpenWindows();
         if (newWindows.Count > 0)
             text.Append(CultureInfo.InvariantCulture, $" Open windows: {string.Join(", ", newWindows.Select(w => $"\"{w.Title}\""))} (see ui_roots).");
+        var newTabs = openDocuments.Names.Except(tabsBefore).ToList();
+        if (newTabs.Count > 0)
+            text.Append(CultureInfo.InvariantCulture, $" Opened in a tab: {string.Join(", ", newTabs.Select(n => $"\"{n}\""))} (see ui_roots).");
         foreach (var error in AgentDialogs.Reported)
             text.Append(CultureInfo.InvariantCulture, $"\nThe editor reported: {error}");
         return AgentDialogs.Reported.Count > 0 ? ToolResult.Error(text.ToString()) : ToolResult.Ok(text.ToString());

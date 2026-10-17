@@ -33,6 +33,7 @@
 - **Game > Play Fullscreen** (Alt+Enter) plays the game over the whole screen, and switches back to the Game tab without stopping the game. F6, F10 and Shift+F5 now also work while a game running in the Game tab has the keyboard.
 - Panel tabs can be dragged along their group to reorder them, and closed with the **×** on the tab (or a middle-click, or the tab's right-click menu). **View > Panels** brings any panel back, and saved layouts and **Reset Layout** remember the order and which panels are closed.
 - A panel can go among the documents: drop its tab on the Scene and Game tabs or in the middle of the scene, and it's a tab beside the scene, prefab and script tabs, filling the whole area (a big **Tables** panel, say). Drag it out again to put it back; layouts remember it.
+- A table can open in a tab of its own beside the scene: **Data > Open Table in Tab**, or turn on **Data > Open Tables in Tabs** so opening or double-clicking a table does it. Each tab is the Tables panel's spreadsheet for that table, and the Data menu works on whichever table you used last. The **Tables** panel still works as before.
 - For agents (MCP): clicking a button by its label finds a button whose label is on the button itself, **Scene_Open** takes a scene's name, and **Edit_Undo** and **Edit_Redo** can name the scene or prefab to undo in.
 
 ## 0.1.0-alpha.7 - 2026-10-16

@@ -22,7 +22,7 @@ namespace Griff.Editor.Features.Data;
 /// level (<see cref="GenerateCurve"/>, or <see cref="Curve"/>'s settings and Generate). <see cref="Chart"/> charts the
 /// picked column over the rows or levels.
 /// </summary>
-public sealed partial class TablesPanel : ToolPanel, IDocumentEditor
+public sealed partial class TablesPanel : ToolPanel, IDocumentEditor, IDisposable
 {
     private readonly TableStore _store;
     private readonly IProjectSession _projectSession;
@@ -43,26 +43,31 @@ public sealed partial class TablesPanel : ToolPanel, IDocumentEditor
         _projectSession = projectSession;
         _status = status;
         _clipboard = clipboard;
-        store.Changed += (_, name) =>
-        {
-            OnPropertyChanged(nameof(TableNames));
-            if (string.IsNullOrEmpty(name) || string.Equals(name, _name, StringComparison.OrdinalIgnoreCase) || _name is null)
-            {
-                if (_name is not null && store.Entry(_name) is null)
-                    _name = null;
-                _name ??= store.FirstName;
-                // A change typed into the grid is shown once the grid has finished with it, so it isn't changed under its feet.
-                if (_typing)
-                    System.Windows.Threading.Dispatcher.CurrentDispatcher.InvokeAsync(Refresh, System.Windows.Threading.DispatcherPriority.Background);
-                else
-                    Refresh();
-            }
-        };
+        store.Changed += OnStoreChanged;
         Curve = new TableCurveModel(this);
         Curve.PropertyChanged += (_, _) => UpdateChart();
         _name = store.FirstName;
         Refresh();
     }
+
+    private void OnStoreChanged(object? sender, string name)
+    {
+        OnPropertyChanged(nameof(TableNames));
+        if (string.IsNullOrEmpty(name) || string.Equals(name, _name, StringComparison.OrdinalIgnoreCase) || _name is null)
+        {
+            if (_name is not null && _store.Entry(_name) is null)
+                _name = null;
+            _name ??= _store.FirstName;
+            // A change typed into the grid is shown once the grid has finished with it, so it isn't changed under its feet.
+            if (_typing)
+                System.Windows.Threading.Dispatcher.CurrentDispatcher.InvokeAsync(Refresh, System.Windows.Threading.DispatcherPriority.Background);
+            else
+                Refresh();
+        }
+    }
+
+    /// <summary>Stops following the project's tables (a table's tab has closed).</summary>
+    void IDisposable.Dispose() => _store.Changed -= OnStoreChanged;
 
     public override string Id => "Tables";
     public override string Title => "Tables";

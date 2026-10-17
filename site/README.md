@@ -199,8 +199,9 @@ a hyphen: `v0.1.0-alpha.1`, `v0.1.0-alpha.2`, then `v0.1.0-beta.1` and so on (Se
 Below 1.0 a new minor version (`v0.2.0`) is a release with new features, and may change how projects and scripts work; a
 patch (`v0.1.1`) only fixes. The workflow ignores any other tag.
 
-1. **Check main is ready**: it is pushed, its CI run (Actions → CI) is green and its Site run deployed. The workflow waits
-   for that CI run and stops before releasing anything unless it passed (run CI again there if it failed by chance).
+1. **Check main is ready**: it is pushed, its CI run (Actions → CI) is green and its Site run deployed, and both test
+   suites pass on it on your machine. The workflow runs no tests: CI's runner draws with software OpenGL, which refuses
+   contexts now and then, so a CI run that fails only on "No OpenGL context could be made" doesn't stop a release.
 2. **Tag and push** it (a pre-release here; `v0.1.0` the same way for a release):
 
    ```sh

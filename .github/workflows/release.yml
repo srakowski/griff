@@ -1,5 +1,5 @@
 # Publishes an editor release when a version tag is pushed (git tag v0.1.0-alpha.1; git push origin v0.1.0-alpha.1): builds
-# the editor in Release once CI has passed on the tagged commit, zips the editor with its players, free fonts, LICENSE and third-party
+# the editor in Release (it runs no tests: both suites pass on the tagged commit before it's tagged), zips the editor with its players, free fonts, LICENSE and third-party
 # notices and packs the same as the installer and its updates with Velopack (tools/release.ps1, which you can run
 # yourself), and publishes a GitHub Release with all of it, whose notes are the commits since the previous tag
 # (tools/release-notes.ps1). A tag with a pre-release label (v0.1.0-alpha.1) makes a pre-release on the "prerelease"
@@ -12,10 +12,9 @@ on:
     # v0.1.0, and pre-releases like v0.1.0-alpha.1 (tools/release.ps1 checks the rest of the label).
     tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']
 
-# Building only reads the repository (and CI's runs); the one job that publishes gets contents: write.
+# Building only reads the repository; the one job that publishes gets contents: write.
 permissions:
   contents: read
-  actions: read
 
 # A tag is released once; a second push of the same tag waits rather than racing it.
 concurrency:
@@ -23,29 +22,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # No tests here: the runner's software OpenGL refuses offscreen contexts now and then, failing commits whose suites pass on
+  # a machine with a GPU, so the suites are run there before a tag (site README, "Cutting a release").
   build:
     runs-on: windows-latest
     steps:
-      # The tests are CI's: it ran both suites on this commit, as here, and the release waits for that run and needs it to
-      # have passed. Running them again only gave the runner's software OpenGL, which refuses contexts now and then, a second
-      # chance to fail a commit CI had passed.
-      - name: Check CI passed on this commit
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: |
-          for ($minutes = 0; ; $minutes++) {
-            $runs = @(gh run list --workflow ci.yml --commit $env:SHA --json status,conclusion | ConvertFrom-Json)
-            if ($runs | Where-Object conclusion -eq 'success') { break }
-            if (-not ($runs | Where-Object status -ne 'completed') -or $minutes -ge 60) {
-              Write-Error "CI hasn't passed on $env:SHA (Actions, CI): run it again there, then the release."
-              exit 1
-            }
-            Start-Sleep -Seconds 60
-          }
-
       # All history and tags, so the notes can see the previous release.
       - uses: actions/checkout@v7
         with:

@@ -18,7 +18,7 @@ public static class ContraptionsGame
         public Entity? ToolFirst => Of(game).ToolFirst;
 
         /// <summary>The <see cref="SandboxTools"/> in use: the first in the scene with focus.</summary>
-        public SandboxTools? Tools => Of(game).Tools;
+        public SandboxTools? Tools => game.GetSystem<ContraptionsSystem>()?.Tools;
 
         /// <summary>Undoes the last prop, weld, rope or wire the tools made; returns whether there was one.</summary>
         public bool Undo() => Of(game).Undo();

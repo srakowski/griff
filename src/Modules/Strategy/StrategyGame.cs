@@ -13,7 +13,7 @@ public static class StrategyGame
     extension(Game game)
     {
         /// <summary>Where the strategy HUD (see <see cref="Commander.Hud"/>) has its parts this frame, if it shows: the minimap, the command card.</summary>
-        public StrategyHud? StrategyHud => Of(game).Rts.Hud;
+        public StrategyHud? StrategyHud => game.GetSystem<StrategySystem>()?.Rts.Hud;
 
         /// <summary>What the player has selected in a strategy game (see <see cref="Commander"/>), first picked first.</summary>
         public IReadOnlyList<Entity> Selected => Of(game).Selected;

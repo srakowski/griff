@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.11 - 2026-10-17
+
 - A **Tooltip** fills in input prompts as a Text does: `Key: {OpenWork}` in its Value shows the key that does it now, following the gamepad and the player's rebinding.
 - **Help > Check for Updates** opens an **Updates** window straight away that shows it checking, then downloading with a bar, then what came of it: up to date (with the version), why it couldn't check, or the offer to restart. The check after starting still says nothing unless there's an update.
 - Answering **Yes** to restarting into a downloaded update really restarts Griff into it: Griff asks about unsaved changes, closes completely (a window left over from dragging a panel no longer keeps it running unseen) and the updater puts the new version in place and starts it.

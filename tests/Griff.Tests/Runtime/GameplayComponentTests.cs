@@ -237,8 +237,11 @@ public class GameplayComponentTests
         return (text, typewriter);
     }
 
+    // What's drawn of the entity's text: the whole of it, or as much as its typewriter has typed.
     private string? VisibleText(Entity entity) =>
-        SceneRenderer.Build(_scene, 1).Sprites.SingleOrDefault(d => d.Entity == entity).Text;
+        SceneRenderer.Build(_scene, 1).Sprites.SingleOrDefault(d => d.Entity == entity) is { Text: { } text } draw
+            ? draw.Typed > 0 ? text[..draw.Typed] : text
+            : null;
 
     private sealed class RecordingAudio : IAudio
     {

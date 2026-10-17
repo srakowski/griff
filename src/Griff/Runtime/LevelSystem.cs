@@ -999,8 +999,8 @@ internal sealed class LevelSystem : GameSystem, IVolleys, IDialogues, IFlags
     // The stick pushed up (1), down (-1) or neither: each push moves one choice.
     private int ChoiceStick => Game.Input.LeftStick.Y > Game.NavigateStick ? 1 : Game.Input.LeftStick.Y < -Game.NavigateStick ? -1 : 0;
 
-    // The choice whose row the mouse is over, if any: each row is a line of the text's size, the block centered on its
-    // entity, and as wide as the box's sprite when it has one.
+    // The choice whose row the mouse is over, if any: each row is a line of the text's size, the block placed up and down
+    // on its entity by its VerticalAlign, and as wide as the box's sprite when it has one.
     private int? ChoiceUnderMouse(Dialogue dialogue, Text text)
     {
         if (!Game.Input.IsMouseInView)
@@ -1018,7 +1018,7 @@ internal sealed class LevelSystem : GameSystem, IVolleys, IDialogues, IFlags
         }
 
         var lines = (text.Value ?? "").Count(c => c == '\n') + 1;
-        var top = world.M42 + height * lines / 2;
+        var top = world.M42 + text.VerticalAlign switch { TextVerticalAlign.Top => 0, TextVerticalAlign.Bottom => height * lines, _ => height * lines / 2 };
         var line = (int)MathF.Floor((top - Game.Input.MouseWorld.Y) / height);
         var choice = line - (lines - dialogue.Choices.Count);
         return line >= 0 && line < lines && choice >= 0 ? choice : null;

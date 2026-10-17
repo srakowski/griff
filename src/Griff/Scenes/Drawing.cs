@@ -18,6 +18,21 @@ public readonly record struct SpriteDraw(Matrix4x4 World, string? Image, Color T
     /// <summary>For text: where the quad sits relative to the origin. The renderer shifts it once it knows the width.</summary>
     public TextAlign Align { get; init; }
 
+    /// <summary>For text: where its lines sit up and down relative to the origin (see <see cref="Scenes.Text.VerticalAlign"/>).</summary>
+    public TextVerticalAlign VerticalAlign { get; init; }
+
+    /// <summary>
+    /// For text: the width its lines are broken between words to fit, in lines (the quad's own units: a
+    /// <see cref="Scenes.Text.WrapWidth"/> over its size); 0 breaks them only at new lines.
+    /// </summary>
+    public float WrapWidth { get; init; }
+
+    /// <summary>
+    /// For text: how many of its characters are drawn, from the start (a typewriter's); the rest are laid out but not
+    /// drawn, so the drawn words stay where the whole text puts them. 0 draws them all.
+    /// </summary>
+    public int Typed { get; init; }
+
     /// <summary>A color painted over the quad (keeping its shape), with alpha saying how much; see <see cref="Sprite.Flash"/>.</summary>
     public Color Flash { get; init; } = Color.Transparent;
 
@@ -329,9 +344,19 @@ public sealed class Drawing
             _draws.Add(line);
     }
 
-    /// <summary>A line of text <paramref name="size"/> high in the world, placed at <paramref name="at"/> as <paramref name="align"/> says.</summary>
-    public void Text(string text, Vector2 at, float size, Color color, TextAlign align = TextAlign.Center, string? font = null) =>
-        _draws.Add(Quads.Label(Entity, text, at, size, color, align) with { Font = string.IsNullOrWhiteSpace(font) ? null : font });
+    /// <summary>
+    /// Text <paramref name="size"/> high a line in the world, placed at <paramref name="at"/> as <paramref name="align"/>
+    /// and <paramref name="vertical"/> say, its lines broken between words to fit <paramref name="wrapWidth"/> world units
+    /// across when that's more than 0 (as a <see cref="Scenes.Text"/>'s are).
+    /// </summary>
+    public void Text(string text, Vector2 at, float size, Color color, TextAlign align = TextAlign.Center, string? font = null,
+        TextVerticalAlign vertical = TextVerticalAlign.Middle, float wrapWidth = 0) =>
+        _draws.Add(Quads.Label(Entity, text, at, size, color, align) with
+        {
+            Font = string.IsNullOrWhiteSpace(font) ? null : font,
+            VerticalAlign = vertical,
+            WrapWidth = wrapWidth > 0 && size > 0 ? wrapWidth / size : 0,
+        });
 
     /// <summary>
     /// A bar of <paramref name="size"/> centered on the entity, in its own space: the background, then the trail up to

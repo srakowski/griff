@@ -112,8 +112,9 @@ internal sealed class LobbySystem : GameSystem
             if (text.Value != shown)
                 text.Value = shown;
 
-            // Text grows both ways from its middle; pinned to the top or bottom of the screen, the list grows away from it.
-            if (board.Entity.GetComponent<ScreenAnchor>() is { } anchor)
+            // Text grows both ways from its middle; pinned to the top or bottom of the screen, the list grows away from it
+            // (text hanging from its entity or standing on it is left where it's put).
+            if (board.Entity.GetComponent<ScreenAnchor>() is { } anchor && text.VerticalAlign == TextVerticalAlign.Middle)
             {
                 var offset = board.AnchorOffset ??= anchor.Offset;
                 var grow = shown.Count(c => c == '\n') * text.Size / 2;

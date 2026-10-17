@@ -1,0 +1,31 @@
+title: Text that hangs and wraps
+intro: A Text's lines can hang from its entity or stand on it, and break between words to fit a width.
+project: Empty | Text Wrap
+
+chapter: Wrapping to a width | Text > Wrap Width
+create: Text
+rename: Contract
+set: Transform.Position = -4, 3
+set: Text.Size = 0.5
+set: Text.Value = Deliver forty crates of copper wire to the north dock before the end of the third shift. Pay on delivery.
+look: 0, 1, 5
+say: A long sentence on a Text runs off in one line.
+set: Text.WrapWidth = 7
+expectvalue: Contract.Text.WrapWidth = 7
+explain: field:Text.WrapWidth | Wrap Width | Wrap Width breaks its lines between words so none is wider than seven units, measured with the font's own letters.
+
+chapter: Hanging from the top | Text > Vertical Align
+set: Text.Align = Left
+set: Text.VerticalAlign = Top
+expectvalue: Contract.Text.VerticalAlign = Top
+explain: field:Text.VerticalAlign | Vertical Align | With Vertical Align set to Top, the first line's top sits at the entity, and the rest hang below it.
+set: Text.Value = Deliver forty crates of copper wire to the north dock before the end of the third shift. Pay on delivery. Bonus for every crate over forty, and a fine for every crate short.
+explain: scene | Scene view | More text adds lines underneath: the first line stays put, so a contract or a log never needs placing by hand as it grows.
+say: Bottom does the opposite, standing the last line on the entity, for a chat whose new lines push the old ones up. Middle, the default, centers them as before.
+
+chapter: Typed out in place | Typewriter
+add: Typewriter
+play
+wait: 3
+say: A typewriter types the wrapped text where it will end up, so a word never starts at the end of a line and jumps to the next.
+stop

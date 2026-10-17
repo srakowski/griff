@@ -169,6 +169,19 @@ public enum TextAlign
     Right,
 }
 
+/// <summary>Where the lines of text sit up and down relative to its entity's position.</summary>
+public enum TextVerticalAlign
+{
+    /// <summary>Centered on the entity: more lines grow up and down from it.</summary>
+    Middle,
+
+    /// <summary>The first line's top at the entity, the rest hanging below it: a page, a log, a contract.</summary>
+    Top,
+
+    /// <summary>The last line's bottom at the entity, more lines pushing the rest up: a chat, a feed.</summary>
+    Bottom,
+}
+
 /// <summary>Draws a line (or lines) of text at the entity. Scripts set <see cref="Value"/>.</summary>
 [Category("Rendering")]
 [ComponentName("Text")]
@@ -214,6 +227,19 @@ public sealed class Text : Component, IDrawable
 
     /// <summary>Where the text sits relative to the entity; lines of several-line text line up the same way.</summary>
     public TextAlign Align { get; set; }
+
+    /// <summary>
+    /// Where the lines sit up and down: centered on the entity (Middle), hanging from it with the first line's top there
+    /// (Top), or standing on it with the last line's bottom there (Bottom), however many lines there are.
+    /// </summary>
+    public TextVerticalAlign VerticalAlign { get; set; }
+
+    /// <summary>
+    /// Breaks lines between words so none is wider than this, in world units before the transform's scale (like
+    /// <see cref="Size"/>), going by the font's own letters; a word wider than it has a line to itself. 0 breaks lines only
+    /// where the text does.
+    /// </summary>
+    public float WrapWidth { get; set; }
 
     /// <summary>
     /// An entity whose <see cref="Output"/> it shows, by name, e.g. "Board". Empty is this entity, or the nearest one it's
@@ -268,11 +294,13 @@ public sealed class Text : Component, IDrawable
 
     int IDrawable.DrawStep => DrawSteps.Text;
 
-    // A typewriter shows only as much as it has typed so far; a button shades its text under the mouse.
+    // A typewriter shows only as much as it has typed so far, laid out as the whole text is so its words don't jump to the
+    // next line as they're typed; a button shades its text under the mouse.
     void IDrawable.Draw(Drawing drawing)
     {
-        var value = Entity!.GetComponent<Typewriter>() is { } typewriter ? typewriter.Visible(Shown) : Shown;
-        if (string.IsNullOrEmpty(value))
+        var value = Shown;
+        var typed = Entity!.GetComponent<Typewriter>() is { } typewriter ? typewriter.Visible(value)?.Length : null;
+        if (string.IsNullOrEmpty(value) || typed == 0)
             return;
         var size = drawing.Smooth(_size);
         var world = Matrix4x4.CreateScale(size, size, 1) * Entity.Transform.WorldMatrix;
@@ -280,6 +308,9 @@ public sealed class Text : Component, IDrawable
         {
             Font = string.IsNullOrWhiteSpace(Font) ? null : Font,
             Align = Align,
+            VerticalAlign = VerticalAlign,
+            WrapWidth = WrapWidth > 0 && size > 0 ? WrapWidth / size : 0,
+            Typed = typed < value.Length ? typed.Value : 0,
         });
     }
 }

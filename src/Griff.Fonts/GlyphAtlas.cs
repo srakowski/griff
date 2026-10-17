@@ -29,8 +29,8 @@ public readonly record struct GlyphQuad(float Left, float Top, float Right, floa
 /// </summary>
 /// <remarks>
 /// Lines are <see cref="TextRaster.LinePixels"/> high and the font's em 0.8 of that, as Griff's text always was; a text
-/// block is centered on its anchor up and down, and each line lines up with it by the <see cref="TextAlign"/>: starting
-/// at it, ending at it or centered on it. Fonts come from <see cref="Fonts"/> (see <see cref="FontCatalog"/>); a
+/// block is centered on its anchor up and down, hangs from it or stands on it by the <see cref="TextVerticalAlign"/>, and
+/// each line lines up with it by the <see cref="TextAlign"/>: starting at it, ending at it or centered on it. Fonts come from <see cref="Fonts"/> (see <see cref="FontCatalog"/>); a
 /// character a font hasn't got comes from the built-in font, then from the fallback (arrows, shapes, symbols such as ♥,
 /// Greek and Cyrillic; see <see cref="BuiltInFonts"/>), then, with <see cref="InstalledFallback"/> (on the desktop), from
 /// Windows' own fonts on the player's computer (Chinese, Japanese, Korean, emoji...; see
@@ -49,12 +49,20 @@ public sealed class GlyphAtlas : IDisposable
     private readonly Dictionary<(int Face, int Left, int Right), float> _kerning = [];
     private GlyphQuad[] _quads = new GlyphQuad[64];
 
+    // The lines text is broken into as it's laid out, and the face and text being measured for it (kept, with the measure
+    // made once, so laying text out makes no garbage).
+    private readonly List<(int Start, int End)> _lines = [];
+    private readonly Func<int, int, float> _measure;
+    private FontFace? _measuring;
+    private string? _measuringText;
+
     /// <param name="assets">The game's files, which font files are found in; null for none.</param>
     /// <param name="installedFallback">See <see cref="InstalledFallback"/>.</param>
     public GlyphAtlas(IAssetSource? assets, bool installedFallback = true)
     {
         Fonts = new FontCatalog(assets);
         InstalledFallback = installedFallback;
+        _measure = (start, end) => Measure(_measuring!, _measuringText!, start, end);
     }
 
     /// <summary>Where the faces text names come from.</summary>
@@ -74,28 +82,33 @@ public sealed class GlyphAtlas : IDisposable
     public IReadOnlyList<GlyphPage> Pages => _pages;
 
     /// <summary>
-    /// Lays <paramref name="text"/> out as quads in <paramref name="font"/>, rasterizing glyphs not on a page yet. The
-    /// span is the atlas's own and lasts until it's next called.
+    /// Lays <paramref name="text"/> out as quads in <paramref name="font"/>, rasterizing glyphs not on a page yet: its lines
+    /// broken between words to fit <paramref name="wrapWidth"/> lines across (0 breaks them only at new lines; see
+    /// <see cref="TextWrap.Break"/>) and placed up and down by <paramref name="vertical"/>, with only the first
+    /// <paramref name="typed"/> characters drawn when that's more than 0. The span is the atlas's own and lasts until it's
+    /// next called.
     /// </summary>
-    public ReadOnlySpan<GlyphQuad> Lay(string text, string? font, TextAlign align)
+    public ReadOnlySpan<GlyphQuad> Lay(string text, string? font, TextAlign align, TextVerticalAlign vertical = TextVerticalAlign.Middle,
+        float wrapWidth = 0, int typed = 0)
     {
         var count = 0;
         if (text.Length == 0)
             return [];
         var face = Fonts.FaceFor(font);
-        var lines = text.AsSpan().Count('\n') + 1;
-        var line = 0;
-        var start = 0;
-        while (start <= text.Length)
+        _lines.Clear();
+        (_measuring, _measuringText) = (face, text);
+        TextWrap.Break(text, wrapWidth * TextRaster.LinePixels, _measure, _lines);
+        _measuringText = null;
+        var end = typed > 0 ? Math.Min(typed, text.Length) : text.Length;
+        var top = vertical switch { TextVerticalAlign.Top => 0, TextVerticalAlign.Bottom => _lines.Count, _ => _lines.Count / 2f };
+        for (var line = 0; line < _lines.Count && _lines[line].Start < end; line++)
         {
-            var end = text.IndexOf('\n', start);
-            if (end < 0)
-                end = text.Length;
-            var width = Measure(face, text, start, end);
+            var (start, stop) = _lines[line];
+            var width = Measure(face, text, start, stop);
             var pen = align switch { TextAlign.Left => 0f, TextAlign.Right => -width, _ => -width / 2 };
-            var baseline = (lines / 2f - line - face.BaselineShare) * TextRaster.LinePixels;
+            var baseline = (top - line - face.BaselineShare) * TextRaster.LinePixels;
             Glyph? previous = null;
-            for (var i = start; i < end;)
+            for (var i = start; i < Math.Min(stop, end);)
             {
                 var codepoint = Next(text, ref i);
                 if (Resolve(face, codepoint) is not { } glyph)
@@ -107,26 +120,27 @@ public sealed class GlyphAtlas : IDisposable
                     if (count == _quads.Length)
                         Array.Resize(ref _quads, count * 2);
                     var left = pen + glyph.Left - 1;
-                    var top = baseline - glyph.Top + 1;
-                    _quads[count++] = new GlyphQuad(left / TextRaster.LinePixels, top / TextRaster.LinePixels,
-                        (left + glyph.Width + 2) / TextRaster.LinePixels, (top - glyph.Height - 2) / TextRaster.LinePixels,
+                    var glyphTop = baseline - glyph.Top + 1;
+                    _quads[count++] = new GlyphQuad(left / TextRaster.LinePixels, glyphTop / TextRaster.LinePixels,
+                        (left + glyph.Width + 2) / TextRaster.LinePixels, (glyphTop - glyph.Height - 2) / TextRaster.LinePixels,
                         new Vector4(glyph.X, glyph.Y, glyph.Width + 2, glyph.Height + 2) / GlyphPage.Size, glyph.Page);
                 }
 
                 pen += Advance(face, glyph, codepoint);
                 previous = glyph;
             }
-
-            start = end + 1;
-            line++;
         }
 
         return _quads.AsSpan(0, count);
     }
 
+    /// <summary>A <see cref="SpriteDraw"/> of text laid out as <see cref="Lay(string, string?, TextAlign, TextVerticalAlign, float, int)"/> does it.</summary>
+    public ReadOnlySpan<GlyphQuad> Lay(in SpriteDraw text) =>
+        Lay(text.Text ?? "", text.Font, text.Align, text.VerticalAlign, text.WrapWidth, text.Typed);
+
     /// <summary>
     /// <paramref name="text"/> drawn into an image of its own (straight-alpha RGBA, white with coverage as alpha, rows from
-    /// the top), and where it goes: its top left corner, in lines from the anchor (Y up), as <see cref="Lay"/> places it.
+    /// the top), and where it goes: its top left corner, in lines from the anchor (Y up), as <see cref="Lay(string, string?, TextAlign, TextVerticalAlign, float, int)"/> places it.
     /// For drawing text where the atlas's pages can't be (the editor's Scene view, tests). Empty for no glyphs.
     /// </summary>
     public (byte[] Rgba, int Width, int Height, Vector2 TopLeft) Rasterize(string text, string? font, TextAlign align)

@@ -319,9 +319,9 @@ public sealed class DrawList
             return;
         }
 
-        if (sprite.Text is { } text)
+        if (sprite.Text is not null)
         {
-            AddText(sprite, text, sprite.World * viewProjection);
+            AddText(sprite, sprite.World * viewProjection);
             return;
         }
 
@@ -342,11 +342,11 @@ public sealed class DrawList
 
     // Text as a quad a glyph, each from its atlas page (the draw is one line high, so the glyphs' places, in lines, are in
     // the draw's own space).
-    private void AddText(in SpriteDraw sprite, string text, in Matrix4x4 toClip)
+    private void AddText(in SpriteDraw sprite, in Matrix4x4 toClip)
     {
         var tint = new Vector4(sprite.Tint.R, sprite.Tint.G, sprite.Tint.B, sprite.Tint.A);
         var flash = new Vector4(sprite.Flash.R, sprite.Flash.G, sprite.Flash.B, sprite.Flash.A);
-        foreach (ref readonly var glyph in Glyphs.Lay(text, sprite.Font, sprite.Align))
+        foreach (ref readonly var glyph in Glyphs.Lay(sprite))
         {
             ref var quad = ref Next(DrawOp.Sprites, GlyphTexture(glyph.Page));
             quad.Corners01 = Pair(ToClip(glyph.Left, glyph.Top, toClip), ToClip(glyph.Right, glyph.Top, toClip));

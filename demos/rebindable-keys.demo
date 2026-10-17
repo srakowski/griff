@@ -1,0 +1,73 @@
+title: Rebindable camera keys and button shortcuts
+intro: Camera Controls pans with input actions, and a button's Shortcut Action clicks it with one, so every key shows in the Controls window and can be rebound.
+
+project: Empty | Rebindable Keys
+
+chapter: A camera that pans | Camera Controls on the camera
+create: Tilemap
+rename: Level
+set: Tilemap.Tiles = 1111222211112222\n1111222211112222\n2222111122221111\n2222111122221111\n1111222211112222\n1111222211112222\n2222111122221111\n2222111122221111
+deselect
+select: Main Camera
+add: CameraControls
+explain: field:CameraControls.PanWithKeys | Pan With Keys | Camera Controls pans with four input actions: Pan Up, Pan Down, Pan Left and Pan Right. They start on W A S D, the arrow keys and the D-pad.
+
+chapter: Pan keys in the Controls window | Rebind Pan Up to I
+menu: Game > Controls...
+controls
+action: PanUp
+explain: controls:usedby | Used by | Pan Up is one of Griff's own actions now, like Jump, and Camera Controls pans up with it.
+say: Say the game needs W for something else. The cross takes W off Pan Up, and I goes on instead.
+click: controls:remove:W
+bind: I
+expectcontrol: PanUp = I
+click: controls:close
+
+chapter: Play | I pans up, W is free
+play
+wait: 1
+hold: I 1
+say: I pans the camera up.
+tap: W
+wait: 1
+say: W does nothing now, so the game can use it. Players can rebind the pan keys too, with a Rebind button.
+stop
+
+chapter: A button's key as an action | Shortcut Action
+menu: Game > Controls...
+controls
+click: controls:addaction
+actionname: OpenMap
+bind: M
+expectcontrol: OpenMap = M
+say: Here's an action of the game's own, Open Map, on M.
+click: controls:close
+create: Panel
+rename: Map
+deselect
+create: Button
+rename: Map Button
+set: Button.Action = OpenPanel
+pick: Button.Panel = Map
+pick: Button.ShortcutAction = OpenMap
+explain: field:Button.ShortcutAction | Shortcut Action | Shortcut Action clicks the button with an input action instead of one fixed key. Its keys are in the Controls window, and players can rebind them.
+
+chapter: Play | M opens the map, then J does
+play
+wait: 1
+tap: M
+waitfor: Map | 3
+say: M clicks the button, and the map opens.
+tap: Escape
+waitgone: Map | 3
+menu: Game > Controls...
+controls
+action: OpenMap
+click: controls:remove:M
+bind: J
+click: controls:close
+say: Now Open Map is on J, straight away in the running game.
+tap: J
+waitfor: Map | 3
+say: J opens the map. The button follows its action's keys, wherever they're set.
+stop

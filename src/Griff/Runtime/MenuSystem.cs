@@ -223,19 +223,65 @@ internal sealed class MenuSystem : GameSystem
 
         foreach (var button in buttons)
         {
-            if (button.Shortcut == Key.None || !Game.Input.WasPressed(button.Shortcut) || clicked.Contains(button))
+            if (clicked.Contains(button))
                 continue;
-            if (_focus is not null && button.Shortcut is Key.Enter or Key.Space)
-                continue;
-            clicked.Add(button);
+            var byKey = button.Shortcut != Key.None && Game.Input.WasPressed(button.Shortcut) &&
+                        !(_focus is not null && button.Shortcut is Key.Enter or Key.Space);
+            var byAction = !string.IsNullOrWhiteSpace(button.ShortcutAction) && Game.Input.WasPressed(button.ShortcutAction.Trim()) &&
+                           !(_focus is not null && submit && Submits(button.ShortcutAction.Trim()));
+            if (byKey || byAction)
+                clicked.Add(button);
         }
 
         // B goes back: it clicks the button Esc would.
-        if (_focus is not null && Game.Input.WasPressed(GamepadButton.B) &&
-            buttons.FirstOrDefault(b => b.Shortcut == Key.Escape) is { } back && !clicked.Contains(back))
+        if (_focus is not null && Game.Input.WasPressed(GamepadButton.B) && FirstBack(buttons) is { } back && !clicked.Contains(back))
             clicked.Add(back);
 
         return clicked;
+    }
+
+    // Whether an action has Enter, Space or A: what clicks the picked button, so it doesn't fire other buttons' shortcuts.
+    private bool Submits(string action)
+    {
+        var bindings = Game.Input.BindingsOf(action);
+        for (var i = 0; i < bindings.Count; i++)
+        {
+            if (bindings[i] == Key.Enter || bindings[i] == Key.Space || bindings[i] == GamepadButton.A)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether Esc clicks the button: its <see cref="Button.Shortcut"/> is Esc, or its <see cref="Button.ShortcutAction"/>
+    /// has Esc among its keys. Such a button is its panel's way back, so Esc and B click it rather than close the panel.
+    /// </summary>
+    internal bool GoesBack(Button button)
+    {
+        if (button.Shortcut == Key.Escape)
+            return true;
+        if (string.IsNullOrWhiteSpace(button.ShortcutAction))
+            return false;
+        var bindings = Game.Input.BindingsOf(button.ShortcutAction.Trim());
+        for (var i = 0; i < bindings.Count; i++)
+        {
+            if (bindings[i] == Key.Escape)
+                return true;
+        }
+
+        return false;
+    }
+
+    private Button? FirstBack(List<Button> buttons)
+    {
+        foreach (var button in buttons)
+        {
+            if (GoesBack(button))
+                return button;
+        }
+
+        return null;
     }
 
     // The scene a Load Scene button's Saved Scene names in the save data, or null while there's none saved there.

@@ -203,10 +203,10 @@ internal sealed class PanelSystem : GameSystem, IPanels
     {
         if (top is not null)
         {
-            if (top.Entity?.Scene != Game.Scene || TopPanel != top || clicked.Any(b => b.Shortcut == Key.Escape))
+            if (top.Entity?.Scene != Game.Scene || TopPanel != top || clicked.Any(Game.MenuSystem.GoesBack))
                 return;
             var toggled = !string.IsNullOrWhiteSpace(top.OpenOn) && Game.Input.WasPressed(top.OpenOn);
-            var back = top.CloseOnBack && buttons.All(b => b.Shortcut != Key.Escape) &&
+            var back = top.CloseOnBack && !buttons.Any(Game.MenuSystem.GoesBack) &&
                        (Game.Input.WasPressed(Key.Escape) || Game.Input.WasPressed(GamepadButton.B));
             if (toggled || back)
                 ClosePanel(top);

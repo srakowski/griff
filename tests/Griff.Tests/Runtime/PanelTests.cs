@@ -450,4 +450,99 @@ public class PanelTests
         // Once it's open, sending it again opens nothing more.
         Assert.Equal(0, game.Send("Solved"));
     }
+
+    [Fact]
+    public void ShortcutAction_ClicksTheButton_OnTheActionsKeys_AsThePlayerRebindsThem()
+    {
+        _input.UseControls(new Dictionary<string, IReadOnlyList<InputBinding>> { ["OpenWork"] = [Key.K] });
+        var work = AddButton("Work", Vector2.Zero);
+        work.ShortcutAction = "OpenWork";
+        var clicks = 0;
+        work.Clicked += _ => clicks++;
+        var game = CreateGame();
+        Tick(game);
+
+        Press(game, Key.K);
+        Assert.Equal(1, clicks);
+
+        _input.Rebind("OpenWork", Key.J);
+        Press(game, Key.K);
+        Assert.Equal(1, clicks);
+        Press(game, Key.J);
+        Assert.Equal(2, clicks);
+    }
+
+    [Fact]
+    public void ShortcutAction_FollowsTheShortcutsRules_PanelsAndInteractable()
+    {
+        _input.UseControls(new Dictionary<string, IReadOnlyList<InputBinding>> { ["OpenMap"] = [Key.M], ["Buy"] = [Key.B] });
+        var map = AddButton("Map", new Vector2(0, 3));
+        map.ShortcutAction = "OpenMap";
+        var buy = AddButton("Buy", new Vector2(0, -3));
+        buy.ShortcutAction = "Buy";
+        buy.Interactable = false;
+        var (mapClicks, buyClicks) = (0, 0);
+        map.Clicked += _ => mapClicks++;
+        buy.Clicked += _ => buyClicks++;
+        var panel = AddPanel("Paused");
+        AddButton("Resume", Vector2.Zero, panel.Entity);
+        var game = CreateGame();
+        Tick(game);
+
+        // A button that can't be clicked ignores its action, as it does its key.
+        Press(game, Key.B);
+        Assert.Equal(0, buyClicks);
+
+        // While a panel is open, buttons outside it don't hear their actions.
+        game.OpenPanel(panel);
+        Tick(game);
+        Press(game, Key.M);
+        Assert.Equal(0, mapClicks);
+
+        game.ClosePanel(panel);
+        Tick(game);
+        Press(game, Key.M);
+        Assert.Equal(1, mapClicks);
+    }
+
+    [Fact]
+    public void ShortcutAction_OnEnter_DoesntFireWhileSomethingIsPicked()
+    {
+        _input.UseControls(new Dictionary<string, IReadOnlyList<InputBinding>> { ["Confirm"] = [Key.Enter, Key.Y] });
+        var panel = AddPanel("Paused");
+        var resume = AddButton("Resume", new Vector2(0, 1), panel.Entity);
+        var quit = AddButton("Quit", new Vector2(0, -1), panel.Entity);
+        quit.ShortcutAction = "Confirm";
+        var (resumeClicks, quitClicks) = (0, 0);
+        resume.Clicked += _ => resumeClicks++;
+        quit.Clicked += _ => quitClicks++;
+        var game = CreateGame();
+        game.OpenPanel(panel);
+        Tick(game);
+        Assert.Equal(resume, game.Focused);
+
+        // Enter clicks what's picked; the action's other key still clicks its button.
+        Press(game, Key.Enter);
+        Assert.Equal((1, 0), (resumeClicks, quitClicks));
+        Press(game, Key.Y);
+        Assert.Equal((1, 1), (resumeClicks, quitClicks));
+    }
+
+    [Fact]
+    public void AButtonWhoseShortcutActionHasEscape_IsWhatEscapeClicks()
+    {
+        _input.UseControls(new Dictionary<string, IReadOnlyList<InputBinding>> { ["Back"] = [Key.Escape, Key.Backspace] });
+        var panel = AddPanel("Game Over");
+        panel.Open = true;
+        var menu = AddButton("Menu", Vector2.Zero, panel.Entity);
+        menu.ShortcutAction = "Back";
+        var clicks = 0;
+        menu.Clicked += _ => clicks++;
+        var game = CreateGame();
+
+        Press(game, Key.Escape);
+
+        Assert.Equal(1, clicks);
+        Assert.True(panel.Entity!.IsEnabled);
+    }
 }

@@ -173,6 +173,7 @@ public sealed partial class FieldEditorAuditTests
         Button.Slot: Names:Kind
         Button.InputAction: Names:Action
         Button.NeedsSaved: Names:Saved
+        Button.ShortcutAction: Names:Action
         Button.Sound: Sound
         Choice.Options: NameList
         Choice.Format: Format

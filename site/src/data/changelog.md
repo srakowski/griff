@@ -8,6 +8,7 @@
 ## Unreleased
 
 - Camera Controls pans with four new built-in actions, **PanUp**, **PanDown**, **PanLeft** and **PanRight** (WASD, the arrows and the D-pad as before), so **Game > Controls** and players can rebind them, and a game can take W or S for something else.
+- A button's **Shortcut Action** clicks it with an input action instead of a fixed key, so a menu key shows in **Game > Controls** and players can rebind it.
 
 ## 0.1.0-alpha.8 - 2026-10-17
 

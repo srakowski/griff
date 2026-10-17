@@ -249,6 +249,14 @@ public sealed class Button : Component, IDrawEffect
     /// <summary>A key that clicks the button too, e.g. Enter for a Play button. None for mouse only.</summary>
     public Key Shortcut { get; set; }
 
+    /// <summary>
+    /// An input action that clicks the button too, e.g. "OpenMap" bound to M in Game &gt; Controls: like
+    /// <see cref="Shortcut"/>, but its keys are the action's, so the Controls window and the player's Rebind change them.
+    /// Empty for none.
+    /// </summary>
+    [Names(NameKind.Action)]
+    public string? ShortcutAction { get; set; }
+
     /// <summary>Plays when it's clicked, e.g. "Sounds/select.wav".</summary>
     [Group("Feel")]
     public string? Sound { get; set; }

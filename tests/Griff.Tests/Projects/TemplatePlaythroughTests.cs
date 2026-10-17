@@ -23,33 +23,34 @@ public sealed class TemplatePlaythroughTests
     // changed when its team-colored bands got a Team Color component (the play is the same: the old fingerprint without it).
     // Every template with a Text changed when texts got a Vertical Align and a Wrap Width (the same without them).
     // Every template changed when cameras got a Hud Size, and those with a tilemap when tilemaps got Placeholder Colors and
-    // a Placeholder Grid (the same without them).
+    // a Placeholder Grid (the same without them). Every template with a button changed when buttons got a Shortcut Action
+    // (the same without it).
     private static readonly Dictionary<string, string> Expected = new()
     {
-        ["Adventure"] = "DEFC775324593D52",
-        ["Arcade"] = "E69197EC01C24F57",
+        ["Adventure"] = "81386AF51920526D",
+        ["Arcade"] = "71C8FCEB3BFD37D1",
         ["BunnyMark"] = "5DA87DF8545F3763",
-        ["Cards"] = "EAF99792DF237D6A",
-        ["Contraption"] = "929C857F9CD71010",
+        ["Cards"] = "9BAA403D62E8B69A",
+        ["Contraption"] = "51C549A22DB98F3F",
         ["Empty"] = "515ECFE77AC91034",
-        ["FallingBlocks"] = "61824BAF27241CAD",
-        ["Fighter"] = "E47D6C65A20D58EA",
-        ["Isometric"] = "3DCA9B4249586901",
-        ["Match3"] = "3494D0D6F51C9DA0",
-        ["Multiplayer"] = "BFF12CBADB9F9965",
-        ["Physics"] = "4BC64DF012AC9A8E",
-        ["Pinball"] = "76246FFE2C3F6FFA",
-        ["Platformer"] = "5FEC29D92470819D",
-        ["Puzzle"] = "0196445365D5B53E",
-        ["Rhythm"] = "3A4B783C3DF353AB",
-        ["Roguelike"] = "35B756176F14887F",
-        ["RpgStats"] = "4B2E7CBC3B42480A",
-        ["Sandbox"] = "7374E284003E896D",
-        ["Shooter"] = "65605E2218A616E8",
-        ["Strategy"] = "4FA7AB459BC75AE1",
-        ["Tactics"] = "D1A0D74F863B7804",
-        ["TopDown"] = "723D963F4140758A",
-        ["VisualNovel"] = "0D0FC4B8AB97DC4F",
+        ["FallingBlocks"] = "B4A438A636A85AE0",
+        ["Fighter"] = "FBE9BFBBFE206FE0",
+        ["Isometric"] = "E575D7F5AF8B9CAE",
+        ["Match3"] = "B70D9E94F26B0959",
+        ["Multiplayer"] = "B89A2597C9DAB566",
+        ["Physics"] = "90682F50E82BAB9D",
+        ["Pinball"] = "2B89F9AA75E545E1",
+        ["Platformer"] = "F6C4734DFAD0603B",
+        ["Puzzle"] = "6847F19DD7FFC41B",
+        ["Rhythm"] = "F700CBA96F698C4F",
+        ["Roguelike"] = "E133F0E11A96B87D",
+        ["RpgStats"] = "0A57D1E24D16791F",
+        ["Sandbox"] = "48AC9E7E7B73E2E8",
+        ["Shooter"] = "27E1B7448DB41E2D",
+        ["Strategy"] = "67A1D5B1727DE868",
+        ["Tactics"] = "29DCB151C256ED09",
+        ["TopDown"] = "36897913E26B2AD8",
+        ["VisualNovel"] = "057DD124992D4C3B",
     };
 
     public static TheoryData<string> Templates => [.. ProjectTemplates.All.Select(t => t.Name)];

@@ -1,0 +1,32 @@
+title: The Select tool for tilemaps
+intro: With a tilemap selected, the Scene view no longer has to paint: the Select tool, first under the palette, clicks and drags things as usual.
+project: Shooter | Select Tool
+
+chapter: Back to the cursor | Select, under the tile palette
+# The HUD sits on the camera's frame in the Scene view: move the camera off the level so it's out of the way of the clicks.
+select: Main Camera
+set: Transform.Position.X = 60
+select: Walls
+look: 8, -4, 6
+say: The Shooter's level is a tilemap. While it's selected, a click in the Scene view paints it, so clicking the player here would put a wall on top of them.
+explain: tiles:Select | Select, V | The first tool under the palette is now Select, the cursor. V picks it from the keyboard.
+click: tiles:Select
+sceneclick: Player
+expectselected: Player
+expecttile: Walls 3, 3 = -1
+say: With it picked, a click selects what's under it, and nothing is painted.
+scenedrag: Player > 4.5, -3.5
+expectat: Player = 4.5, -3.5
+say: Dragging moves it, and the handles, the selection box and the rest work as they do with no tilemap selected.
+
+chapter: Paint again | The tool stays as you left it
+select: Walls
+explain: tiles:Select | Still the cursor | Selecting the map again keeps the Select tool, so it doesn't start painting by surprise. The palette stays up to pick a painting tool.
+click: tiles:Brush
+click: tiles:1
+sceneclick: 3.5, -3.5
+expecttile: Walls 3, 3 = 1
+say: The Brush, or B, paints again with the next click.
+key: Ctrl+Z
+expecttile: Walls 3, 3 = -1
+say: Agents pick the tool the same way, through the Scene view's TileTool.

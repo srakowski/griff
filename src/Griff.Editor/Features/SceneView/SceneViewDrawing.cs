@@ -569,7 +569,7 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
             var box = Cells(Math.Min(fx, tx), Math.Min(fy, ty), Math.Max(fx, tx), Math.Max(fy, ty));
             dc.DrawGeometry(style.Faded(color, 0.2), outline, box);
         }
-        else if (input.HoverCell is var (hx, hy))
+        else if (input.HoverCell is var (hx, hy) && model.IsPainting)
         {
             if (model.TileTool == TileTool.Fill && input.Drag == SceneDrag.None)
             {

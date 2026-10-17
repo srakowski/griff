@@ -12,6 +12,7 @@ description: "Painting tilemaps in the Scene view, tilesets, layers, autotiles a
 - The tabs along the palette's top switch between the map's tilesets. Its **+** tab (or **Art → Add Tileset to Tilemap**) adds another from the project's images: a picture painted in Griff keeps its own tiles across and down, and any other is cut into tiles the size of the first tileset's.
 - The buttons under the tools switch between the map's layers, and **+ Layer** adds one (see [Layers](/docs/tilemaps/#layers)). The layers not being painted fade back.
 - Paint (or drag a rectangle) past the left or top edge and the map grows that way; its layers (and anything else inside it) stay where they are.
+- The **Select** tool (V), first under the palette, is the cursor: with it picked, clicks and drags select and move things as they do with no tilemap selected (the map itself too, with its handles), and the palette stays up to pick a painting tool again. The tool stays as you leave it while you select other things, so a tilemap selected again with Select picked doesn't paint until you pick the Brush, Rectangle or Fill (the editor starts on the Brush).
 - Press Esc (or select something else in the Hierarchy) to stop painting.
 
 ## Several tilesets

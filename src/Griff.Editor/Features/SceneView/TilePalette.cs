@@ -9,6 +9,7 @@ namespace Griff.Editor.Features.SceneView;
 /// tilesets (<see cref="Tilesets"/>, the one <see cref="Shown"/> picked out), that tileset's tiles in rows of eight
 /// (scrolled down <see cref="Scroll"/> rows when they don't all fit), the tools (<see cref="Tool"/>), and a button for each
 /// of the map's layers (<see cref="Layers"/>). Picking a tile, tool, tileset or layer here is the same as clicking it.
+/// With the Select tool picked it stays up, but clicks on the map select and move entities instead of painting.
 /// Painting itself is <see cref="SceneViewModel"/>'s (PaintTile, PaintRectangle, FillTiles), and Art > Add Tileset to
 /// Tilemap is the palette's + tab.
 /// </summary>
@@ -104,7 +105,7 @@ public sealed class TilePalette : ObservableObject
         set => _model.BrushTile = value;
     }
 
-    /// <summary>The tools under the tiles, in order: Brush (B), Rectangle (R) and Fill (G).</summary>
+    /// <summary>The tools under the tiles, in order: Select (V), Brush (B), Rectangle (R) and Fill (G).</summary>
     public IReadOnlyList<TileTool> Tools => Enum.GetValues<TileTool>();
 
     /// <summary>The tool picked (see <see cref="SceneViewModel.TileTool"/>).</summary>
@@ -125,6 +126,7 @@ public sealed class TilePalette : ObservableObject
     {
         TileTool.Rectangle => "Rectangle: drag a box to fill · Shift erase · Ctrl pick · [ ] tile · Esc done",
         TileTool.Fill => "Fill: click an area to fill it · Shift erase · Ctrl pick · [ ] tile · Esc done",
+        TileTool.Select => "Select: click or drag to select and move · B R G paint again · Esc done",
         _ => "Brush: drag to paint · Shift erase · Ctrl pick · [ ] tile · Esc done",
     };
 
@@ -144,6 +146,7 @@ public sealed class TilePalette : ObservableObject
     /// <summary>The key that picks a tool in the Scene view.</summary>
     public static char KeyOf(TileTool tool) => tool switch
     {
+        TileTool.Select => 'V',
         TileTool.Rectangle => 'R',
         TileTool.Fill => 'G',
         _ => 'B',

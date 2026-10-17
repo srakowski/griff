@@ -9,6 +9,11 @@
 
 - The **Assets** panel shows the folders as a tree on the left and the picked folder's files as tiles on the right, pictures as thumbnails and everything else with an icon for its kind. Double-clicking, dragging into the scene or onto a folder, and right-clicking work on the tiles as they did on the rows, a slider sizes the tiles, and the **Tree** button brings back the one tree.
 - **Expand All** and **Collapse All** buttons on every panel with a tree or sections that fold: the Hierarchy, the Inspector (every component and subheading), the Assets panel (every folder, in either view) and the script editor (every block of code).
+- With a tilemap selected, the Scene view's new **Select** tool (V), first under the tile palette, is the cursor: click and drag to select and move things without painting, then pick the Brush (B) to paint again. The tool stays as you left it.
+- Panel tabs can be dragged along their group to reorder them, and closed with the **×** on the tab (or a middle-click, or the tab's right-click menu). **View > Panels** brings any panel back, and saved layouts and **Reset Layout** remember the order and which panels are closed.
+- A panel can go among the documents: drop its tab on the Scene and Game tabs or in the middle of the scene, and it's a tab beside the scene, prefab and script tabs, filling the whole area (a big **Tables** panel, say). Drag it out again to put it back; layouts remember it.
+- A table can open in a tab of its own beside the scene: **Data > Open Table in Tab**, or turn on **Data > Open Tables in Tabs** so opening or double-clicking a table does it. Each tab is the Tables panel's spreadsheet for that table, and the Data menu works on whichever table you used last. The **Tables** panel still works as before.
+- The **Sprite Painter**, **Sound Maker**, **Clip Editor**, **Move List** and **Dialogue Editor** open as tabs beside the scene instead of windows: a tab for each picture or sound, a dot on a tab with unsaved changes, and the same "save changes?" question as a scene when you close one.
 
 ## 0.1.0-alpha.9 - 2026-10-17
 
@@ -31,10 +36,6 @@
 - **Tooltip** shows a box by the mouse after a short delay, or writes into a Text you name, while the mouse rests on an entity. A script can set what it says, or it can show an output.
 - **Game > New Random Numbers Each Game** starts each Play with different random numbers, instead of the same ones every Play until the editor restarts.
 - **Game > Play Fullscreen** (Alt+Enter) plays the game over the whole screen, and switches back to the Game tab without stopping the game. F6, F10 and Shift+F5 now also work while a game running in the Game tab has the keyboard.
-- Panel tabs can be dragged along their group to reorder them, and closed with the **×** on the tab (or a middle-click, or the tab's right-click menu). **View > Panels** brings any panel back, and saved layouts and **Reset Layout** remember the order and which panels are closed.
-- A panel can go among the documents: drop its tab on the Scene and Game tabs or in the middle of the scene, and it's a tab beside the scene, prefab and script tabs, filling the whole area (a big **Tables** panel, say). Drag it out again to put it back; layouts remember it.
-- A table can open in a tab of its own beside the scene: **Data > Open Table in Tab**, or turn on **Data > Open Tables in Tabs** so opening or double-clicking a table does it. Each tab is the Tables panel's spreadsheet for that table, and the Data menu works on whichever table you used last. The **Tables** panel still works as before.
-- The **Sprite Painter**, **Sound Maker**, **Clip Editor**, **Move List** and **Dialogue Editor** open as tabs beside the scene instead of windows: a tab for each picture or sound, a dot on a tab with unsaved changes, and the same "save changes?" question as a scene when you close one.
 - For agents (MCP): clicking a button by its label finds a button whose label is on the button itself, **Scene_Open** takes a scene's name, and **Edit_Undo** and **Edit_Redo** can name the scene or prefab to undo in.
 
 ## 0.1.0-alpha.7 - 2026-10-16

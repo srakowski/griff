@@ -269,4 +269,47 @@ public class SceneTilePaintTests
             Assert.Equal(before, map.Entity.Transform.Position);
         });
     }
+
+    [Fact]
+    public void SelectTool_LetsClicksSelectAndMove_AndPaintsNothing()
+    {
+        EditorHost.Run(services =>
+        {
+            var (document, selection, model, map) = Open(services);
+            var box = document.Scene.Entities.Single(e => e.Name == "Box");
+            box.Transform.Position = new Vector3(10, 10, 0);
+            var palette = services.GetRequiredService<TilePalette>();
+            var handles = services.GetRequiredService<SceneViewControl>().Handles;
+            Assert.True(model.IsPainting);
+            Assert.Null(handles.HandleFrame());
+
+            // The cursor: the palette stays up, the map's handles show, and a click selects what's under it.
+            palette.Tool = TileTool.Select;
+            Assert.Same(map, model.PaintTarget);
+            Assert.False(model.IsPainting);
+            Assert.True(palette.IsShowing);
+            Assert.StartsWith("Select:", palette.Hint);
+            Assert.NotNull(handles.HandleFrame());
+            var tiles = map.Tiles.ToList();
+            Assert.Same(box, model.SelectAt(new Vector2(10, 10)));
+            Assert.Same(box, selection.Entity);
+            Assert.Equal(tiles, map.Tiles);
+
+            // Selecting the map again keeps the cursor, so a drag moves the map rather than painting it.
+            Assert.Same(map.Entity, model.SelectAt(new Vector2(0.5f, -0.5f)));
+            Assert.Equal(TileTool.Select, model.TileTool);
+            Assert.False(model.IsPainting);
+            var move = model.BeginMove();
+            Assert.NotNull(move);
+            move.To(new Vector2(2, 0), snap: false);
+            move.End();
+            Assert.Equal(new Vector3(2, 0, 0), map.Entity!.Transform.Position);
+            Assert.Equal(tiles, map.Tiles);
+
+            // Picking the Brush again paints.
+            palette.Tool = TileTool.Brush;
+            Assert.True(model.IsPainting);
+            Assert.Null(handles.HandleFrame());
+        });
+    }
 }

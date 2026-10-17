@@ -6,7 +6,7 @@ chapter: Three tools | Under the tile palette
 select: Walls
 look: 22, -7, 8
 say: The Shooter's level is a tilemap of wall tiles, painted top-down. While it's selected, the Scene view paints it.
-explain: tiles:Brush | Brush, B | Under the palette there are now three tools. The Brush paints the cells you drag over, as before.
+explain: tiles:Brush | Brush, B | Under the palette there are three painting tools. The Brush paints the cells you drag over, as before.
 explain: tiles:Rectangle | Rectangle, R | The Rectangle fills a whole box at once,
 explain: tiles:Fill | Fill, G | and Fill fills an area, like a paint bucket. B, R and G pick them from the keyboard, the same keys as in the Sprite Painter.
 

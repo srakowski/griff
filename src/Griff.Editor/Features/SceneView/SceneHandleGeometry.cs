@@ -50,7 +50,7 @@ internal sealed class SceneHandleGeometry(SceneViewport viewport, SceneViewModel
     /// </summary>
     public Point[]? HandleFrame()
     {
-        if (Document is null || selection.Entity is not { } entity || entity.Scene != Document.Scene || model.PaintTarget is not null)
+        if (Document is null || selection.Entity is not { } entity || entity.Scene != Document.Scene || model.IsPainting)
             return null;
         if (SceneViewModel.Outline(entity) is { } corners)
             return corners.Select(c => viewport.ToScreen(c)).ToArray();
@@ -210,7 +210,7 @@ internal sealed class SceneHandleGeometry(SceneViewport viewport, SceneViewModel
     /// </summary>
     public List<PathHandle> PathHandles()
     {
-        if (Document is not { } document || model.PaintTarget is not null)
+        if (Document is not { } document || model.IsPainting)
             return [];
         var handles = model.PathPoints().Select(p => new PathHandle(p.Key, viewport.ToScreen(p.World), p, null, p.Index)).ToList();
         if (DraggingPathPoint || selection.Entity is not { } primary || primary.Scene != document.Scene)

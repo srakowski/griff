@@ -117,12 +117,13 @@ internal sealed class SceneViewPicture(SceneViewport viewport, SceneViewModel mo
         }
     }
 
-    // Hidden entities are left out; while a layer of a map is painted, the map's other layers fade back.
+    // Hidden entities are left out; while a layer of a map is painted (not with the Select tool), the map's other layers
+    // fade back.
     private float Opacity(Entity entity)
     {
         if (entity.IsHiddenInHierarchy)
             return 0;
-        return model.PaintTarget is { } painting && entity.GetComponent<Tilemap>() is { } map && map != painting && map.BaseMap == painting.BaseMap
+        return model.IsPainting && model.PaintTarget is { } painting && entity.GetComponent<Tilemap>() is { } map && map != painting && map.BaseMap == painting.BaseMap
             ? OtherLayerOpacity
             : 1;
     }

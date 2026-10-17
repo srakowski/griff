@@ -10,6 +10,12 @@ namespace Griff.Editor.Features.SceneView;
 /// <summary>What dragging on a selected tilemap in the Scene view does.</summary>
 public enum TileTool
 {
+    /// <summary>
+    /// Don't paint: clicks and drags select and move entities as they do with no tilemap selected, while the palette stays
+    /// up to pick a painting tool again.
+    /// </summary>
+    Select,
+
     /// <summary>Paint each cell the cursor passes over.</summary>
     Brush,
 
@@ -22,18 +28,30 @@ public enum TileTool
 
 public sealed partial class SceneViewModel
 {
-    private TileTool _tileTool;
+    private TileTool _tileTool = TileTool.Brush;
     private int _brushTile;
 
     /// <summary>
-    /// What painting on the selected tilemap does: paint cell by cell (Brush, the default), fill a box (Rectangle) or
-    /// fill an area (Fill). B, R and G pick it in the Scene view while a tilemap is selected.
+    /// What clicking and dragging on the selected tilemap in the Scene view does: paint cell by cell (Brush, the
+    /// default), fill a box (Rectangle), fill an area (Fill), or select and move entities as usual (Select, the cursor).
+    /// V, B, R and G pick it in the Scene view while a tilemap is selected. It stays as it's left while other things are
+    /// selected, so a tilemap selected again with Select picked doesn't paint until a painting tool is picked.
     /// </summary>
     public TileTool TileTool
     {
         get => _tileTool;
-        set => SetProperty(ref _tileTool, value);
+        set
+        {
+            if (SetProperty(ref _tileTool, value))
+                OnPropertyChanged(nameof(IsPainting));
+        }
     }
+
+    /// <summary>
+    /// True while clicks and drags in the Scene view paint: there's a tilemap to paint (<see cref="PaintTarget"/>) and
+    /// the <see cref="TileTool"/> isn't Select. Otherwise they select, move and work the handles as usual.
+    /// </summary>
+    public bool IsPainting => PaintTarget is not null && TileTool != TileTool.Select;
 
     /// <summary>
     /// The tile painting puts down (picked from the Scene view's palette): numbered from 0 in the first tileset, and from
@@ -196,7 +214,8 @@ public sealed partial class SceneViewModel
 
     /// <summary>
     /// The tilemap the Scene view paints: the selected entity's, when it's the only one selected, in the shown scene,
-    /// enabled and not hidden. Null otherwise (then the Scene view selects and moves as usual).
+    /// enabled and not hidden. Null otherwise (then the Scene view selects and moves as usual). The palette shows while
+    /// there is one; whether clicks paint it is <see cref="IsPainting"/> (not with the Select tool).
     /// </summary>
     public Tilemap? PaintTarget =>
         selection.Entities is [var entity] && entity.Scene == sceneDocuments.Scene?.Scene && IsShown(entity)

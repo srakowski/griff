@@ -104,7 +104,10 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
     /// <summary>Whether painting now erases: the stroke's or rectangle's way, or Shift held.</summary>
     public bool Erasing => Stroke?.Erasing ?? (RectangleFrom is not null ? RectangleErases : Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
 
+    // The tilemap whose palette shows, and the one clicks paint (none with the Select tool).
     private Tilemap? PaintTarget => model.PaintTarget;
+
+    private Tilemap? Painting => model.IsPainting ? model.PaintTarget : null;
 
     private TilePaletteLayout Layout(Tilemap tilemap) => TilePaletteLayout.Of(palette, tilemap, style.Measure);
 
@@ -141,7 +144,11 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
         {
             BeginDrag(SceneDrag.Pan, position);
         }
-        else if (e.ChangedButton == MouseButton.Left && PaintTarget is { } tilemap)
+        else if (e.ChangedButton == MouseButton.Left && PaintTarget is { } map && ClickPalette(map, position))
+        {
+            // A tile, tool, tab or layer picked from the palette.
+        }
+        else if (e.ChangedButton == MouseButton.Left && Painting is { } tilemap)
         {
             BeginPaint(tilemap, position);
         }
@@ -224,7 +231,7 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
     public void Move(MouseEventArgs e)
     {
         var position = e.GetPosition(view);
-        if (PaintTarget is { } tilemap && Drag is SceneDrag.None or SceneDrag.Paint)
+        if (Painting is { } tilemap && Drag is SceneDrag.None or SceneDrag.Paint)
         {
             UpdateHoverCell(tilemap, position);
             if (Stroke is not null)
@@ -318,7 +325,7 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
             model.SelectInBox(viewport.ToWorld(DragStart), viewport.ToWorld(position), _boxAdds);
         else if (Drag == SceneDrag.Move && _pressed is { } pressed)
             selection.Select(pressed);
-        else if (Drag == SceneDrag.Paint && RectangleFrom is var (fromX, fromY) && PaintTarget is { } tilemap && CellUnder(tilemap, position) is var (toX, toY))
+        else if (Drag == SceneDrag.Paint && RectangleFrom is var (fromX, fromY) && Painting is { } tilemap && CellUnder(tilemap, position) is var (toX, toY))
             model.PaintRectangle(fromX, fromY, toX, toY, RectangleErases);
 
         if (Drag != SceneDrag.None)
@@ -333,24 +340,21 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
 
     public void Leave()
     {
-        if (HoverCell is not null && Drag != SceneDrag.Paint)
-        {
-            HoverCell = null;
-            view.InvalidateVisual();
-        }
+        if (Drag != SceneDrag.Paint)
+            ClearHoverCell();
     }
 
     // ----- Tile painting -----
 
-    // Click the palette to pick a tile or a tool, Ctrl+click the map to pick the tile under the cursor, otherwise use the
-    // tool (erasing with Shift): drag the brush, drag out a rectangle, or click to fill. Each is one undo step.
-    private void BeginPaint(Tilemap tilemap, Point position)
+    // A click on the palette picks a tile, a tool, a tileset or a layer (with any tool, Select too). False off it.
+    private bool ClickPalette(Tilemap tilemap, Point position)
     {
         var layout = Layout(tilemap);
         if (layout.ToolAt(position) is { } tool)
         {
             palette.Tool = tool;
-            return;
+            ClearHoverCell();
+            return true;
         }
 
         if (layout.LayerAt(position) is { } layer)
@@ -359,26 +363,34 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
                 palette.ShowLayer(layer);
             else
                 palette.AddLayer();
-            return;
+            return true;
         }
 
         if (layout.AddTab.Contains(position))
         {
             ShowAddTilesetMenu(layout.AddTab);
-            return;
+            return true;
         }
 
         if (layout.TabAt(position) is { } tab)
         {
             palette.ShowTileset(tab);
-            return;
+            return true;
         }
 
         if (layout.TileAt(position, palette.BrushTile) is { } chosen)
         {
             palette.Pick(chosen);
-            return;
+            return true;
         }
+
+        return false;
+    }
+
+    // Ctrl+click the map to pick the tile under the cursor, otherwise use the tool (erasing with Shift): drag the brush,
+    // drag out a rectangle, or click to fill. Each is one undo step.
+    private void BeginPaint(Tilemap tilemap, Point position)
+    {
 
         if (CellUnder(tilemap, position) is not var (x, y))
             return;
@@ -437,6 +449,15 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
             HoverCell = cell;
             view.InvalidateVisual();
         }
+    }
+
+    // No cell outlined (the mouse left, or the tool became Select).
+    private void ClearHoverCell()
+    {
+        if (HoverCell is null)
+            return;
+        HoverCell = null;
+        view.InvalidateVisual();
     }
 
     // The + tab lists the project's images to add as a tileset, as Art > Add Tileset to Tilemap does.
@@ -506,16 +527,18 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
             return;
         }
 
-        // While painting a tilemap (which hides the handles), B, R and G pick the brush, rectangle and fill, as in the
-        // Sprite Painter.
-        if (e.Key is Key.B or Key.R or Key.G && Keyboard.Modifiers == ModifierKeys.None && Drag == SceneDrag.None && PaintTarget is not null)
+        // While a tilemap is selected (painting hides the handles), B, R and G pick the brush, rectangle and fill, as in
+        // the Sprite Painter, and V the cursor, to select and move things without painting.
+        if (e.Key is Key.V or Key.B or Key.R or Key.G && Keyboard.Modifiers == ModifierKeys.None && Drag == SceneDrag.None && PaintTarget is not null)
         {
             palette.Tool = e.Key switch
             {
+                Key.V => TileTool.Select,
                 Key.R => TileTool.Rectangle,
                 Key.G => TileTool.Fill,
                 _ => TileTool.Brush,
             };
+            ClearHoverCell();
             e.Handled = true;
             return;
         }

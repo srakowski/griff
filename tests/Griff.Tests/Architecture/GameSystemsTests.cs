@@ -35,7 +35,7 @@ public sealed class GameSystemsTests
         { "Carrying", "Dragging" }, { "Pickups", "Items" }, { "Checkpoints", "Levels" }, { "Doors", "Levels" },
         { "Dialogues", "Levels" }, { "Switches", "Switches" }, { "Bouncers", "Movement" }, { "Crumbles", "Movement" },
         { "TouchDamage", "Combat" }, { "Health", "Combat" }, { "Respawns", "Levels" }, { "Bars", "HUD" }, { "Stars", "HUD" },
-        { "Counters", "HUD" }, { "TextOutputs", "HUD" }, { "Fade", "Scenes" }, { "ScreenFlash", "Effects" },
+        { "Counters", "HUD" }, { "Tooltips", "HUD" }, { "TextOutputs", "HUD" }, { "Fade", "Scenes" }, { "ScreenFlash", "Effects" },
         { "Destroys", "Lifetimes" }, { "SceneChange", "Scenes" }, { "Rooms", "Atmosphere" }, { "CameraControls", "Views" }, { "Followers", "Effects" },
         { "LateScripts", "Scripts" }, { "Layouts", "HUD" }, { "ScreenAnchors", "HUD" }, { "Trails", "Effects" }, { "Lights", "Atmosphere" },
         { "Weather", "Weather" }, { "PresentPrompts", "Panels" }, { "SoundSources", "Atmosphere" },

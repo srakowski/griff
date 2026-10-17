@@ -5,7 +5,7 @@ project: Empty | Text Wrap
 chapter: Wrapping to a width | Text > Wrap Width
 create: Text
 rename: Contract
-set: Transform.Position = -4, 3
+set: Transform.Position = -4, 3, 0
 set: Text.Size = 0.5
 set: Text.Value = Deliver forty crates of copper wire to the north dock before the end of the third shift. Pay on delivery.
 look: 0, 1, 5

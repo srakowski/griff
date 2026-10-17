@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+- Camera Controls pans with four new built-in actions, **PanUp**, **PanDown**, **PanLeft** and **PanRight** (WASD, the arrows and the D-pad as before), so **Game > Controls** and players can rebind them, and a game can take W or S for something else.
+
 ## 0.1.0-alpha.8 - 2026-10-17
 
 - **Camera Controls**: put it on the camera and the player pans with the arrow keys or WASD, drags the world with the middle or right mouse button, zooms toward the mouse with the wheel between a smallest and largest size, and can pan at the screen's edge. **Stay Inside** keeps the view inside a level, even as the level grows. No code needed.

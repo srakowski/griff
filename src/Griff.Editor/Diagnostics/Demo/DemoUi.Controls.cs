@@ -75,6 +75,9 @@ internal sealed partial class DemoUi
     public async Task PickAction(string name)
     {
         var window = OpenControls;
+        // The list only makes rows for what it shows, so an action further down is scrolled to first.
+        if (ActionItem(window, name) is null && window.Model.Actions.FirstOrDefault(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is { } row)
+            Descendants<ListBox>(window).FirstOrDefault(l => l.Items.Contains(row))?.ScrollIntoView(row);
         var item = await WaitFor(() => ActionItem(window, name), $"{name} in the actions");
         await Click(item);
         if (window.Model.Selected?.Name.Equals(name, StringComparison.OrdinalIgnoreCase) != true)

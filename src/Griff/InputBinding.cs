@@ -99,5 +99,10 @@ public static class InputActions
             ["Lane2"] = [Key.F, Key.Down, GamepadButton.DPadDown, GamepadButton.A],
             ["Lane3"] = [Key.J, Key.Up, GamepadButton.DPadUp, GamepadButton.Y],
             ["Lane4"] = [Key.K, Key.Right, GamepadButton.DPadRight, GamepadButton.B],
+            // Camera Controls' panning: WASD, the arrows and the D-pad, each way an action so a game can take W for itself.
+            ["PanUp"] = [Key.W, Key.Up, GamepadButton.DPadUp],
+            ["PanDown"] = [Key.S, Key.Down, GamepadButton.DPadDown],
+            ["PanLeft"] = [Key.A, Key.Left, GamepadButton.DPadLeft],
+            ["PanRight"] = [Key.D, Key.Right, GamepadButton.DPadRight],
         };
 }

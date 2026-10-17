@@ -255,7 +255,8 @@ public enum CameraDrag
 
 /// <summary>
 /// Pan and zoom with no code, for management, building and strategy games: put it on the camera, in place of a
-/// <see cref="Follow"/>. The arrow keys and WASD (or a controller's stick) pan, a mouse button drags the world along, the
+/// <see cref="Follow"/>. The PanUp, PanDown, PanLeft and PanRight actions (WASD, the arrow keys and the D-pad, rebound in
+/// Game &gt; Controls or by the player) and a controller's stick pan, a mouse button drags the world along, the
 /// wheel zooms toward the mouse between <see cref="ZoomMin"/> and <see cref="ZoomMax"/>, and the mouse at the screen's
 /// edge can pan too. With <see cref="StayInside"/> the view never goes past the level's edges, however big it grows. The
 /// wheel and drags are the HUD's while the mouse is over it (anything pinned with a <see cref="ScreenAnchor"/>, an open
@@ -275,7 +276,10 @@ public sealed class CameraControls : Component
     /// </summary>
     public float PanSpeed { get; set; } = 1;
 
-    /// <summary>Whether the arrow keys, WASD, the D-pad and the left stick pan.</summary>
+    /// <summary>
+    /// Whether the PanUp, PanDown, PanLeft and PanRight input actions (WASD, the arrow keys and the D-pad unless the game
+    /// or the player rebinds them) and the left stick pan.
+    /// </summary>
     public bool PanWithKeys { get; set; } = true;
 
     /// <summary>The mouse button that drags the world along with the mouse, or None.</summary>

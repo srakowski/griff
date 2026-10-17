@@ -50,7 +50,7 @@ internal sealed class ViewSystem : GameSystem
         var mouse = input.MouseWorld;
         var mouseFree = input.IsMouseInView && !mouseOnHud;
 
-        var pan = controls.PanWithKeys ? input.Move : Vector2.Zero;
+        var pan = controls.PanWithKeys ? KeyPan(input) : Vector2.Zero;
         if (controls.EdgeScroll && input.IsMouseInView && controls.HeldAt is null)
         {
             // Where the mouse is across the view, from -1 to 1 each way; the edge is its outer 3%.
@@ -86,6 +86,16 @@ internal sealed class ViewSystem : GameSystem
             position = Follow.Clamp(position, bounds, new Vector2(size * aspect, size));
         if (position != start)
             Follow.SetWorld(transform, position);
+    }
+
+    // The way the PanUp, PanDown, PanLeft and PanRight actions point, or else the left stick's (keys win while held, as
+    // they do for Input.Move), never longer than 1.
+    private static Vector2 KeyPan(IInput input)
+    {
+        var x = (input.IsDown("PanRight") ? 1f : 0f) - (input.IsDown("PanLeft") ? 1f : 0f);
+        var y = (input.IsDown("PanUp") ? 1f : 0f) - (input.IsDown("PanDown") ? 1f : 0f);
+        var pan = new Vector2(x != 0 ? x : input.LeftStick.X, y != 0 ? y : input.LeftStick.Y);
+        return pan.LengthSquared() > 1 ? Vector2.Normalize(pan) : pan;
     }
 
     // Whether the drag button is down (or was pressed), as `button` says of each mouse button.

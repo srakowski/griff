@@ -62,6 +62,55 @@ public class CameraControlsTests
     }
 
     [Fact]
+    public void PanUp_RebindToI_PansWithIAndNotW()
+    {
+        var game = CreateGame();
+        _input.Rebind("PanUp", Key.I);
+
+        _input.SetKey(Key.W, true);
+        for (var i = 0; i < 30; i++)
+            Tick(game);
+        Near(Vector2.Zero, At);
+
+        _input.SetKey(Key.W, false);
+        _input.SetKey(Key.I, true);
+        for (var i = 0; i < 30; i++)
+            Tick(game);
+        Near(new Vector2(0, 5), At);
+    }
+
+    [Fact]
+    public void TheProjectsControls_TakingWAndSOffThePanActions_FreesThem()
+    {
+        var game = CreateGame();
+        _input.UseControls(new Dictionary<string, IReadOnlyList<InputBinding>>
+        {
+            ["PanUp"] = [Key.Up, GamepadButton.DPadUp],
+            ["PanDown"] = [Key.Down, GamepadButton.DPadDown],
+        });
+
+        _input.SetKey(Key.W, true);
+        _input.SetKey(Key.D, true);
+        for (var i = 0; i < 30; i++)
+            Tick(game);
+
+        // D still pans right; W does nothing.
+        Near(new Vector2(5, 0), At);
+    }
+
+    [Fact]
+    public void TheLeftStick_StillPans()
+    {
+        var game = CreateGame();
+        for (var i = 0; i < 30; i++)
+        {
+            _input.SetGamepad([], new Vector2(-1, 0));
+            Tick(game);
+        }
+        Near(new Vector2(-5, 0), At);
+    }
+
+    [Fact]
     public void TheWheel_ZoomsTowardTheMouse_BetweenItsLimits()
     {
         var game = CreateGame();

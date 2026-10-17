@@ -337,6 +337,7 @@ public sealed partial class ActionRow : ObservableObject
         "pause" => "Panels that Open On Pause (pause menus) open and close with it.",
         "endturn" => "A Turn Order ends a person's turn with it.",
         "lane1" or "lane2" or "lane3" or "lane4" => $"Note Lanes press their lane {Name[^1]} with it (a rhythm game's lanes, the first on the left).",
+        "panup" or "pandown" or "panleft" or "panright" => $"Camera Controls (with Pan With Keys) pans the camera {Name[3..].ToLowerInvariant()} with it.",
         _ => "Griff's components use it.",
     };
 

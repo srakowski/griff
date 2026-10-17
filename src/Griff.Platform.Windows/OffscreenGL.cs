@@ -16,6 +16,8 @@ namespace Griff.Platform.Windows;
 /// </summary>
 public sealed class OffscreenGL : IDisposable
 {
+    private static readonly Lock Making = new();
+
     private readonly IntPtr _window, _dc, _context, _opengl32;
     private readonly uint _framebuffer, _color;
 
@@ -33,33 +35,37 @@ public sealed class OffscreenGL : IDisposable
         (Width, Height) = (width, height);
         // opengl32.dll is loaded before the pixel format is chosen: GDI may otherwise choose before the driver is loaded, and a
         // driver installed as the system's software OpenGL (Mesa on a machine with no GPU) then can't make a context the first
-        // time in a process. A driver still starting up can refuse one too, so it gets a few tries, each on a new window (a
-        // window's pixel format is set once).
+        // time in a process. A driver still starting up or busy can refuse one too (Mesa on a build server does, now and then),
+        // so it gets tries for a few seconds, each on a new window (a window's pixel format is set once) and each waiting longer.
         _opengl32 = LoadLibrary("opengl32.dll");
         var problem = "";
-        for (var attempt = 1; ; attempt++)
+        // Contexts are made one at a time: Mesa's software OpenGL can refuse pixel formats set on several threads at once.
+        lock (Making)
         {
-            _window = CreateWindowEx(0, "static", "Griff", 0x80000000, 0, 0, width, height, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
-            _dc = GetDC(_window);
-            var format = new PixelFormat { Size = (ushort)Marshal.SizeOf<PixelFormat>(), Version = 1, Flags = 0x4 | 0x20 | 0x1, ColorBits = 32, AlphaBits = 8, DepthBits = 24, StencilBits = 8 };
-            var chosen = ChoosePixelFormat(_dc, ref format);
-            if (chosen == 0 || !SetPixelFormat(_dc, chosen, ref format))
-                problem = $"no pixel format (chose {chosen}, error {Marshal.GetLastPInvokeError()})";
-            else if ((_context = wglCreateContext(_dc)) == IntPtr.Zero)
-                problem = $"no context ({Describe(_dc, chosen)})";
-            else if (!wglMakeCurrent(_dc, _context))
-                problem = $"the context couldn't be made current ({Describe(_dc, chosen)})";
-            else
-                break;
+            for (var attempt = 1; ; attempt++)
+            {
+                _window = CreateWindowEx(0, "static", "Griff", 0x80000000, 0, 0, width, height, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+                _dc = GetDC(_window);
+                var format = new PixelFormat { Size = (ushort)Marshal.SizeOf<PixelFormat>(), Version = 1, Flags = 0x4 | 0x20 | 0x1, ColorBits = 32, AlphaBits = 8, DepthBits = 24, StencilBits = 8 };
+                var chosen = ChoosePixelFormat(_dc, ref format);
+                if (chosen == 0 || !SetPixelFormat(_dc, chosen, ref format))
+                    problem = $"no pixel format (chose {chosen}, error {Marshal.GetLastPInvokeError()})";
+                else if ((_context = wglCreateContext(_dc)) == IntPtr.Zero)
+                    problem = $"no context ({Describe(_dc, chosen)})";
+                else if (!wglMakeCurrent(_dc, _context))
+                    problem = $"the context couldn't be made current ({Describe(_dc, chosen)})";
+                else
+                    break;
 
-            if (_context != IntPtr.Zero)
-                wglDeleteContext(_context);
-            _context = IntPtr.Zero;
-            _ = ReleaseDC(_window, _dc);
-            DestroyWindow(_window);
-            if (attempt == 3)
-                throw new InvalidOperationException($"No OpenGL context could be made: {problem}.");
-            Thread.Sleep(100);
+                if (_context != IntPtr.Zero)
+                    wglDeleteContext(_context);
+                _context = IntPtr.Zero;
+                _ = ReleaseDC(_window, _dc);
+                DestroyWindow(_window);
+                if (attempt == 10)
+                    throw new InvalidOperationException($"No OpenGL context could be made: {problem}.");
+                Thread.Sleep(100 * attempt);
+            }
         }
 
         GL = GL.GetApi(name =>

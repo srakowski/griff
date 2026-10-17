@@ -29,6 +29,8 @@ public partial class MainWindow : ChromeWindow
         Features.Scripts.ScriptTabs scriptTabs,
         Features.Prefabs.PrefabTabs prefabTabs,
         Features.Debugging.Debugger debugger,
+        PlayShortcuts playShortcuts,
+        FullscreenPlay fullscreen,
         Core.EditorWindow editorWindow)
     {
         InitializeComponent();
@@ -77,6 +79,12 @@ public partial class MainWindow : ChromeWindow
             var list = shared.Select(s => s.Command).ToList();
             InputBindings.Add(new KeyBinding(list.Count == 1 ? list[0] : new FirstThatCanRun(list), shared.First().Gesture));
         }
+
+        // Over a running game the Game menu's shortcuts come first (the game takes the keys): attached now, before any game
+        // listens to the window. FullscreenPlay, made with the window, moves the Game tab's view to a window filling the
+        // screen and back as PlayMode.IsFullscreen says, and attaches them there too.
+        playShortcuts.Attach(this);
+        _ = fullscreen;
 
         panelHost.Attach(this, DockRoot, DocumentArea);
     }

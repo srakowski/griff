@@ -150,6 +150,58 @@ public sealed class PlayMode : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Whether the game plays over the whole of the screen the editor is on, with no border, rather than in the Game tab
+    /// (Game &gt; Play Fullscreen, Alt+Enter, or the game's own <c>Game.Fullscreen</c>, which follows it). Only while
+    /// playing, and not while a script stands at a line: Stop, a breakpoint or a pause on an error bring the game back
+    /// to its tab, still playing (or paused) as it was.
+    /// </summary>
+    public bool IsFullscreen
+    {
+        get => _fullscreen;
+        set
+        {
+            value &= IsPlaying && _held is null;
+            var changed = value != _fullscreen;
+            _fullscreen = value;
+            // The game's own setting says what's showing, so a Fullscreen toggle in its options menu does too.
+            if (Game is { } game)
+                game.Fullscreen = value;
+            if (!changed)
+                return;
+            _logger.LogInformation("Fullscreen {On}", value);
+            if (value)
+                _status.Show("Playing fullscreen: Alt+Enter brings the game back to the editor");
+            OnPropertyChanged();
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    private bool _fullscreen;
+
+    // Where the Game tab's game takes its keys from, when not the editor's window: the window it's fullscreen in.
+    private UIElement? _keySource;
+
+    /// <summary>
+    /// Has the Game tab's game take its keys from <paramref name="source"/> (the window it's fullscreen in), or, given null,
+    /// from the editor's window again.
+    /// </summary>
+    internal void TakeKeysFrom(UIElement? source)
+    {
+        _keySource = source;
+        if (_runner is { } runner)
+            runner.KeySource = KeySource;
+    }
+
+    private UIElement KeySource => _keySource ?? (UIElement?)_editorWindow.Main ?? Surface;
+
+    /// <summary>
+    /// Whether a key pressed now goes to the Game tab's game: it's playing, not paused, and nothing is being typed into
+    /// (a field, the code). Then only the Game menu's shortcuts reach past it (see <see cref="PlayShortcuts"/>).
+    /// </summary>
+    internal bool GameTakesKeys => _runner is { IsPaused: false } && _held is null && NotTypingCode() &&
+                                   Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase;
+
+    /// <summary>
     /// The drawings to debug with that are on (see <see cref="IDebugDrawing"/>), by name: a fighting game's "Hitboxes"
     /// (Game &gt; Show Hitboxes).
     /// </summary>
@@ -313,6 +365,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         if (_runner is not { } runner)
             return;
 
+        IsFullscreen = false;
         LetGo(abandon: true);
         _runner = null;
         _pendingSeek = null;
@@ -489,8 +542,13 @@ public sealed class PlayMode : ObservableObject, IDisposable
         game.Stepped += OnStepped;
         game.QuitRequested += OnGameQuit;
 
-        // Keys come from the whole window (or, with no window, as in tests, the game's own view).
-        _runner = new GameRunner(game, Surface, (UIElement?)_editorWindow.Main ?? Surface) { IsPaused = paused, TakesKeys = NotTypingCode };
+        // Its Fullscreen says whether it's showing fullscreen (not what it last saved: Play starts in the Game tab), and
+        // setting it goes fullscreen and back.
+        game.Fullscreen = _fullscreen;
+        game.FullscreenChanged += OnGameFullscreenChanged;
+        // Keys come from the whole window (or, with no window, as in tests, the game's own view), or the window it's
+        // fullscreen in.
+        _runner = new GameRunner(game, Surface, KeySource) { IsPaused = paused, TakesKeys = NotTypingCode };
         // The editor's own hooks in its loop, which an exported game's has none of: the debugger, and where an agent points.
         _pointer = new PlaytestPointer();
         _runner.Loop.Add(Debugging.DebuggerLoopHooks.Instance);
@@ -615,6 +673,8 @@ public sealed class PlayMode : ObservableObject, IDisposable
     // Holds the game in the middle of its frame, on the editor's own loop, until it's let go.
     private bool Hold(string status)
     {
+        // The editor shows the line it stands at, so a fullscreen game goes back to its tab.
+        IsFullscreen = false;
         SetPaused(true);
         var frame = _held = new DispatcherFrame();
         _abandonHeld = false;
@@ -819,6 +879,18 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _logger.LogInformation("Game loaded another scene");
     }
 
+    // A script or a Fullscreen toggle set Game.Fullscreen: the window changes once the step it's in is done.
+    private void OnGameFullscreenChanged(object? sender, EventArgs e)
+    {
+        if (sender is not Game game)
+            return;
+        Surface.Dispatcher.BeginInvoke(() =>
+        {
+            if (_runner?.Game == game)
+                IsFullscreen = game.Fullscreen;
+        });
+    }
+
     // Game.Quit (or a Quit button): stop playing once the current frame is done.
     private void OnGameQuit(object? sender, EventArgs e)
     {
@@ -928,6 +1000,9 @@ public sealed class PlayMode : ObservableObject, IDisposable
         if (!reported)
             _logger.LogError(ex, "Game error: {Message}", ex.Message);
         _status.Show((sender as GameLoop)?.IsPaused == false ? $"{ex.GetType().Name} ended a frame; the game plays on (see Output)" : "Paused on error; see Output");
+        // Paused on it, the game goes back to its tab, where Output says what happened.
+        if (_runner is { IsPaused: true } runner && sender == runner.Loop)
+            IsFullscreen = false;
         _nextFrame.TrySetResult();
         Refresh();
         Raise();

@@ -25,6 +25,8 @@ public partial class TimelineBar : UserControl
         _updating = true;
         try
         {
+            // Fullscreen, the game has the whole screen until it's paused, when the timeline shows to rewind it.
+            Visibility = _play.IsFullscreen && !_play.IsPaused ? Visibility.Collapsed : Visibility.Visible;
             Scrubber.Maximum = Math.Max(0, _play.TimelineCount - 1);
             Scrubber.Value = _play.TimelinePosition;
             // A tick where the moment just before the last exception is.

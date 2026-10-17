@@ -17,12 +17,15 @@ public sealed class PlayModule : IEditorModule
     {
         services.AddSingleton<PlayMode>();
         services.AddSingleton<TimelineBar>();
+        services.AddSingleton<PlayShortcuts>();
+        services.AddSingleton<FullscreenPlay>();
         services.AddMenu(Menus.Game, "_Game", order: 4);
         services
             .AddCommand<PlayCommand>()
             .AddCommand<PauseCommand>()
             .AddCommand<StepCommand>()
             .AddCommand<StopCommand>()
+            .AddCommand<PlayFullscreenCommand>()
             .AddCommand<KeepPlayChangesCommand>()
             .AddCommand<ClearSaveDataCommand>()
             .AddCommand<PlayWithTwoCommand>()
@@ -146,6 +149,38 @@ public sealed class StopCommand(PlayMode play) : EditorCommand
     protected override Task ExecuteCoreAsync()
     {
         play.Stop();
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Plays the game over the whole of the screen the editor is on, with no border; again (or Alt+Enter) brings it back to
+/// the Game tab, still playing. Not playing yet, it plays the open scene fullscreen. Pause, Stop and the other Game
+/// shortcuts work over it, and a breakpoint or a pause on an error brings it back to show what happened.
+/// </summary>
+public sealed class PlayFullscreenCommand(PlayMode play, ISceneDocuments sceneDocuments) : EditorCommand
+{
+    public override string Id => "Game.Fullscreen";
+    public override string Text => "Play _Fullscreen";
+    public override string? Icon => Icons.Play;
+    public override KeyGesture? Gesture { get; } = new(Key.Enter, ModifierKeys.Alt);
+    public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 1, Order: 0);
+
+    public override bool? IsChecked => play.IsFullscreen;
+
+    protected override bool CanExecuteCore() => play.IsPlaying ? !play.IsAtBreakpoint : sceneDocuments.Scene is not null;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        if (!play.IsPlaying)
+            play.Play();
+        else if (play.IsFullscreen)
+        {
+            play.IsFullscreen = false;
+            return Task.CompletedTask;
+        }
+
+        play.IsFullscreen = true;
         return Task.CompletedTask;
     }
 }

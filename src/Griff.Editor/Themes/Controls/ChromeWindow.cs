@@ -80,6 +80,21 @@ public class ChromeWindow : Window
         new WindowInteropHelper(window).Handle is var hwnd && hwnd != IntPtr.Zero ? NativeMethods.WorkArea(hwnd) : null;
 
     /// <summary>
+    /// Moves <paramref name="window"/> (made, not yet shown) to the middle of the work area of the screen holding most of
+    /// <paramref name="other"/>, so it opens, and maximizes, on that screen. In the screen's pixels, so its DPI doesn't matter.
+    /// </summary>
+    public static void MoveToScreenOf(Window window, Window other)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        var otherHwnd = new WindowInteropHelper(other).Handle;
+        if (hwnd == IntPtr.Zero || otherHwnd == IntPtr.Zero || NativeMethods.WorkArea(otherHwnd) is not { } area ||
+            NativeMethods.Bounds(hwnd) is not { } bounds)
+            return;
+        var centered = bounds with { X = area.X + (area.Width - bounds.Width) / 2, Y = area.Y + (area.Height - bounds.Height) / 2 };
+        NativeMethods.Move(hwnd, Fit(centered, area));
+    }
+
+    /// <summary>
     /// Whether a window is wholly on the work area of the screen holding most of it (a maximized one always is); null when
     /// it isn't showing.
     /// </summary>

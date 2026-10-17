@@ -1,0 +1,28 @@
+title: Play fullscreen
+intro: Play the game over the whole screen, as a player sees it, and come back to the editor without stopping it.
+project: Platformer | Fullscreen
+
+chapter: The whole screen | Game > Play Fullscreen, or Alt+Enter
+play
+say: Play runs the game in the Game tab, beside the editor's panels.
+hold: Right 1
+say: Alt Enter, or Play Fullscreen in the Game menu, moves the running game over the whole screen the editor is on, with no border.
+key: Alt+Enter
+expectfullscreen: true
+hold: Right 1.5
+tap: Space
+say: It's the same game, still running. Its camera, its HUD and the mouse all work at the screen's size, as they will on a player's screen.
+
+chapter: The editor's keys still work | Pause, rewind, back to the editor
+pause
+expectfullscreen: true
+say: F6 pauses it, and it stays fullscreen. Paused, the timeline shows above the game, to rewind it.
+rewind: 0.4
+say: The game went back a moment.
+pause
+hold: Left 1
+key: Alt+Enter
+expectfullscreen: false
+say: Alt Enter again brings the game back to the Game tab, still playing. A breakpoint, an error that pauses the game, or Stop bring it back too.
+stop
+expectfullscreen: false

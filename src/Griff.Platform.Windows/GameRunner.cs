@@ -19,7 +19,7 @@ namespace Griff.Platform.Windows;
 public sealed class GameRunner : IDisposable
 {
     private readonly GameSurface _surface;
-    private readonly UIElement _keySource;
+    private UIElement _keySource;
     private readonly IHostInput _input;
     // When the compositor let the last frame go (a Stopwatch timestamp): frames are timed from one to the next.
     private long _lastShown;
@@ -38,9 +38,7 @@ public sealed class GameRunner : IDisposable
         Loop = new GameLoop(game, surface) { BeforeSteps = Poll };
         _input = Loop.Input;
 
-        _keySource.PreviewKeyDown += OnKeyDown;
-        _keySource.PreviewKeyUp += OnKeyUp;
-        _keySource.LostKeyboardFocus += OnLostFocus;
+        HearKeys(_keySource, true);
         _surface.MouseMoved += OnMouseMoved;
         _surface.MouseLeft += OnMouseLeft;
         _surface.MouseButtonChanged += OnMouseButton;
@@ -78,6 +76,40 @@ public sealed class GameRunner : IDisposable
     /// </summary>
     public Func<bool>? TakesKeys { get; set; }
 
+    /// <summary>
+    /// Where its keys come from: its window, or the editor's. The editor hands it the window it moves the game into to play
+    /// it fullscreen, and back; the keys held down are let go as it changes.
+    /// </summary>
+    public UIElement KeySource
+    {
+        get => _keySource;
+        set
+        {
+            if (value == _keySource)
+                return;
+            HearKeys(_keySource, false);
+            _input.ReleaseAll();
+            _keySource = value;
+            HearKeys(value, true);
+        }
+    }
+
+    private void HearKeys(UIElement source, bool hear)
+    {
+        if (hear)
+        {
+            source.PreviewKeyDown += OnKeyDown;
+            source.PreviewKeyUp += OnKeyUp;
+            source.LostKeyboardFocus += OnLostFocus;
+        }
+        else
+        {
+            source.PreviewKeyDown -= OnKeyDown;
+            source.PreviewKeyUp -= OnKeyUp;
+            source.LostKeyboardFocus -= OnLostFocus;
+        }
+    }
+
     public void Start()
     {
         if (IsRunning)
@@ -98,9 +130,7 @@ public sealed class GameRunner : IDisposable
     {
         _pacer?.Dispose();
         ReleaseMouse();
-        _keySource.PreviewKeyDown -= OnKeyDown;
-        _keySource.PreviewKeyUp -= OnKeyUp;
-        _keySource.LostKeyboardFocus -= OnLostFocus;
+        HearKeys(_keySource, false);
         _surface.MouseMoved -= OnMouseMoved;
         _surface.MouseLeft -= OnMouseLeft;
         _surface.MouseButtonChanged -= OnMouseButton;

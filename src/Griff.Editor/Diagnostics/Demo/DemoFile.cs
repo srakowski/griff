@@ -332,6 +332,15 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
                 if (muteSwitch.IsChecked != wantMuted || play.Sound.Muted != deviceShut)
                     throw new InvalidOperationException($"Expected Mute {(wantMuted ? "on" : "off")}, with the sound device {(deviceShut ? "shut" : "open")}.");
                 break;
+            case "expectfullscreen":
+                // "expectfullscreen: true": the game plays fullscreen (Game > Play Fullscreen), in a window of its own filling
+                // the screen; false, it isn't (in the Game tab, or not playing).
+                var wantFullscreen = bool.Parse(a);
+                var gameWindow = System.Windows.Window.GetWindow(play.Surface);
+                var filling = gameWindow is { WindowState: System.Windows.WindowState.Maximized } && gameWindow != ui.Main;
+                if (play.IsFullscreen != wantFullscreen || filling != wantFullscreen)
+                    throw new InvalidOperationException($"Expected the game {(wantFullscreen ? "" : "not ")}to be playing fullscreen; it's {(play.IsFullscreen ? "fullscreen" : "not")}, {(filling ? "filling the screen" : "in the editor's window")}.");
+                break;
             case "rename":
                 var box = await DemoUi.WaitFor(() => DemoUi.Descendants<TextBox>(DemoUi.Inspector).FirstOrDefault(b => b.DataContext is EntityHeader), "the name field");
                 await ui.EditBox(box, a);
@@ -1761,8 +1770,9 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
     // ----- Targets -----
 
     // The Rewind bar over the Game tab while playing.
+    // In the Game tab, or (playing fullscreen) in the window the game fills.
     private Slider RewindBar() =>
-        DemoUi.Descendants<Slider>(ui.Main.GameTab.Content as DependencyObject ?? ui.Main).FirstOrDefault(s => s.Name == "Scrubber" && s.IsVisible)
+        DemoUi.Descendants<Slider>(ui.Main.GameTab.Content as DependencyObject ?? Window.GetWindow(play.Surface) ?? (DependencyObject)ui.Main).FirstOrDefault(s => s.Name == "Scrubber" && s.IsVisible)
         ?? throw new InvalidOperationException("The Rewind bar isn't showing: play first.");
 
     /// <summary>

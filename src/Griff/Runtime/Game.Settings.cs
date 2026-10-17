@@ -56,7 +56,9 @@ public sealed partial class Game
 
     /// <summary>
     /// Whether the game fills the screen. A built game starts windowed until the player picks fullscreen (F11, or a
-    /// <see cref="Scenes.Toggle"/> set to it), and then remembers. In the editor the game stays in its tab.
+    /// <see cref="Scenes.Toggle"/> set to it), and then remembers. In the editor it says whether the game is playing
+    /// fullscreen (Game &gt; Play Fullscreen, Alt+Enter) and setting it goes fullscreen and back, but Play always starts in
+    /// the Game tab.
     /// </summary>
     public bool Fullscreen
     {

@@ -79,6 +79,7 @@ build: standalone
 | `expectdrawn: <x>, <y> = lit\|dark\|<color>` | Fail unless the game view's picture, as the renderer draws it (the running game's, or the scene through its camera), is at that point of the world lit (a channel over 80), dark (every channel under 40) or that color (within 24), e.g. `expectdrawn: 3.5, 0 = dark` behind a wall from a lamp. |
 | `expectproject: none\|<name>` | Fail unless no project is open (`none`, the editor as it starts, e.g. after **File → Close Project**) or the one called that is. |
 | `expectmuted: true\|false` | Fail unless **Game → Mute** is on (or off) and the sound device is shut while it is (and in checks, where `GRIFF_MUTE=1` keeps it shut either way). |
+| `expectfullscreen: true\|false` | Fail unless the game is playing fullscreen (**Game → Play Fullscreen**, Alt+Enter), in a window of its own filling the screen (or, `false`, isn't: it's in the Game tab, or not playing). |
 | `cell: <row> > <column> = <value>` | Type into a cell of the table showing in the Tables panel with the real mouse and keyboard: click it, F2, type, Enter (`cell: Slime > Health = 12`; a yes/no cell is ticked or unticked, a cell with a list picks from it). The column `Name` is the rows' names, so `cell: Row 1 > Name = Slime` renames a row. |
 | `expectcell: <row> > <column> = <value>` | Fail unless the cell of the table showing reads that, e.g. `expectcell: Wisp > Damage = 1d2`. |
 | `expecttable: <summary>` | Fail unless the Tables panel says the table showing has that, e.g. `expecttable: 4 rows, 2 columns`. |

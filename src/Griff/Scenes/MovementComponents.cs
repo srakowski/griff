@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Numerics;
 
 namespace Griff.Scenes;
@@ -310,7 +311,9 @@ public sealed class TopDownMovement : Component
 /// <see cref="Animation"/>'s Idle and Walk (or Run) clips if it has them (and IdleUp, WalkDown and so on, facing that
 /// way). Needs a <see cref="Body"/> and a collider, so pickups, doors and damage reach it; it ignores gravity. With a
 /// <see cref="GridChase"/> or a <see cref="GridPatrol"/> it's an enemy or another mover instead, stepping on its own;
-/// with a <see cref="Pushable"/> it's a crate that grid movers push a cell at a time by stepping into it. On an isometric
+/// with a <see cref="Pushable"/> it's a crate that grid movers push a cell at a time by stepping into it.
+/// <see cref="WalkTo(IEnumerable{ValueTuple{int, int}})"/> (or its <see cref="Destination"/>) walks it to a cell, the nearest
+/// free one of several, or an entity, round walls and other movers: workers, villagers, units sent somewhere. On an isometric
 /// map it steps from diamond to diamond: up goes up to the right, right down to the right, down down to the left and left
 /// up to the left, and two ways held together go that way on the screen (with <see cref="Diagonal"/>, every way pressed
 /// goes that way on the screen). On a hex map it steps from hexagon to hexagon, six ways: left and right along the row,
@@ -376,6 +379,108 @@ public sealed class GridMovement : Component
 
     /// <summary>A sound played on trying to step into a wall, once per press.</summary>
     public string? BumpSound { get; set; }
+
+    /// <summary>
+    /// Where it's walking to (see <see cref="WalkTo(IEnumerable{ValueTuple{int, int}})"/>): cells, as "column row" pairs
+    /// separated by semicolons and counted as <see cref="Cell"/> is, e.g. "4 2; 5 2", of which it goes to the nearest that's
+    /// free; or an entity's name, whose cell it walks to (or next to it, when something solid is there). Empty while it
+    /// isn't walking. The game empties it on arriving; set it to send it off.
+    /// </summary>
+    [Group("Walking")]
+    [PlainText("cells or an entity's name: Walk To and the game set it")]
+    public string? Destination
+    {
+        get => _destination;
+        set
+        {
+            _destination = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            var points = Formats.Points(_destination);
+            _destinationCells = points.Count > 0 ? [.. points.Select(p => ((int)MathF.Round(p.X), (int)MathF.Round(p.Y)))] : null;
+        }
+    }
+
+    /// <summary>
+    /// Collision layers whose solid colliders are in its way, e.g. "Obstacle, Wall"; empty for every solid collider. Solid
+    /// tiles and other grid movers always are. It goes for a step as for a walk, so a walk plans round what really blocks it.
+    /// </summary>
+    [Names(NameKind.Layer, Many = true)]
+    public string? BlockingLayers { get; set; }
+
+    /// <summary>
+    /// Seconds a walk waits, face to face with another walker that's waiting for it (two in a one-cell aisle), before one of
+    /// them steps aside to a free cell off the other's way and lets it by: the one later in the scene, unless only the other
+    /// has somewhere to go.
+    /// </summary>
+    public float GiveWay { get; set; } = 0.5f;
+
+    /// <summary>A message sent with <c>Game.Send</c> when a walk gets to its <see cref="Destination"/>, with this entity as its data.</summary>
+    [Names(NameKind.Message)]
+    public string? ArrivedMessage { get; set; }
+
+    /// <summary>
+    /// A message sent with <c>Game.Send</c> each time a walk has to stop and wait (see <see cref="Blocked"/>), with this
+    /// entity as its data.
+    /// </summary>
+    [Names(NameKind.Message)]
+    public string? BlockedMessage { get; set; }
+
+    /// <summary>True while it's walking to its <see cref="Destination"/>, waiting on the way included.</summary>
+    public bool IsWalking => _destination is not null;
+
+    /// <summary>
+    /// True while a walk is held up: another mover is in its way, there's no way to its <see cref="Destination"/> just now,
+    /// or it has stepped aside to let another by.
+    /// </summary>
+    public bool IsWaiting { get; internal set; }
+
+    /// <summary>The cell of its <see cref="Destination"/> it's heading for now (it changes as cells fill and free up); null when it has none.</summary>
+    public (int X, int Y)? Goal { get; internal set; }
+
+    /// <summary>Raised when a walk gets to its <see cref="Destination"/>, with the cell it arrived in. The walk is over.</summary>
+    public event Action<GridMovement, (int X, int Y)>? Arrived;
+
+    /// <summary>
+    /// Raised each time a walk has to stop and wait: another mover is in its way, or there's no way to its
+    /// <see cref="Destination"/> just now. It keeps trying, as things move, until it gets there or <see cref="StopWalking"/>.
+    /// </summary>
+    public event Action<GridMovement>? Blocked;
+
+    /// <summary>
+    /// Walks to the nearest of <paramref name="cells"/> that's free (column then row, as <see cref="Cell"/> counts them), a
+    /// step at a time, the shortest way: four ways, or eight if it's <see cref="Diagonal"/>, round solid tiles, solid colliders
+    /// (on its <see cref="BlockingLayers"/>, if it has any) and the cells other grid movers are in or stepping into. It plans
+    /// again at every cell as things move, waits for a mover in its way, and steps aside when two walkers meet head on.
+    /// Raises <see cref="Arrived"/> there; <see cref="Blocked"/> while it waits.
+    /// </summary>
+    /// <example><code>
+    /// worker.GetComponent&lt;GridMovement&gt;()!.WalkTo([(4, 2), (5, 2)]);
+    /// </code></example>
+    public void WalkTo(IEnumerable<(int X, int Y)> cells) =>
+        Destination = string.Join("; ", cells.Select(c => string.Create(CultureInfo.InvariantCulture, $"{c.X} {c.Y}")));
+
+    /// <summary>Walks to one cell (see <see cref="WalkTo(IEnumerable{ValueTuple{int, int}})"/>).</summary>
+    public void WalkTo((int X, int Y) cell) => WalkTo([cell]);
+
+    /// <summary>
+    /// Walks to <paramref name="target"/>'s cell, or next to it when it's in the way there (it's solid, or a grid mover),
+    /// following it as it moves.
+    /// </summary>
+    public void WalkTo(Entity target)
+    {
+        Destination = target.Name;
+        WalkTarget = target;
+    }
+
+    /// <summary>
+    /// Walks to <paramref name="place"/>: cells as "column row" pairs, e.g. "4 2; 5 2" (the nearest that's free), or an
+    /// entity's name. Empty stops it. See <see cref="Destination"/>.
+    /// </summary>
+    [Action]
+    public void WalkTo(string? place) => Destination = place;
+
+    /// <summary>Stops walking, in the cell it's in or stepping into.</summary>
+    [Action]
+    public void StopWalking() => Destination = null;
 
     /// <summary>
     /// The way it faces, one cell's step as a unit vector (diagonals are (±1, ±1)): down to start with. Like
@@ -498,6 +603,37 @@ public sealed class GridMovement : Component
     internal bool PreferVertical { get; set; }
 
     internal (int X, int Y) LastRaw { get; set; }
+
+    // ----- Walking (see WalkTo; GridSystem walks it) -----
+
+    private string? _destination;
+
+    [NotState("read from Destination as it's set")]
+    private (int X, int Y)[]? _destinationCells;
+
+    // Its Destination's cells, or null when it names an entity.
+    internal (int X, int Y)[]? DestinationCells => _destinationCells;
+
+    // The entity Walk To was given, so one of several with its name is the one followed.
+    internal Entity? WalkTarget { get; set; }
+
+    // The Destination the rest of the walk's state is for: a new one (set any way at all) starts afresh.
+    internal string? PlannedFor { get; set; }
+
+    // The way it means to go, a cell at a time after the one it's in: round other movers, or past them while it waits.
+    internal List<(int X, int Y)> Route { get; set; } = [];
+
+    // Seconds it has been waiting.
+    internal float Waited { get; set; }
+
+    // A cell it's stepping aside to (or waiting in) to let Giving by, and that walker.
+    internal (int X, int Y)? Aside { get; set; }
+
+    internal GridMovement? Giving { get; set; }
+
+    internal void RaiseArrived((int X, int Y) cell) => Arrived?.Invoke(this, cell);
+
+    internal void RaiseBlocked() => Blocked?.Invoke(this);
 }
 
 /// <summary>

@@ -1,0 +1,63 @@
+title: Grid walking
+intro: Grid movers sent somewhere walk there by themselves: to the nearest free cell, round walls and each other, giving way in a narrow aisle.
+project: Empty | Grid Walkers
+
+chapter: A floor to walk on | A tilemap with a wall across it
+create: Tilemap
+rename: Floor
+set: Tilemap.Tiles = 111111111111\n1....1.....1\n1....1.....1\n1..........1\n111111111111
+select: Main Camera
+set: Transform.Position.X = 6
+set: Transform.Position.Y = -2.5
+look: 6, -2.5, 4
+say: Here's a floor painted on a tilemap, with a wall part of the way down the middle.
+deselect
+create: Grid Player
+rename: Worker
+set: Transform.Position.X = 1.5
+set: Transform.Position.Y = -1.5
+set: GridMovement.Controllable = false
+deselect
+create: Grid Player
+rename: Visitor
+set: Transform.Position.X = 9.5
+set: Transform.Position.Y = -3.5
+set: GridMovement.Controllable = false
+say: Two grid movers: a worker in the top left, and a visitor standing in the bottom right. Neither takes the keys.
+
+chapter: Sent somewhere | Destination, and the nearest free cell
+select: Worker
+explain: field:GridMovement.Destination | Destination | A Grid Movement's Destination sends it walking. It takes cells, column then row, or an entity's name.
+set: GridMovement.Destination = 9 1; 9 3
+say: Two cells on the far side: the bottom one is nearer, but the visitor is standing in it, so the worker heads for the top one.
+play
+wait: 1
+explain: game | Round the wall | It finds the shortest way round the wall, a cell at a time, and plans again at every cell as things move.
+wait: 2
+expectat: Worker = 9.5, -1.5
+say: There. It empties its Destination and says it has arrived, with an Arrived event and an Arrived Message for triggers.
+stop
+
+chapter: Two in an aisle | Waiting, and giving way
+select: Floor
+set: Tilemap.Tiles = 1111111111\n1........1\n11111.1111\n1111111111
+look: 5, -2, 3
+say: Now a one-cell aisle, with a nook halfway along.
+select: Worker
+set: Transform.Position.X = 1.5
+set: Transform.Position.Y = -1.5
+set: GridMovement.Destination = 8 1
+select: Visitor
+set: Transform.Position.X = 8.5
+set: Transform.Position.Y = -1.5
+set: GridMovement.Destination = 1 1
+say: The worker walks to the right end, and the visitor to the left: they'll meet in the middle.
+explain: field:GridMovement.GiveWay | Give Way | Face to face, each waits this long, then one steps aside to a free cell off the other's way.
+play
+wait: 1.5
+explain: game | Stepping aside | The visitor ducks into the nook, lets the worker by, and carries on.
+wait: 3
+expectat: Worker = 8.5, -1.5
+expectat: Visitor = 1.5, -1.5
+stop
+say: That's grid walking. Blocking Layers choose which colliders are in the way, the Blocked event says when one has to wait, and scripts call Walk To, or ask a tilemap for the cells of a way with Find Steps.

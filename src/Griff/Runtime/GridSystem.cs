@@ -5,9 +5,9 @@ namespace Griff.Runtime;
 
 /// <summary>
 /// Things that step tile by tile on a tilemap's grid, blocked by walls: players, enemies and other movers that chase a
-/// target or walk a route on their own, and the crates they push.
+/// target or walk a route on their own, movers walking where they were sent, and the crates they push.
 /// </summary>
-internal sealed class GridSystem : GameSystem
+internal sealed partial class GridSystem : GameSystem
 {
     public override string Name => "Grid Movement";
 
@@ -60,6 +60,12 @@ internal sealed class GridSystem : GameSystem
         var controls = waits && byTurns && Game.TurnSystem.ComputersTurn(entity) ? Game.ControlsOf(entity) : Game.InputOf(entity);
         var way = m.Controllable && !driven ? GridWay(m, controls.Move, grid) : (X: 0, Y: 0);
         var pressed = way != (0, 0) && way != m.Held;
+        // The player taking it over ends a walk.
+        if (pressed && m.IsWalking && !waits)
+            m.StopWalking();
+        KeepWalkCurrent(m);
+        if (m.IsWaiting)
+            m.Waited += Game.Time.Delta;
         m.HeldFor = way == m.Held ? m.HeldFor + Game.Time.Delta : 0;
         m.Held = way;
         if (way != m.BumpedWay)
@@ -109,11 +115,19 @@ internal sealed class GridSystem : GameSystem
             var next = m.Queued ?? (waits ? null : m.Buffered);
             if (next is null && !waits && way != (0, 0) && (pressed || (m.Repeat && m.HeldFor >= m.RepeatDelay)))
                 next = way;
-            if (next is null && minds && driven)
-                next = DriversStep(m);
+            // A walk it was sent on comes before what it does by itself.
             var decided = false;
+            var walks = minds && m.IsWalking;
+            if (next is null && walks && (m.Rest <= 0 || byTurns))
+            {
+                next = WalkStep(m, grid, stepTime);
+                decided = next is not null;
+            }
+
+            if (next is null && minds && driven && !walks)
+                next = DriversStep(m);
             var thinks = chase is not null || patrol is not null;
-            if (next is null && thinks && (m.Rest <= 0 || byTurns))
+            if (next is null && thinks && !walks && (m.Rest <= 0 || byTurns))
             {
                 if (byTurns && patrol is { WaitLeft: > 0 } && chase is not { IsChasing: true })
                     patrol.WaitLeft = Math.Max(0, patrol.WaitLeft - 1);
@@ -136,7 +150,7 @@ internal sealed class GridSystem : GameSystem
             }
 
             // Taking turns, a chaser or a patrol with nowhere to go on its turn passes (unless it swings instead).
-            m.Idle = byTurns && thinks && !m.Stepping;
+            m.Idle = byTurns && (thinks || walks) && !m.Stepping;
         }
 
         // Which way it faces on the screen: on an isometric map, every step along the grid is a diagonal, seen from behind
@@ -165,7 +179,7 @@ internal sealed class GridSystem : GameSystem
         var target = grid.Step(m.Cell, way);
         var along = grid.Resolve(m.Cell, way);
         var offset = (X: target.Item1 - m.Cell.X, Y: target.Item2 - m.Cell.Y);
-        var walls = Game.GridWalls.Gather(Game, m, grid);
+        var walls = GridWalls.Gather(Game.Scene, m, grid);
         var free = walls.IsFree(target);
         // A diagonal step can't cut a wall's corner (a hex map's six neighbours each share a side).
         if (free && !grid.IsHex && offset.X != 0 && offset.Y != 0)
@@ -277,7 +291,7 @@ internal sealed class GridSystem : GameSystem
     // ----- Bump attacks -----
 
     // What's in the cell it bumped into that it can hurt: a grid mover, or anything else with health standing there.
-    private Entity? BumpTarget(BumpAttack bump, Game.GridWalls walls, GridCells grid, (int X, int Y) cell)
+    private Entity? BumpTarget(BumpAttack bump, GridWalls walls, GridCells grid, (int X, int Y) cell)
     {
         bool Hurtable(Entity e) => e != bump.Entity && Health.Of(e) is { IsDead: false } && bump.Hurts(e.GetComponent<Collider>()?.Layer) && Game.CanHurt(bump.Entity, e);
         if (walls.MoverIn(cell) is { } mover)
@@ -343,7 +357,7 @@ internal sealed class GridSystem : GameSystem
             // A crate this machine doesn't run is wherever the host last put it.
             var grid = GridCells.Of(m.FindMap());
             var cell = m.Started ? m.Cell : grid.CellAt(Game.Flat(crate.Transform.WorldPosition));
-            var walls = Game.GridWalls.Gather(Game, m, grid);
+            var walls = GridWalls.Gather(Game.Scene, m, grid);
             var next = grid.Step(cell, way);
             if (walls.IsWall(next))
                 return null;
@@ -517,7 +531,7 @@ internal sealed class GridSystem : GameSystem
     // them (it waits behind whatever is in the way). With no way at all, a step that gets closer, if asked for.
     private (int X, int Y)? FirstStep(GridMovement m, GridCells grid, (int X, int Y) goal, Entity? target, bool closerIfNoWay)
     {
-        var walls = Game.GridWalls.Gather(Game, m, grid, except: target);
+        var walls = GridWalls.Gather(Game.Scene, m, grid, except: target);
         var next = FindGridStep(m, walls, goal, avoidMovers: true) ?? FindGridStep(m, walls, goal, avoidMovers: false);
         if (next is { } into)
             return grid.WayBetween(m.Cell, into);
@@ -537,76 +551,11 @@ internal sealed class GridSystem : GameSystem
         return best;
     }
 
-    // A* over cells from where it stands to the goal: the first cell to step into, or null if there's no way there.
-    private static (int X, int Y)? FindGridStep(GridMovement m, Game.GridWalls walls, (int X, int Y) goal, bool avoidMovers)
-    {
-        var start = m.Cell;
-        if (start == goal)
-            return null;
+    // The first cell to step into on the shortest way to a cell, or null if there's no way there.
+    private static (int X, int Y)? FindGridStep(GridMovement m, GridWalls walls, (int X, int Y) goal, bool avoidMovers) =>
+        walls.FindWay(m.Cell, [goal], m.Diagonal, avoidMovers) is [var first, ..] ? first : null;
 
-        // The searched area: its map (and the cells round it, if it may step off), or a margin round both ends.
-        int minX, minY, maxX, maxY;
-        if (walls.Size is { } size)
-            (minX, minY, maxX, maxY) = m.StayOnMap ? (0, 0, size.Width - 1, size.Height - 1) : (-1, -1, size.Width, size.Height);
-        else
-            (minX, minY, maxX, maxY) = (Math.Min(start.X, goal.X) - Game.GridSearchMargin, Math.Min(start.Y, goal.Y) - Game.GridSearchMargin,
-                Math.Max(start.X, goal.X) + Game.GridSearchMargin, Math.Max(start.Y, goal.Y) + Game.GridSearchMargin);
-        (minX, minY) = (Math.Min(minX, Math.Min(start.X, goal.X)), Math.Min(minY, Math.Min(start.Y, goal.Y)));
-        (maxX, maxY) = (Math.Max(maxX, Math.Max(start.X, goal.X)), Math.Max(maxY, Math.Max(start.Y, goal.Y)));
-        var width = maxX - minX + 1;
-        var count = (long)width * (maxY - minY + 1);
-        if (count > Game.GridSearchLimit)
-            return null;
-
-        int IndexOf((int X, int Y) c) => (c.Y - minY) * width + (c.X - minX);
-        (int X, int Y) CellOf(int index) => (index % width + minX, index / width + minY);
-        bool Inside((int X, int Y) c) => c.X >= minX && c.Y >= minY && c.X <= maxX && c.Y <= maxY;
-
-        // Every step takes as long, so the fewest steps win; a diagonal costs a hair more, so it walks straight when it can
-        // (a hex map's six ways are all straight).
-        var grid = walls.Grid;
-        float Estimate((int X, int Y) c) => grid.Steps(c, goal, m.Diagonal);
-
-        var cost = new float[count];
-        Array.Fill(cost, float.PositiveInfinity);
-        var cameFrom = new int[count];
-        var open = new PriorityQueue<int, float>();
-        var startIndex = IndexOf(start);
-        cost[startIndex] = 0;
-        open.Enqueue(startIndex, Estimate(start));
-        while (open.TryDequeue(out var current, out var priority))
-        {
-            var cell = CellOf(current);
-            if (cell == goal)
-            {
-                // Back from the goal to the cell just after the start.
-                while (cameFrom[current] != startIndex)
-                    current = cameFrom[current];
-                return CellOf(current);
-            }
-
-            if (priority > cost[current] + Estimate(cell) + 1e-4f)
-                continue; // A stale entry: this cell was reached more cheaply since.
-
-            foreach (var (dx, dy) in grid.Neighbours(cell, m.Diagonal))
-            {
-                var next = (cell.X + dx, cell.Y + dy);
-                if (!Inside(next) || !CanPass(walls, cell, (dx, dy), avoidMovers, goal))
-                    continue;
-                var index = IndexOf(next);
-                var nextCost = cost[current] + (!grid.IsHex && dx != 0 && dy != 0 ? 1.001f : 1);
-                if (nextCost >= cost[index])
-                    continue;
-                cost[index] = nextCost;
-                cameFrom[index] = current;
-                open.Enqueue(index, nextCost + Estimate(next));
-            }
-        }
-
-        return null;
-    }
-
-    public static bool CanPass(Game.GridWalls walls, (int X, int Y) from, (int X, int Y) by, bool avoidMovers, (int X, int Y) goal)
+    public static bool CanPass(GridWalls walls, (int X, int Y) from, (int X, int Y) by, bool avoidMovers, (int X, int Y) goal)
     {
         bool Open((int X, int Y) c) => !walls.IsWall(c) && (!avoidMovers || c == goal || walls.MoverIn(c) is null);
         if (!Open((from.X + by.X, from.Y + by.Y)))

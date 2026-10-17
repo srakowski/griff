@@ -1157,6 +1157,32 @@ public sealed partial class Tilemap : Component, ISortsInParts
         return [];
     }
 
+    /// <summary>
+    /// The shortest way in cells from <paramref name="start"/> to the nearest of <paramref name="goals"/>, as a grid mover on
+    /// this map would walk it (see <see cref="GridMovement.WalkTo(IEnumerable{ValueTuple{int, int}})"/>): every cell to
+    /// step into after the start, ending at the goal it reaches; empty if the start is a goal; null if no goal can be
+    /// reached. Cells are column then row, row 0 at the top. It stays on the map and goes round solid tiles (of every
+    /// tilemap in the scene), the cells in <paramref name="avoid"/> (where others stand, say), and the solid colliders on
+    /// <paramref name="blockingLayers"/>, e.g. "Obstacle" (grid movers on them block the cell they're in). Four ways, or
+    /// eight with <paramref name="diagonal"/>, never cutting a corner; six on a hex map. For planning without walking.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// var way = floor.FindSteps(here, [(4, 2), (5, 2)], avoid: taken, blockingLayers: "Obstacle");
+    /// if (way is { Count: > 0 })
+    ///     mover.Step(way[0].X - here.X, here.Y - way[0].Y);
+    /// </code>
+    /// </example>
+    public IReadOnlyList<(int X, int Y)>? FindSteps((int X, int Y) start, IEnumerable<(int X, int Y)> goals,
+        IEnumerable<(int X, int Y)>? avoid = null, string? blockingLayers = null, bool diagonal = false)
+    {
+        var grid = Entity is null ? new GridCells(this, Matrix4x4.Identity, Matrix4x4.Identity) : GridCells.Of(this);
+        var walls = GridWalls.Gather(Entity?.Scene, grid, stayOnMap: true, self: null, layer: null, ignoreLayers: null,
+            only: CollisionLayers.Parse(blockingLayers), moversByLayer: true, except: null);
+        HashSet<(int X, int Y)>? avoided = avoid is null ? null : [.. avoid];
+        return walls.FindWay(start, [.. goals.Where(g => walls.MoverIn(g) is null)], diagonal, avoidMovers: true, avoided);
+    }
+
     // Walks back from the goal, keeping the corners: a cell where the next step goes a different way from the last.
     private static List<(int X, int Y)> Waypoints(int[] cameFrom, int start, int goal, Func<int, (int X, int Y)> cellOf)
     {

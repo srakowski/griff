@@ -12,6 +12,7 @@
 - A **Bar** can be drawn with pictures: its **Fill Image** is revealed as it fills, in its **Direction**, cut off rather than squeezed, over a **Background Image** that can be a nine-slice. Its colors tint them.
 - Agents: `ui_invoke` on a path ending at a property, or with an argument the tool doesn't take (a `method` beside the path), no longer answers with what the property holds as though something had been called: it says what went wrong. Every MCP tool now refuses arguments it doesn't take, and `ui_invoke` reads lists and objects by name of anything it can read, so `Project.SetControlsAsync` with `[{"PauseTime": ["Space"]}]` sets and saves a project's controls.
 - A script spawned during the game no longer stops it with "The behavior isn't running in a game yet" when a **Tooltip**, **Text**, **Counter**, **Bar** or wire shows one of its outputs that uses `Game`: a script's outputs are read once it has started, from the next step. A **Tooltip** now reads its output only while it's the one hovered.
+- A **Grid Movement** can walk somewhere by itself: give it a **Destination** (cells or an entity), use its **Walk To** action, or call `WalkTo` from a script, and it goes to the nearest free cell round walls, solid things and other movers, waits when someone's in the way, and steps aside in a narrow aisle so two walkers get past each other. **Arrived** and **Blocked** say how it went, and a tilemap's `FindSteps` plans such a way for scripts.
 
 ## 0.1.0-alpha.8 - 2026-10-17
 

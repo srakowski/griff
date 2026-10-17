@@ -26,6 +26,8 @@ public sealed class TemplatePlaythroughTests
     // a Placeholder Grid (the same without them). Every template with a button changed when buttons got a Shortcut Action
     // (the same without it), and every template with a Bar
     // when bars got a Fill Image, a Background Image and its slice (the same without them).
+    // Those with a grid mover changed when grid movement got a Destination to
+    // walk to, Blocking Layers, Give Way and its walk messages (the same without them).
     private static readonly Dictionary<string, string> Expected = new()
     {
         ["Adventure"] = "81386AF51920526D",
@@ -42,14 +44,14 @@ public sealed class TemplatePlaythroughTests
         ["Physics"] = "90682F50E82BAB9D",
         ["Pinball"] = "2B89F9AA75E545E1",
         ["Platformer"] = "0C4958764B6FB0EF",
-        ["Puzzle"] = "6847F19DD7FFC41B",
+        ["Puzzle"] = "9F0CE3CEB3E61A26",
         ["Rhythm"] = "D298BF6385BA6FEF",
-        ["Roguelike"] = "B958654488705BDA",
+        ["Roguelike"] = "57841721AE1D9420",
         ["RpgStats"] = "7F73ABC2252DBEE8",
         ["Sandbox"] = "48AC9E7E7B73E2E8",
         ["Shooter"] = "4EF84C928101439B",
         ["Strategy"] = "67A1D5B1727DE868",
-        ["Tactics"] = "29DCB151C256ED09",
+        ["Tactics"] = "7EAA2BB15685C41F",
         ["TopDown"] = "A783DCCCFEB22D0F",
         ["VisualNovel"] = "057DD124992D4C3B",
     };

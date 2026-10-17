@@ -75,7 +75,7 @@ internal sealed partial class TacticsSystem
         if (unit.HasMoved)
             return BestFoe(unit, foes.Where(f => InRange(unit, grid, m, here, f.Cell)), _ => 0) is { } foe && Order(unit, TacticsOrder.Attack, null, foe);
 
-        var walls = Game.GridWalls.Gather(Game, m, grid);
+        var walls = GridWalls.Gather(Game.Scene, m, grid);
         var reach = unit.Stance == TacticsStance.Hold
             ? new Dictionary<(int X, int Y), ((int X, int Y) From, int Steps)> { [here] = (here, 0) }
             : Reach(unit, m, walls, here);
@@ -119,7 +119,7 @@ internal sealed partial class TacticsSystem
 
     // How many steps each cell is from somewhere it could hit a foe from, around walls (other units are passed by, as
     // they'll move), within its map or a margin round the fighters.
-    private static Dictionary<(int X, int Y), int> DistanceToFoes(TacticsUnit unit, GridMovement m, Game.GridWalls walls,
+    private static Dictionary<(int X, int Y), int> DistanceToFoes(TacticsUnit unit, GridMovement m, GridWalls walls,
         List<(Entity Entity, (int X, int Y) Cell)> foes, (int X, int Y) here)
     {
         int minX, minY, maxX, maxY;

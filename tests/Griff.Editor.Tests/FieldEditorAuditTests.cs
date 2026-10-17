@@ -173,6 +173,10 @@ public sealed partial class FieldEditorAuditTests
         GridMovement.Map: Entity
         GridMovement.StepSound: Sound
         GridMovement.BumpSound: Sound
+        GridMovement.Destination: Text
+        GridMovement.BlockingLayers: Names:Layer*
+        GridMovement.ArrivedMessage: Names:Message
+        GridMovement.BlockedMessage: Names:Message
         GridPatrol.Points: Points
         Mover.Points: Points
         Mover.Clock: Entity

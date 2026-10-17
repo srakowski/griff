@@ -102,7 +102,7 @@ internal sealed partial class TacticsSystem : GameSystem
         }
 
         var grid = GridCells.Of(m.FindMap());
-        var walls = Game.GridWalls.Gather(Game, m, grid);
+        var walls = GridWalls.Gather(Game.Scene, m, grid);
         unit.Reachable = unit.HasMoved ? [] : Reach(unit, m, walls, CellOf(m, grid)).Keys.Where(c => c != CellOf(m, grid)).ToList();
         unit.Targets = TargetsFrom(unit, grid, CellOf(m, grid)).Select(t => t.Entity).ToList();
     }
@@ -122,7 +122,7 @@ internal sealed partial class TacticsSystem : GameSystem
         {
             case TacticsOrder.Move when !unit.HasMoved && cell is { } to:
             {
-                var reach = Reach(unit, m, Game.GridWalls.Gather(Game, m, grid), CellOf(m, grid));
+                var reach = Reach(unit, m, GridWalls.Gather(Game.Scene, m, grid), CellOf(m, grid));
                 if (to == here || !reach.ContainsKey(to))
                     return false;
                 Walk(unit, here, PathTo(reach, to));
@@ -148,7 +148,7 @@ internal sealed partial class TacticsSystem : GameSystem
                 return true;
             case TacticsOrder.UndoMove when unit.HasMoved && unit.MovedFrom is { } from:
             {
-                var walls = Game.GridWalls.Gather(Game, m, grid);
+                var walls = GridWalls.Gather(Game.Scene, m, grid);
                 if (from != here && !walls.IsFree(from))
                     return false;
                 Game.MoveTo(entity, grid.Center(from));
@@ -254,7 +254,7 @@ internal sealed partial class TacticsSystem : GameSystem
 
     // The cells a unit can walk to this go (its own included), each with the cell it's reached from and how many steps it
     // takes, by the fewest steps around walls and other units.
-    private static Dictionary<(int X, int Y), ((int X, int Y) From, int Steps)> Reach(TacticsUnit unit, GridMovement m, Game.GridWalls walls, (int X, int Y) start)
+    private static Dictionary<(int X, int Y), ((int X, int Y) From, int Steps)> Reach(TacticsUnit unit, GridMovement m, GridWalls walls, (int X, int Y) start)
     {
 
         var reach = new Dictionary<(int X, int Y), ((int X, int Y) From, int Steps)> { [start] = (start, 0) };
@@ -294,7 +294,7 @@ internal sealed partial class TacticsSystem : GameSystem
     // steps away (the farthest from the foe, between those), with the way there.
     private (List<(int X, int Y)> Path, (int X, int Y) Cell)? AttackSpot(TacticsUnit unit, GridMovement m, GridCells grid, (int X, int Y) foe)
     {
-        var reach = Reach(unit, m, Game.GridWalls.Gather(Game, m, grid), CellOf(m, grid));
+        var reach = Reach(unit, m, GridWalls.Gather(Game.Scene, m, grid), CellOf(m, grid));
         var best = reach.Where(p => InRange(unit, grid, m, p.Key, foe))
             .OrderBy(p => p.Value.Steps).ThenByDescending(p => grid.Steps(p.Key, foe, m.Diagonal)).Select(p => (Cell: p.Key, Found: true)).FirstOrDefault();
         return best.Found ? (PathTo(reach, best.Cell), best.Cell) : null;
@@ -366,7 +366,7 @@ internal sealed partial class TacticsSystem : GameSystem
         var selected = controls.Selected?.GetComponent<TacticsUnit>();
         var m = (selected ?? units[0]).Entity!.GetComponent<GridMovement>()!;
         var grid = GridCells.Of(m.FindMap());
-        var size = Game.GridWalls.Gather(Game, m, grid).Size;
+        var size = GridWalls.Gather(Game.Scene, m, grid).Size;
         (int X, int Y) Clamp((int X, int Y) c) => size is var (w, h) ? (Math.Clamp(c.X, 0, w - 1), Math.Clamp(c.Y, 0, h - 1)) : c;
         bool OnMap((int X, int Y) c) => size is not var (w, h) || (c.X >= 0 && c.Y >= 0 && c.X < w && c.Y < h);
 
@@ -499,7 +499,7 @@ internal sealed partial class TacticsSystem : GameSystem
         view.Faint = selected is null && computer is null;
         var m = shown.Entity!.GetComponent<GridMovement>()!;
         var here = CellOf(m, grid);
-        var walls = Game.GridWalls.Gather(Game, m, grid);
+        var walls = GridWalls.Gather(Game.Scene, m, grid);
         var reach = shown.HasMoved ? new() { [here] = (here, 0) } : Reach(shown, m, walls, here);
         view.Moves.AddRange(reach.Keys.Where(k => k != here));
         var friends = units.Where(u => u != shown && !IsFoe(shown, u.Entity!)).Select(u => CellOf(u.Entity!, grid)).ToHashSet();

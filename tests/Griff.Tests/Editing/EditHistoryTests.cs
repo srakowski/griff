@@ -99,6 +99,25 @@ public class EditHistoryTests
     }
 
     [Fact]
+    public void DiscardingAGroup_TakesBackItsEdits_AndRecordsNothing()
+    {
+        var entity = new Entity("Crate");
+        _scene.Add(entity);
+        _history.Execute(new SetEntitiesLockedEdit([entity], locked: true));
+
+        using (var group = _history.BeginGroup("Try"))
+        {
+            _history.Execute(new SetPropertyEdit(entity.Transform, PositionProperty, new Vector3(3, 0, 0)));
+            _history.Execute(new SetEntitiesHiddenEdit([entity], hidden: true));
+            group.Discard();
+        }
+
+        Assert.Equal(Vector3.Zero, entity.Transform.Position);
+        Assert.False(entity.IsHidden);
+        Assert.Equal("Lock Crate", _history.UndoDescription);
+    }
+
+    [Fact]
     public void PropertyEdits_OnDifferentComponents_DoNotMerge()
     {
         var a = new Entity("A");

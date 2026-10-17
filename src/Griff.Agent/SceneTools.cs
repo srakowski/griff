@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Griff.Editing;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
@@ -27,8 +28,8 @@ public interface IAgentScene
     /// <summary>Applies an edit through the scene's undo history.</summary>
     void Execute(IEdit edit);
 
-    /// <summary>Makes every edit until the scope is disposed one undo step.</summary>
-    IDisposable BeginGroup(string description);
+    /// <summary>Makes every edit until the group is disposed one undo step (or none, if it is discarded first).</summary>
+    EditHistory.EditGroup BeginGroup(string description);
 
     /// <summary>The selected entities, which the Inspector edits together; the last is the primary one.</summary>
     IReadOnlyList<Entity> Selection { get; set; }
@@ -127,12 +128,14 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             Name = "entity_create",
             Title = "Create Entities",
             Description = "Creates one or more entities (with components and children) in the open scene, as one undo step. " +
-                EntityFormat,
+                "All or nothing: if any entity has a mistake, none is created and each is listed as ok or with its error. " +
+                "\"dryRun\": true says what it would create without creating anything. " + EntityFormat,
             InputSchema = Schema.Object([
                 ("entity", Schema.Map("One entity to create.")),
                 ("entities", Schema.Array(Schema.Map("An entity."), "Several entities to create.")),
                 ("parent", Schema.String("Create inside this entity (name, id or path). Default: the top level (inside the prefab, while one is open on its own).")),
                 ("select", Schema.Bool("Select the (last) created entity. Default true.")),
+                ("dryRun", Schema.Bool("Only report what would be created; change nothing.")),
             ]),
             Invoke = args => Task.FromResult(Create(args)),
         };
@@ -144,11 +147,19 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             Description = "Changes entities, as one undo step: rename (fields that name it, a Switch's Targets or a camera's Follow target, are renamed too), enable, lock (\"locked\": the Scene view clicks through it), hide (\"hidden\": the Scene view doesn't draw it), move in the hierarchy (\"parent\": a name, or null for " +
                 "the top level; \"index\": its place among siblings), place (\"position\", \"rotation\", \"scale\"), and set component " +
                 "properties with \"components\": {\"Light\": {\"radius\": 6}} (a component it doesn't have yet is added, with what it needs; " +
-                "\"Weapon#2\" is its second Weapon). \"remove\": [\"Patrol\"] takes components off.",
+                "\"Weapon#2\" is its second Weapon). \"remove\": [\"Patrol\"] takes components off. " +
+                "Instead of \"entity\", pick several to change alike: \"match\" is a glob on the path (\"HUD/Toolbar/Tool *\"; \"*\" is any characters " +
+                "within a name, \"?\" one; without a \"/\" it matches names at any depth), \"with\" keeps those with a component, \"under\" those inside an entity; " +
+                "any of them alone works too. \"updates\" gives many such changes at once. All or nothing: if any change fails, nothing changes and " +
+                "each entity is listed as ok or with its error. \"dryRun\": true lists each field's old and new value without changing anything.",
             InputSchema = Schema.Object([
                 ("entity", Schema.String("The entity to change (name, id or path).")),
+                ("match", Schema.String("Change every entity whose path (or, without a \"/\", name) matches this glob, e.g. \"HUD/Toolbar/Tool *\".")),
+                ("with", Schema.String("Only entities with this component, e.g. \"SoundPlayer\".")),
+                ("under", Schema.String("Only entities inside this one (name, id or path).")),
                 ("changes", Schema.Map("What to change: name, enabled, locked, hidden, parent, index, position, rotation, scale, components, remove.")),
-                ("updates", Schema.Array(Schema.Map("{\"entity\": ..., \"changes\": {...}}"), "Several entities to change at once.")),
+                ("updates", Schema.Array(Schema.Map("{\"entity\": ..., \"changes\": {...}}; \"match\", \"with\" and \"under\" work in place of \"entity\"."), "Several changes at once, applied in order.")),
+                ("dryRun", Schema.Bool("Only report what would change (each entity, field, old and new value); change nothing.")),
             ]),
             Invoke = args => Task.FromResult(Update(args)),
         };
@@ -447,20 +458,53 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
 
         var parent = args.OptionalString("parent") is { } p ? Resolve(scene, p) : host.TopParent;
         var notes = new List<string>();
-        var built = specs.Select(s => Build(s, notes)).ToList();
-
-        using (host.BeginGroup(built.Count == 1 ? $"Create {built[0].Name}" : $"Create {built.Count} entities"))
+        // Each is built before any is added, so a mistake in one adds none, and every one that's wrong is named.
+        var built = new List<(string Label, Entity? Entity, string? Error)>();
+        foreach (var (spec, i) in specs.Select((s, i) => (s, i)))
         {
-            foreach (var entity in built)
-                host.Execute(new AddEntityEdit(scene, entity, parent));
+            var label = Prop(spec, "name") is { ValueKind: JsonValueKind.String } n ? n.GetString()! : $"entity {i + 1}";
+            try
+            {
+                built.Add((label, Build(spec, notes), null));
+            }
+            catch (AgentException ex)
+            {
+                built.Add((label, null, ex.Message));
+            }
         }
 
-        if (args.Bool("select", true))
-            host.Selection = [built[^1]];
+        if (built.Count(b => b.Error is not null) is var failures and > 0)
+        {
+            if (built.Count == 1)
+                throw new AgentException(built[0].Error!);
+            throw new AgentException($"Nothing was created: {failures} of {built.Count} failed.\n" +
+                string.Join("\n", built.Select(b => $"- {b.Label}: {b.Error ?? "ok"}")));
+        }
 
+        var entities = built.Select(b => b.Entity!).ToList();
         var text = new StringBuilder();
-        foreach (var entity in built)
-            text.Append("Created ").Append(PathOf(entity)).Append("  ").Append(Line(entity)).AppendLine();
+        if (args.Bool("dryRun"))
+        {
+            var inside = parent is null ? "" : PathOf(parent) + "/";
+            text.Append("Dry run: nothing was created. It would create:").AppendLine();
+            foreach (var entity in entities)
+                text.Append("- ").Append(inside).Append(entity.Name).Append("  ").Append(Line(entity)).AppendLine();
+        }
+        else
+        {
+            using (host.BeginGroup(entities.Count == 1 ? $"Create {entities[0].Name}" : $"Create {entities.Count} entities"))
+            {
+                foreach (var entity in entities)
+                    host.Execute(new AddEntityEdit(scene, entity, parent));
+            }
+
+            if (args.Bool("select", true))
+                host.Selection = [entities[^1]];
+
+            foreach (var entity in entities)
+                text.Append("Created ").Append(PathOf(entity)).Append("  ").Append(Line(entity)).AppendLine();
+        }
+
         foreach (var note in notes.Distinct())
             text.Append("Note: ").Append(note).AppendLine();
         return ToolResult.Ok(text.ToString().TrimEnd());
@@ -540,43 +584,217 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
     // Detached entities link up directly, as the serializer does; the scene indexes them all when the parent is added.
     private static void AttachChild(Entity parent, Entity child) => parent.AddChild(child);
 
+    // An update's "entity" (or "match", "with" and "under") and its changes: the entities it picks, or why it picks none.
+    private sealed record Pick(string Label, IReadOnlyList<Entity> Entities, string? Error, JsonElement Changes);
+
     private ToolResult Update(ToolArgs args)
     {
         var scene = RequireScene();
-        var updates = new List<(Entity Entity, JsonElement Changes)>();
-        if (args.Has("entity"))
-            updates.Add((Resolve(scene, args.String("entity")), args.TryGet("changes", out var c) ? c : throw new AgentException("Give \"changes\".")));
+        var picks = new List<Pick>();
+        if (Picks(args.Root))
+            picks.Add(PickFrom(scene, args.Root, args.TryGet("changes", out var c) ? c : throw new AgentException("Give \"changes\".")));
         if (args.TryGet("updates", out var list))
         {
             foreach (var item in list.EnumerateArray())
             {
-                var reference = Prop(item, "entity")?.GetString() ?? throw new AgentException("Each update needs an \"entity\".");
-                updates.Add((Resolve(scene, reference), Prop(item, "changes") ?? throw new AgentException($"The update to {reference} needs \"changes\".")));
+                if (!Picks(item))
+                    throw new AgentException("Each update needs an \"entity\" (or a \"match\", \"with\" or \"under\" to pick several).");
+                picks.Add(PickFrom(scene, item, Prop(item, "changes") ?? throw new AgentException($"The update to {PickLabel(item)} needs \"changes\".")));
             }
         }
 
-        if (updates.Count == 0)
+        if (picks.Count == 0)
             throw new AgentException("Give \"entity\" and \"changes\", or \"updates\".");
 
-        // Checked before anything changes: a change it doesn't know would otherwise be left out without a word.
-        foreach (var (entity, changes) in updates)
-            CheckChanges(entity, changes);
+        var entities = picks.SelectMany(p => p.Entities).Distinct().ToList();
+        var paths = entities.ToDictionary(e => e, PathOf);
+        var failed = new Dictionary<Entity, string>();
 
-        var notes = new List<string>();
-        var first = updates[0].Changes.ValueKind == JsonValueKind.Object && Prop(updates[0].Changes, "name") is { ValueKind: JsonValueKind.String } renamed
-            ? renamed.GetString()! : updates[0].Entity.Name;
-        using (host.BeginGroup(updates.Count == 1 ? $"Change {first}" : $"Change {updates.Count} entities"))
+        // Checked before anything changes: a change it doesn't know would otherwise be left out without a word.
+        foreach (var pick in picks)
         {
-            foreach (var (entity, changes) in updates)
-                Apply(scene, entity, changes, notes);
+            foreach (var entity in pick.Entities.Where(e => !failed.ContainsKey(e)))
+            {
+                try
+                {
+                    CheckChanges(entity, pick.Changes);
+                }
+                catch (AgentException ex)
+                {
+                    failed[entity] = ex.Message;
+                }
+            }
         }
 
-        var text = new StringBuilder();
-        foreach (var entity in updates.Select(u => u.Entity).Distinct())
-            text.Append("Updated ").Append(Line(entity)).AppendLine();
+        var dryRun = args.Bool("dryRun");
+        var before = dryRun ? entities.ToDictionary(e => e, Snapshot) : null;
+        var notes = new List<string>();
+        var first = picks[0].Changes.ValueKind == JsonValueKind.Object && Prop(picks[0].Changes, "name") is { ValueKind: JsonValueKind.String } renamed
+            ? renamed.GetString()! : entities.FirstOrDefault()?.Name;
+        using (var group = host.BeginGroup(entities.Count == 1 ? $"Change {first}" : $"Change {entities.Count} entities"))
+        {
+            foreach (var pick in picks)
+            {
+                foreach (var entity in pick.Entities.Where(e => !failed.ContainsKey(e)))
+                {
+                    try
+                    {
+                        Apply(scene, entity, pick.Changes, notes);
+                    }
+                    catch (Exception ex)
+                    {
+                        failed[entity] = ex.Message;
+                    }
+                }
+            }
+
+            // All or nothing: a batch with a mistake in it changes nothing, and says how each entity fared.
+            var unpicked = picks.Count(p => p.Error is not null);
+            if (unpicked + failed.Count > 0)
+            {
+                group.Discard();
+                if (unpicked + entities.Count == 1)
+                    throw new AgentException(picks.FirstOrDefault(p => p.Error is not null)?.Error ?? failed.Values.Single());
+                var report = new StringBuilder($"Nothing was changed: {unpicked + failed.Count} of {unpicked + entities.Count} failed.\n");
+                foreach (var pick in picks.Where(p => p.Error is not null))
+                    report.Append("- ").Append(pick.Label).Append(": ").Append(pick.Error).AppendLine();
+                foreach (var entity in entities)
+                    report.Append("- ").Append(paths[entity]).Append(": ").Append(failed.GetValueOrDefault(entity, "ok")).AppendLine();
+                throw new AgentException(report.ToString().TrimEnd());
+            }
+
+            if (dryRun)
+            {
+                var text = new StringBuilder("Dry run: nothing was changed. It would change:\n");
+                foreach (var entity in entities)
+                {
+                    var changes = Differences(before![entity], Snapshot(entity));
+                    text.Append("- ").Append(paths[entity]).Append(changes.Count == 0 ? ": nothing" : "").AppendLine();
+                    foreach (var change in changes)
+                        text.Append("  ").Append(change).AppendLine();
+                }
+
+                group.Discard();
+                foreach (var note in notes.Distinct())
+                    text.Append("Note: ").Append(note).AppendLine();
+                return ToolResult.Ok(text.ToString().TrimEnd());
+            }
+        }
+
+        var result = new StringBuilder();
+        foreach (var entity in entities)
+            result.Append("Updated ").Append(Line(entity)).AppendLine();
         foreach (var note in notes.Distinct())
-            text.Append("Note: ").Append(note).AppendLine();
-        return ToolResult.Ok(text.ToString().TrimEnd());
+            result.Append("Note: ").Append(note).AppendLine();
+        return ToolResult.Ok(result.ToString().TrimEnd());
+    }
+
+    private static bool Picks(JsonElement item) =>
+        Prop(item, "entity") is not null || Prop(item, "match") is not null || Prop(item, "with") is not null || Prop(item, "under") is not null;
+
+    private static string PickLabel(JsonElement item)
+    {
+        if (Prop(item, "entity") is { } entity)
+            return entity.ValueKind == JsonValueKind.String ? entity.GetString()! : entity.GetRawText();
+        var parts = new List<string>();
+        if (Prop(item, "match") is { } match)
+            parts.Add($"\"{match}\"");
+        if (Prop(item, "with") is { } with)
+            parts.Add($"with {with}");
+        if (Prop(item, "under") is { } under)
+            parts.Add($"under {under}");
+        return string.Join(" ", parts);
+    }
+
+    private Pick PickFrom(Scene scene, JsonElement item, JsonElement changes)
+    {
+        var label = PickLabel(item);
+        try
+        {
+            return new Pick(label, Targets(scene, item, label), null, changes);
+        }
+        catch (AgentException ex)
+        {
+            return new Pick(label, [], ex.Message, changes);
+        }
+    }
+
+    /// <summary>
+    /// The entities an update names: one by "entity" (a name, id or path), or every one whose path matches the glob
+    /// "match" ("*" is any characters within a name, "?" one; a pattern without "/" matches names at any depth), that has
+    /// the component "with", and that is inside "under", in the order the hierarchy shows them.
+    /// </summary>
+    private List<Entity> Targets(Scene scene, JsonElement item, string label)
+    {
+        if (Prop(item, "entity") is { } entity)
+        {
+            if (Prop(item, "match") is not null)
+                throw new AgentException("Give \"entity\" or \"match\", not both.");
+            return [Resolve(scene, entity.ValueKind == JsonValueKind.String ? entity.GetString()! : throw new AgentException("\"entity\" should be text."))];
+        }
+
+        var under = Prop(item, "under") is { } u ? Resolve(scene, u.ToString()) : null;
+        var with = Prop(item, "with") is { } w ? FindComponent(w.ToString()) : null;
+        var pattern = Prop(item, "match")?.ToString().Trim();
+        var glob = pattern is null ? null
+            : new Regex("^" + Regex.Escape(pattern).Replace(@"\*", "[^/]*").Replace(@"\?", "[^/]") + "$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var found = (under?.Children ?? scene.Roots).SelectMany(Tree)
+            .Where(e => with is null || e.Components.Any(with.Type.IsInstanceOfType))
+            .Where(e => glob is null || glob.IsMatch(pattern!.Contains('/') ? PathOf(e) : e.Name))
+            .ToList();
+        return found.Count > 0 ? found : throw new AgentException($"Nothing matches {label}.");
+
+        static IEnumerable<Entity> Tree(Entity e) => e.Children.SelectMany(Tree).Prepend(e);
+    }
+
+    // What a dry run compares: the entity's own settings, and each component (Value "") and its properties as JSON, with
+    // each property's default, what a component the change adds starts from.
+    private List<(string Key, string Value, string? Default)> Snapshot(Entity entity)
+    {
+        var values = new List<(string, string, string?)>
+        {
+            ("name", Json(entity.Name), null),
+            ("enabled", Json(entity.IsEnabled), null),
+            ("locked", Json(entity.IsLocked), null),
+            ("hidden", Json(entity.IsHidden), null),
+            ("parent", entity.Parent is { } parent ? Json(PathOf(parent)) : "null", null),
+        };
+        var seen = new Dictionary<string, int>();
+        foreach (var component in entity.Components)
+        {
+            var descriptor = component is MissingComponent ? null : host.Components.Get(component.GetType());
+            var type = descriptor?.DisplayName ?? ((MissingComponent)component).TypeName;
+            seen[type] = seen.GetValueOrDefault(type) + 1;
+            var key = seen[type] == 1 ? type : $"{type}#{seen[type]}";
+            values.Add((key, "", null));
+            if (descriptor is null)
+                continue;
+            var fresh = descriptor.CreateInstance();
+            foreach (var property in descriptor.Properties)
+                values.Add(($"{key}.{property.SerializedName}", Json(property.GetValue(component)), Json(property.GetValue(fresh))));
+        }
+
+        return values;
+
+        static string Json(object? value) => AgentValues.ToJson(value)?.ToJsonString() ?? "null";
+    }
+
+    // "Light.radius: 3 -> 8", "+ Light (added)" and "- Sprite (removed)" for what changed between two snapshots.
+    private static List<string> Differences(List<(string Key, string Value, string? Default)> before, List<(string Key, string Value, string? Default)> after)
+    {
+        var old = before.ToDictionary(b => b.Key, b => b.Value);
+        var now = after.Select(a => a.Key).ToHashSet();
+        var lines = new List<string>();
+        foreach (var (key, value, fallback) in after)
+        {
+            if (old.TryGetValue(key, out var was) ? was != value : value == "" || fallback != value)
+                lines.Add(value == "" ? $"+ {key} (added)" : $"{key}: {Short(was ?? fallback ?? "null")} -> {Short(value)}");
+        }
+
+        lines.AddRange(before.Where(b => b.Value == "" && !now.Contains(b.Key)).Select(b => $"- {b.Key} (removed)"));
+        return lines;
+
+        static string Short(string json) => json.Length <= 120 ? json : json[..117] + "...";
     }
 
     private static readonly string[] ChangeKeys = ["name", "enabled", "locked", "hidden", "parent", "index", "position", "rotation", "scale", "components", "remove"];

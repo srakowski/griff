@@ -27,7 +27,7 @@ public class SceneToolsTests
 
         public void Execute(IEdit edit) => History.Execute(edit);
 
-        public IDisposable BeginGroup(string description) => History.BeginGroup(description);
+        public EditHistory.EditGroup BeginGroup(string description) => History.BeginGroup(description);
 
         public Entity? InstantiatePrefab(string name)
         {
@@ -798,5 +798,140 @@ public class SceneToolsTests
         // Removing what needs it too, or putting another in its place, says nothing.
         Assert.DoesNotContain("Note:", Run("entity_update", """{"entity": "Hero", "changes": {"remove": ["Sprite"]}}""").Text);
         Assert.DoesNotContain("Note:", Run("entity_update", """{"entity": "Hero", "changes": {"remove": ["BoxCollider", "PlatformerMovement"]}}""").Text);
+    }
+
+    // A toolbar in a HUD (three tools and a toolbox, two of them lit) and a tool on its own at the top level.
+    private void MakeToolbar()
+    {
+        Run("entity_create", """
+            {"entity": {"name": "HUD", "children": [{"name": "Toolbar", "children": [
+              {"name": "Tool A", "components": {"Light": {"radius": 1}}},
+              {"name": "Tool B", "components": {"Light": {"radius": 2}}},
+              {"name": "Tool C"},
+              {"name": "Toolbox"}]}]}}
+            """);
+        Run("entity_create", """{"entity": {"name": "Tool X", "components": {"Light": {"radius": 4}}}}""");
+    }
+
+    private float Radius(string name) => Named(name).GetComponent<Light>()!.Radius;
+
+    [Fact]
+    public void Update_ABatchOverSeveralEntities_IsOneUndoStep()
+    {
+        MakeToolbar();
+        var undoBefore = _host.History.UndoDescription;
+
+        var result = Run("entity_update", """
+            {"updates": [{"entity": "Tool A", "changes": {"components": {"Light": {"radius": 7}}}},
+              {"entity": "HUD/Toolbar/Tool B", "changes": {"components": {"Light": {"radius": 8}}, "hidden": true}},
+              {"entity": "Tool X", "changes": {"position": [5, 5]}}]}
+            """);
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal("Change 3 entities", _host.History.UndoDescription);
+        Assert.Equal((7f, 8f), (Radius("Tool A"), Radius("Tool B")));
+        Assert.True(Named("Tool B").IsHidden);
+
+        _host.History.Undo();
+        Assert.Equal(undoBefore, _host.History.UndoDescription);
+        Assert.Equal((1f, 2f), (Radius("Tool A"), Radius("Tool B")));
+        Assert.False(Named("Tool B").IsHidden);
+        Assert.Equal(Vector3.Zero, Named("Tool X").Transform.Position);
+    }
+
+    [Fact]
+    public void Update_PicksEntitiesByAGlob_AComponentAndWhatTheyAreInside()
+    {
+        MakeToolbar();
+
+        // A path glob: "?" is one character, so the toolbox isn't picked, nor the tool outside the HUD.
+        Assert.Contains("Updated Tool C", Run("entity_update", """{"match": "hud/Toolbar/Tool ?", "changes": {"locked": true}}""").Text);
+        Assert.Equal(["Tool A", "Tool B", "Tool C"], _host.Scene!.Entities.Where(e => e.IsLocked).Select(e => e.Name).Order());
+
+        // Without a "/" it matches names at any depth.
+        Run("entity_update", """{"match": "Tool *", "changes": {"hidden": true}}""");
+        Assert.Equal(["Tool A", "Tool B", "Tool C", "Tool X"], _host.Scene!.Entities.Where(e => e.IsHidden).Select(e => e.Name).Order());
+
+        // Every lit one inside the HUD, in an "updates" item.
+        Run("entity_update", """{"updates": [{"with": "Light", "under": "HUD", "changes": {"components": {"Light": {"radius": 9}}}}]}""");
+        Assert.Equal((9f, 9f, 4f), (Radius("Tool A"), Radius("Tool B"), Radius("Tool X")));
+
+        var none = Run("entity_update", """{"match": "HUD/*/Nothing*", "changes": {"locked": true}}""");
+        Assert.True(none.IsError);
+        Assert.Contains("Nothing matches", none.Text);
+    }
+
+    [Fact]
+    public void Update_ABatchWithMistakes_ChangesNothing_AndSaysHowEachEntityFared()
+    {
+        MakeToolbar();
+        var undoBefore = _host.History.UndoDescription;
+
+        var result = Run("entity_update", """
+            {"updates": [{"match": "HUD/Toolbar/Tool ?", "changes": {"components": {"Light": {"radius": 5}}}},
+              {"entity": "Tool B", "changes": {"components": {"Light": {"raduis": 6}}}},
+              {"entity": "Ghost", "changes": {"locked": true}}]}
+            """);
+
+        Assert.True(result.IsError);
+        Assert.Contains("Nothing was changed: 2 of 4 failed.", result.Text);
+        Assert.Contains("- Ghost: There's no entity \"Ghost\".", result.Text);
+        Assert.Contains("- HUD/Toolbar/Tool A: ok", result.Text);
+        Assert.Contains("- HUD/Toolbar/Tool B: Light has no property \"raduis\"", result.Text);
+        Assert.Contains("- HUD/Toolbar/Tool C: ok", result.Text);
+        // Tool C got a Light from the first change, taken back with the rest.
+        Assert.Null(Named("Tool C").GetComponent<Light>());
+        Assert.Equal((1f, 2f), (Radius("Tool A"), Radius("Tool B")));
+        Assert.Equal(undoBefore, _host.History.UndoDescription);
+    }
+
+    [Fact]
+    public void Update_ADryRun_ListsOldAndNewValues_AndChangesNothing()
+    {
+        MakeToolbar();
+        var undoBefore = _host.History.UndoDescription;
+
+        var result = Run("entity_update", """
+            {"match": "HUD/Toolbar/Tool ?", "changes": {"components": {"Light": {"radius": 2}}}, "dryRun": true}
+            """);
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Contains("Dry run: nothing was changed.", result.Text);
+        var text = result.Text.ReplaceLineEndings("\n");
+        Assert.Contains("- HUD/Toolbar/Tool A\n  Light.radius: 1 -> 2", text);
+        Assert.Contains("- HUD/Toolbar/Tool B: nothing", text);
+        Assert.Contains("- HUD/Toolbar/Tool C\n  + Light (added)\n  Light.radius: 4 -> 2", text);
+        Assert.Equal(1f, Radius("Tool A"));
+        Assert.Null(Named("Tool C").GetComponent<Light>());
+        Assert.Equal(undoBefore, _host.History.UndoDescription);
+    }
+
+    [Fact]
+    public void Update_OneEntity_WorksAsItAlwaysHas()
+    {
+        MakeToolbar();
+
+        var result = Run("entity_update", """{"entity": "Tool A", "changes": {"name": "Pick", "components": {"Light": {"radius": 3}}}}""");
+
+        Assert.Equal($"Updated Pick #{AgentValues.ShortId(Named("Pick").Id)} (0, 0) [Light]", result.Text);
+        Assert.Equal("Change Pick", _host.History.UndoDescription);
+        // Its one mistake comes back as it is.
+        Assert.Equal("Light has no property \"raduis\". It has: " + string.Join(", ", _host.Components.Get(typeof(Light)).Properties.Select(p => p.SerializedName)) + ".",
+            Run("entity_update", """{"entity": "Pick", "changes": {"components": {"Light": {"raduis": 6}}}}""").Text);
+    }
+
+    [Fact]
+    public void Create_SaysWhichEntitiesAreWrong_AndADryRunCreatesNothing()
+    {
+        var count = _host.Scene!.Count;
+        var wrong = Run("entity_create", """{"entities": [{"name": "Good"}, {"name": "Bad", "components": {"Nope": {}}}]}""");
+        Assert.True(wrong.IsError);
+        Assert.Contains("- Good: ok", wrong.Text);
+        Assert.Contains("- Bad: There's no component \"Nope\"", wrong.Text);
+
+        var dry = Run("entity_create", """{"entities": [{"name": "Coin"}, {"name": "Gem"}], "dryRun": true}""");
+        Assert.False(dry.IsError, dry.Text);
+        Assert.Contains("- Gem", dry.Text);
+        Assert.Equal(count, _host.Scene!.Count);
     }
 }

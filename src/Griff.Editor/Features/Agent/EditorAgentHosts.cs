@@ -26,7 +26,7 @@ public sealed class EditorAgentScene(IProjectSession projectSession, ISceneDocum
 
     public void Execute(IEdit edit) => Document.Execute(edit);
 
-    public IDisposable BeginGroup(string description) => Document.History.BeginGroup(description);
+    public EditHistory.EditGroup BeginGroup(string description) => Document.History.BeginGroup(description);
 
     public IReadOnlyList<Entity> Selection
     {

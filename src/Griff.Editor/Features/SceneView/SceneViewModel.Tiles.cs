@@ -312,7 +312,7 @@ public sealed partial class SceneViewModel
         private readonly int _tile;
         private readonly PropertyDescriptor _tiles;
         private readonly PropertyDescriptor _position;
-        private readonly IDisposable _group;
+        private readonly EditHistory.EditGroup _group;
         private (int X, int Y)? _last;
 
         internal TileStroke(SceneDocument document, Tilemap tilemap, int tile, PropertyDescriptor tiles, PropertyDescriptor position)

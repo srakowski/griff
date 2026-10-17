@@ -25,7 +25,7 @@ public sealed partial class AgentServer : ObservableObject, IHostedService
         """
         This is Griff, a 2D game engine and editor, running on the user's machine; you're driving it live.
         - Start with editor_state. Project_New (a template, answering its window) or Project_Open gets a project going.
-        - scene_tree shows the open scene; entity_get shows an entity in full. entity_create / entity_update / entity_delete change it, one undo step per call (Edit_Undo undoes).
+        - scene_tree shows the open scene; entity_get shows an entity in full. entity_create / entity_update / entity_delete change it, one undo step per call (Edit_Undo undoes); entity_create and entity_update take many at once (entity_update can pick them by a path glob) and have a dry run.
         - components_list and component_describe say what every component does and what its properties take. Any component (scripts too) can be added through entity_create/entity_update.
         - Tools named like Entity_CreatePlatformerPlayer are the editor's own commands (menus and toolbar). Ones that act on the selection take "entity". If a command asks a question, it says so; call again with "answers". The Entity_Create ones make ready-made things (players, enemies, UI, level pieces, sounds, lights, a genre module's boards and units), each saying its Entity menu category (Menu: Entity > Characters > Grid Enemy).
         - Scripts, sprites, sounds and scenes are files: asset_write writes them (scripts compile at once and report errors), asset_read reads them.

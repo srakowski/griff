@@ -97,10 +97,11 @@ public sealed class EditHistory
     /// Groups every edit executed until the returned scope is disposed into one undo step.
     /// Groups can nest; only the outermost becomes a history entry.
     /// </summary>
-    public IDisposable BeginGroup(string description)
+    public EditGroup BeginGroup(string description)
     {
-        _groups.Push([]);
-        return new GroupScope(this, description);
+        List<IEdit> edits = [];
+        _groups.Push(edits);
+        return new EditGroup(this, edits, description);
     }
 
     /// <summary>Stops the next edit merging into the current one, e.g. at the end of a drag.</summary>
@@ -223,16 +224,39 @@ public sealed class EditHistory
 
     private sealed record Entry(long Id, IEdit Edit);
 
-    private sealed class GroupScope(EditHistory history, string description) : IDisposable
+    /// <summary>An open group of edits (see <see cref="BeginGroup"/>): disposing it makes them one undo step.</summary>
+    public sealed class EditGroup : IDisposable
     {
+        private readonly EditHistory _history;
+        private readonly List<IEdit> _edits;
+        private readonly string _description;
         private bool _disposed;
+
+        internal EditGroup(EditHistory history, List<IEdit> edits, string description)
+        {
+            _history = history;
+            _edits = edits;
+            _description = description;
+        }
+
+        /// <summary>
+        /// Takes back every edit made in the group so far, newest first, so disposing it records none of them: how a
+        /// change that fails partway, or one only tried to see what it would do, leaves the document as it was. Call it
+        /// with no group open inside this one.
+        /// </summary>
+        public void Discard()
+        {
+            for (var i = _edits.Count - 1; i >= 0; i--)
+                _edits[i].Revert();
+            _edits.Clear();
+        }
 
         public void Dispose()
         {
             if (_disposed)
                 return;
             _disposed = true;
-            history.EndGroup(description);
+            _history.EndGroup(_description);
         }
     }
 }

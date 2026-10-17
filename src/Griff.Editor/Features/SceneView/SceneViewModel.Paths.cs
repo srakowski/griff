@@ -409,7 +409,7 @@ public sealed partial class SceneViewModel
 
         // A hinge's arc as the drag began, and the whole drag as one undo step when it unjoins the hinge too.
         private readonly HingeArc _arc;
-        private readonly IDisposable? _group;
+        private readonly EditHistory.EditGroup? _group;
 
         internal PathPointDrag(SceneDocument document, Component component, PropertyDescriptor property, int index, bool insert,
             PropertyDescriptor? joined = null)

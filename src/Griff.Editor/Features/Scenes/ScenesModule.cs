@@ -64,7 +64,10 @@ public sealed class SaveSceneCommand(ISceneDocuments sceneDocuments) : EditorCom
     protected override Task ExecuteCoreAsync() => sceneDocuments.SaveSceneAsync();
 }
 
-/// <summary>Opens another of the project's scenes (asking to save the open one first if it has changes).</summary>
+/// <summary>
+/// Opens another of the project's scenes (asking to save the open one first if it has changes). Over MCP, "scene" names
+/// the one to open, by name ("Game Over"), path in Assets or full path.
+/// </summary>
 public sealed class OpenSceneCommand(IProjectSession projectSession, ISceneDocuments sceneDocuments, IPlaySession playSession, IDialogService dialogs) : EditorCommand
 {
     public override string Id => "Scene.Open";
@@ -74,6 +77,14 @@ public sealed class OpenSceneCommand(IProjectSession projectSession, ISceneDocum
     public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 1, Order: 2);
 
     protected override bool CanExecuteCore() => projectSession.Project is not null && !playSession.IsPlaying;
+
+    // "scene": which to open without a dialog, by name ("Game Over"), path in Assets or full path.
+    public override CommandTarget? Target => new("scene", "The scene to open, by name (\"Game Over\"), path in Assets or full path. Leave out to be asked.",
+        name => projectSession.Project?.FindScene(name) is { } path ? path
+            : Path.IsPathRooted(name) && File.Exists(name) ? name
+            : throw new ArgumentException($"The project has no scene \"{name}\".", nameof(name))) { Optional = true };
+
+    protected override Task ExecuteCoreAsync(object? target) => target is string path ? sceneDocuments.OpenSceneAsync(path) : ExecuteCoreAsync();
 
     protected override async Task ExecuteCoreAsync()
     {

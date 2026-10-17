@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -26,6 +27,7 @@ public sealed class ActiveDocument : ObservableObject
     private static int s_hooked;
 
     private readonly EditorWindow _editorWindow;
+    private readonly ISceneDocuments _sceneDocuments;
     private readonly HashSet<IDocumentEditor> _watched = [];
     private IDocumentEditor _editor;
     private SceneDocument? _scene;
@@ -33,6 +35,7 @@ public sealed class ActiveDocument : ObservableObject
     public ActiveDocument(ISceneDocuments sceneDocuments, IEnumerable<IDocumentEditor> editors, EditorWindow editorWindow)
     {
         _editorWindow = editorWindow;
+        _sceneDocuments = sceneDocuments;
         Scene = new SceneEditor(sceneDocuments);
         _editor = Scene;
         foreach (var editor in editors)
@@ -65,6 +68,21 @@ public sealed class ActiveDocument : ObservableObject
     /// <summary>What Redo would do again now, or null.</summary>
     public string? RedoDescription => HistoryOf(null)?.RedoDescription;
 
+    /// <summary>
+    /// The editor of an open scene or prefab named <paramref name="nameOrPath"/> ("Game Over", "Bullet", or its path, with or
+    /// without its extension), for undoing or redoing in it whichever document is active. The scene's own editor when it's the
+    /// one showing. Throws <see cref="ArgumentException"/>, listing the open ones, if none is.
+    /// </summary>
+    public IDocumentEditor FindDocument(string nameOrPath)
+    {
+        var wanted = nameOrPath.Trim().Replace('\\', '/');
+        var open = new[] { _sceneDocuments.EditScene, _sceneDocuments.Scene }.Concat(_sceneDocuments.Prefabs).OfType<SceneDocument>().Distinct().ToList();
+        var found = open.FirstOrDefault(d => d.Name.Equals(wanted, StringComparison.OrdinalIgnoreCase) || Path.GetFileName(d.FilePath).Equals(wanted, StringComparison.OrdinalIgnoreCase))
+            ?? open.FirstOrDefault(d => d.FilePath.Replace('\\', '/').EndsWith(wanted, StringComparison.OrdinalIgnoreCase))
+            ?? throw new ArgumentException($"\"{nameOrPath}\" isn't open" + (open.Count > 0 ? $" (the open ones: {string.Join(", ", open.Select(d => d.Name))})." : "."), nameof(nameOrPath));
+        return ReferenceEquals(found, _sceneDocuments.Scene) ? Scene : new OtherDocument(found);
+    }
+
     /// <summary>Makes <paramref name="editor"/> the one undo and redo go to.</summary>
     public void Activate(IDocumentEditor editor)
     {
@@ -95,7 +113,9 @@ public sealed class ActiveDocument : ObservableObject
         editor ??= _editor;
         if (HistoryOf(editor) is not { } history || !(undo ? history.CanUndo : history.CanRedo))
             return null;
-        Activate(editor);
+        // A document that isn't the one showing is undone where it is, leaving the active one as it was.
+        if (editor is not OtherDocument)
+            Activate(editor);
         var what = undo ? history.UndoDescription : history.RedoDescription;
         var where = editor.DocumentName;
         if (undo)
@@ -217,6 +237,20 @@ public sealed class ActiveDocument : ObservableObject
 
     /// <summary>Raised when <see cref="Opened"/> finds a window of a document of its own, e.g. for Undo and Redo to bind their keys in it.</summary>
     public event Action<Window, IDocumentEditor>? EditorWindowOpened;
+
+    // An open scene or prefab that isn't showing (its tab is behind the one that is), as a document.
+    private sealed class OtherDocument(SceneDocument document) : IDocumentEditor
+    {
+        public EditHistory? History => document.History;
+
+        public string? DocumentName => $"the {document.Name} {(document.IsPrefab ? "prefab" : "scene")}";
+
+        public event EventHandler? Edited
+        {
+            add { }
+            remove { }
+        }
+    }
 
     // The open scene or prefab, as a document.
     private sealed class SceneEditor(ISceneDocuments sceneDocuments) : IDocumentEditor

@@ -19,7 +19,7 @@ public sealed class EditingModule : IEditorModule
 /// Undoes the last change to the document being worked on: the open scene or prefab, or the table, rhythm chart,
 /// simulation or sprite sheet last changed or clicked into (in its panel or window), whichever is active (ui_inspect
 /// ActiveDocument says which, and what this would undo). Given one (a panel's undo button gives its own), it undoes that
-/// one's.
+/// one's. Over MCP, "document" names an open scene or prefab to undo in when it isn't the active one.
 /// </summary>
 public sealed class UndoCommand : EditorCommand
 {
@@ -49,6 +49,13 @@ public sealed class UndoCommand : EditorCommand
     public override MenuPlacement? Placement { get; } = new(Menus.Edit, Group: 0, Order: 0);
     public override ToolbarPlacement? Toolbar { get; } = new(Group: 1, Order: 0);
 
+    public override CommandTarget? Target => DocumentTarget(documents);
+
+    // "document": which open scene or prefab, where the active one isn't the one meant.
+    internal static CommandTarget DocumentTarget(ActiveDocument documents) => new("document",
+        "Which open scene or prefab to act on, by name (\"Game Over\", \"Bullet\") or path, when it isn't the active one (editor_state or ui_inspect ActiveDocument says which is). Leave out for the active document.",
+        documents.FindDocument) { Optional = true };
+
     protected override bool CanExecuteCore(object? target) => documents.CanUndo(target as IDocumentEditor);
 
     protected override Task ExecuteCoreAsync() => ExecuteCoreAsync(null);
@@ -73,7 +80,7 @@ public sealed class UndoCommand : EditorCommand
         : $"there's nothing to {what} in {editor.DocumentName ?? "it"}";
 }
 
-/// <summary>Redoes the last change undone to the document being worked on (see Undo), or to the one it's given.</summary>
+/// <summary>Redoes the last change undone to the document being worked on (see Undo), or to the open scene or prefab named by "document".</summary>
 public sealed class RedoCommand : EditorCommand
 {
     private readonly ActiveDocument documents;
@@ -92,6 +99,8 @@ public sealed class RedoCommand : EditorCommand
     public override KeyGesture? AlternateGesture { get; } = new(Key.Z, ModifierKeys.Control | ModifierKeys.Shift);
     public override MenuPlacement? Placement { get; } = new(Menus.Edit, Group: 0, Order: 1);
     public override ToolbarPlacement? Toolbar { get; } = new(Group: 1, Order: 1);
+
+    public override CommandTarget? Target => UndoCommand.DocumentTarget(documents);
 
     protected override bool CanExecuteCore(object? target) => documents.CanRedo(target as IDocumentEditor);
 

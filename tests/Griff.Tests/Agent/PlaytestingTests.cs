@@ -135,6 +135,19 @@ public class PlaytestingTests
         Assert.Equal("Systems scripts added: Recorder (Simulate, goes with Level), OtherRecorder (Simulate).", Playtesting.AddedSystems(game));
     }
     [Fact]
+    public void PointOf_FindsAButtonByTheLabelOnItsOwnEntity()
+    {
+        var scene = new Scene();
+        var button = new Entity("Retry Button");
+        button.Transform.Position = new Vector3(4, -1, 0);
+        button.AddComponent<Button>();
+        button.AddComponent<Text>().Value = "START OVER";
+        scene.Add(button);
+
+        Assert.Equal(new Vector2(4, -1), Playtesting.PointOf(JsonDocument.Parse("\"start over\"").RootElement, scene));
+    }
+
+    [Fact]
     public void PointOf_TakesAPointInTheWorld_OrAnEntitysMiddle()
     {
         var scene = new Scene();

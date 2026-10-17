@@ -170,6 +170,10 @@ public sealed record ContextMenuPlacement(string Menu, int Group, int Order);
 
 /// <summary>
 /// What a command acts on when it's given one (see <see cref="EditorCommand.Target"/>): the argument agents name it in
-/// ("component"), what to put there, and how the command finds it from that.
+/// ("component"), what to put there, and how the command finds it from that. An <see cref="Optional"/> one may be left out.
 /// </summary>
-public sealed record CommandTarget(string Argument, string Description, Func<string, object> Find);
+public sealed record CommandTarget(string Argument, string Description, Func<string, object> Find)
+{
+    /// <summary>True when the command also runs without one, as it does from its menu item (an agent may leave the argument out).</summary>
+    public bool Optional { get; init; }
+}

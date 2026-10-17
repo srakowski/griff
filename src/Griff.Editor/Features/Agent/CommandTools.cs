@@ -108,10 +108,12 @@ public sealed class CommandTools(Lazy<CommandRegistry> registry, Core.EditorWind
         object? target = null;
         if (command.Target is { } takes)
         {
-            var name = args.OptionalString(takes.Argument) ?? throw new AgentException($"{command.DisplayText.TrimEnd('.')} needs \"{takes.Argument}\": {takes.Description}");
+            var name = args.OptionalString(takes.Argument);
+            if (name is null && !takes.Optional)
+                throw new AgentException($"{command.DisplayText.TrimEnd('.')} needs \"{takes.Argument}\": {takes.Description}");
             try
             {
-                target = takes.Find(name);
+                target = name is null ? null : takes.Find(name);
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or KeyNotFoundException)
             {

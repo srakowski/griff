@@ -53,7 +53,7 @@ public static class Playtesting
 
     /// <summary>
     /// The point in the world an agent names for the mouse: <c>[x, y]</c> in world units, an entity's name for its middle
-    /// (its collider's, if it has one), or the label of a button a system shows on the screen (an inventory bar's item, a
+    /// (its collider's, if it has one), the label of a Button (the Text on its entity), or the label of a button a system shows on the screen (an inventory bar's item, a
     /// hotbar's slot: see <see cref="Game.HudButtons"/>) for its middle, after its kind (<c>"Item: Key"</c>) when an
     /// entity has the same name. Throws an <see cref="AgentException"/> saying what's wrong otherwise.
     /// </summary>
@@ -74,6 +74,9 @@ public static class Playtesting
                 return Game.CenterOf(active);
             if (buttons.FirstOrDefault(b => b.Label.Equals(name, StringComparison.OrdinalIgnoreCase)) is { } button)
                 return button.Rect.Center;
+            // A button is also pointed at by its label: the Text on its own entity.
+            if (scene.All<Button>().Select(b => b.Entity).OfType<Entity>().FirstOrDefault(e => e.IsActive && e.GetComponent<Text>()?.Value?.Trim().Equals(name, StringComparison.OrdinalIgnoreCase) == true) is { } labelled)
+                return Game.CenterOf(labelled);
             var entity = scene.FindNamed(name)
                          ?? throw new AgentException($"There's no \"{name}\" in the game to point at" +
                                                      (buttons.Count > 0 ? $" (the buttons on the screen: {ButtonList(buttons)})." : "."));

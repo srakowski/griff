@@ -36,6 +36,9 @@ public partial class AssetsView : UserControl
         _scripts = scripts;
         _sceneDocuments = sceneDocuments;
         _commands = commands;
+        // The toolbar's Expand All and Collapse All run the panel's commands, as agents do.
+        Resources["Command.ExpandAll"] = commands.Get<ExpandAllAssetsCommand>();
+        Resources["Command.CollapseAll"] = commands.Get<CollapseAllAssetsCommand>();
     }
 
     private AssetsPanel? Panel => DataContext as AssetsPanel;

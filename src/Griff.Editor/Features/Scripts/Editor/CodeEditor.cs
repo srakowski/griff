@@ -128,6 +128,7 @@ public sealed partial class CodeEditor : TextEditor, IDisposable
         };
         Document.TextChanged += (_, _) => UpdateFoldings();
         script.NavigateRequested += (_, target) => GoTo(target.Offset, target.Length);
+        script.FoldAllRequested += (_, open) => FoldAll(open);
         Loaded += (_, _) =>
         {
             UpdateFoldings();
@@ -379,6 +380,15 @@ public sealed partial class CodeEditor : TextEditor, IDisposable
         // Batched: a burst of typing updates the folds once.
         _foldingUpdate?.Abort();
         _foldingUpdate = Dispatcher.InvokeAsync(() => _folding.UpdateFoldings(BraceFolding.Find(Document), -1), DispatcherPriority.Background);
+    }
+
+    // Opens every fold, or folds every one shut, finding the folds first if typing hasn't yet.
+    private void FoldAll(bool open)
+    {
+        _foldingUpdate?.Abort();
+        _folding.UpdateFoldings(BraceFolding.Find(Document), -1);
+        foreach (var folding in _folding.AllFoldings)
+            folding.IsFolded = !open;
     }
 
     // ----- Zoom -----

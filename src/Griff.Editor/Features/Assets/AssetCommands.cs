@@ -98,3 +98,25 @@ internal static class AssetFiles
         return full == root || full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ? full : null;
     }
 }
+
+/// <summary>
+/// Opens every folder in the Assets panel, in its folder tree and its Tree view alike, so everything in Assets shows: the
+/// Expand All button on its toolbar. Agents can list Assets with assets_list whether it's open or not.
+/// </summary>
+public sealed class ExpandAllAssetsCommand(AssetsPanel assets) : FoldAllCommand("Assets", expand: true)
+{
+    protected override bool CanExecuteCore() => assets.HasProject;
+
+    protected override void Fold() => assets.ExpandAll();
+}
+
+/// <summary>
+/// Folds every folder in the Assets panel shut but Assets itself, in its folder tree and its Tree view alike, leaving
+/// what's at the top of Assets showing: the Collapse All button on its toolbar.
+/// </summary>
+public sealed class CollapseAllAssetsCommand(AssetsPanel assets) : FoldAllCommand("Assets", expand: false)
+{
+    protected override bool CanExecuteCore() => assets.HasProject;
+
+    protected override void Fold() => assets.CollapseAll();
+}

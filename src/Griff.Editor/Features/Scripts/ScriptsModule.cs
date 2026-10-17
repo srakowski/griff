@@ -19,8 +19,29 @@ public sealed partial class ScriptsModule : IEditorModule
     {
         services.AddSingleton<ScriptEditors>();
         services.AddSingleton<ScriptTabs>();
-        services.AddCommand<NewScriptCommand>();
+        services.AddCommand<NewScriptCommand>()
+            .AddCommand<ExpandAllCodeCommand>()
+            .AddCommand<CollapseAllCodeCommand>();
     }
+}
+
+/// <summary>Opens every block folded shut in the code of the script whose tab is showing: the Expand All button above it.</summary>
+public sealed class ExpandAllCodeCommand(ScriptEditors scripts) : FoldAllCommand("Script", expand: true)
+{
+    protected override bool CanExecuteCore() => scripts.Active is not null;
+
+    protected override void Fold() => scripts.Active?.ExpandAll();
+}
+
+/// <summary>
+/// Folds shut every block in the code of the script whose tab is showing, its classes, methods and comments (opening a
+/// class shows its methods a line each): the Collapse All button above it.
+/// </summary>
+public sealed class CollapseAllCodeCommand(ScriptEditors scripts) : FoldAllCommand("Script", expand: false)
+{
+    protected override bool CanExecuteCore() => scripts.Active is not null;
+
+    protected override void Fold() => scripts.Active?.CollapseAll();
 }
 
 /// <summary>

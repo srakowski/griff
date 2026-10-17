@@ -28,7 +28,7 @@ public sealed class FieldGroup : ObservableObject
     public IReadOnlyList<PropertyField> Fields { get; }
 
     // Kept with the components' folded sections, under "Type/Group", which no type's name can be.
-    private string Key => $"{_section.TypeKey}/{Name}";
+    internal string Key => $"{_section.TypeKey}/{Name}";
 
     /// <summary>Open, showing its fields.</summary>
     public bool IsExpanded

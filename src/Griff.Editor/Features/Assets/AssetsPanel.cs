@@ -304,6 +304,31 @@ public sealed class AssetsPanel : ToolPanel, IDisposable
         }
     }
 
+    /// <summary>
+    /// Opens every folder, in the folder tree and the Tree view alike (the toolbar's Expand All), showing everything in
+    /// Assets. Folders stay open as the files in them change.
+    /// </summary>
+    public void ExpandAll() => SetAllExpanded(true);
+
+    /// <summary>
+    /// Folds every folder shut but Assets itself, in the folder tree and the Tree view alike (the toolbar's Collapse
+    /// All), leaving what's at the top of Assets showing. The picked folder stays picked.
+    /// </summary>
+    public void CollapseAll() => SetAllExpanded(false);
+
+    private void SetAllExpanded(bool expanded)
+    {
+        var assets = FolderTree.FirstOrDefault();
+        foreach (var node in Flatten(FolderTree).Where(n => n.Kind == AssetKind.Folder && n != assets))
+        {
+            node.IsExpanded = expanded;
+            if (expanded)
+                _expanded.Add(node.FullPath);
+            else
+                _expanded.Remove(node.FullPath);
+        }
+    }
+
     /// <summary>Shows the folder the picked folder is in.</summary>
     public void GoUp()
     {
@@ -493,13 +518,15 @@ public sealed class AssetsPanel : ToolPanel, IDisposable
 
         FolderTree.Add(root);
         MarkStartScene();
-        ShowFolder(_selectedFolder, picked);
+        // The tree is as it was: the picked folder needs opening up to only if it's gone and one it was in is picked.
+        ShowFolder(_selectedFolder, picked, reveal: false);
     }
 
     // Shows a folder's contents as tiles (or those of the nearest folder it's in that's still there), opening the
-    // folders it's in in the tree.
-    private void ShowFolder(string folder, string? pick = null)
+    // folders it's in in the tree (unless not asked to, and it's the folder asked for).
+    private void ShowFolder(string folder, string? pick = null, bool reveal = true)
     {
+        var asked = folder;
         var node = FindFolder(folder);
         while (node is null && folder.Length > 0)
         {
@@ -516,7 +543,7 @@ public sealed class AssetsPanel : ToolPanel, IDisposable
         {
             foreach (var child in node.Children)
                 Items.Add(child);
-            if (node.AssetPath.Length > 0)
+            if (node.AssetPath.Length > 0 && (reveal || !string.Equals(node.AssetPath, asked, StringComparison.OrdinalIgnoreCase)))
             {
                 for (var outer = ParentOf(node.AssetPath); FindFolder(outer) is { } inside; outer = ParentOf(outer))
                 {

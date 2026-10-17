@@ -446,6 +446,31 @@ public sealed class HierarchyPanel : ToolPanel
             : [node.Entity];
     }
 
+    /// <summary>
+    /// Opens every entity that has entities inside it, so the whole scene shows (the Expand All button above the tree).
+    /// While a filter is typed, it's what comes back when the filter is emptied too.
+    /// </summary>
+    public void ExpandAll() => SetAllExpanded(true);
+
+    /// <summary>
+    /// Folds every entity shut, leaving only the top-level ones showing (the Collapse All button above the tree). While a
+    /// filter is typed, it's what comes back when the filter is emptied too.
+    /// </summary>
+    public void CollapseAll() => SetAllExpanded(false);
+
+    private void SetAllExpanded(bool expanded)
+    {
+        foreach (var node in _nodes.Values)
+            node.IsExpanded = expanded && node.Children.Count > 0;
+        // What the filter puts back when it's emptied.
+        if (_expandedBeforeFilter is { } before)
+        {
+            before.Clear();
+            if (expanded)
+                before.UnionWith(_expanded);
+        }
+    }
+
     internal void OnExpandedChanged(EntityNode node)
     {
         if (node.IsExpanded)

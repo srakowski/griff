@@ -25,6 +25,9 @@ public partial class HierarchyView : UserControl
         InitializeComponent();
         _commands = commands;
         Tree.ContextMenu = BuildMenu(commands);
+        // The header's Expand All and Collapse All run the panel's commands, as agents do.
+        Resources["Command.ExpandAll"] = commands.Get<ExpandAllEntitiesCommand>();
+        Resources["Command.CollapseAll"] = commands.Get<CollapseAllEntitiesCommand>();
     }
 
     private HierarchyPanel Panel => (HierarchyPanel)DataContext;

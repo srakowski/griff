@@ -6,6 +6,7 @@
              xmlns:assets="clr-namespace:Griff.Editor.Features.Assets"
              xmlns:theme="clr-namespace:Griff.Editor.Themes"
              xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters"
+             xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=assets:AssetsPanel}"
              d:DesignHeight="240" d:DesignWidth="800">
@@ -148,6 +149,12 @@
                                   ToolTip="Every folder and file in one tree">
                         <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Hierarchy}" />
                     </ToggleButton>
+                    <!-- Open or fold every folder, in either view -->
+                    <Separator Style="{StaticResource Style.Separator.Vertical}" />
+                    <controls:FoldAllButtons CollapseCommand="{DynamicResource Command.CollapseAll}"
+                                             CollapseTip="Collapse All: fold every folder shut but Assets itself"
+                                             ExpandCommand="{DynamicResource Command.ExpandAll}"
+                                             ExpandTip="Expand All: open every folder" />
                     <DockPanel Visibility="{Binding ShowsTiles, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
                         <Separator DockPanel.Dock="Left" Style="{StaticResource Style.Separator.Vertical}" />
                         <Button x:Name="UpButton"

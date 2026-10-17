@@ -75,13 +75,20 @@
                            TextWrapping="Wrap"
                            Visibility="{Binding HasHiddenNote, Converter={StaticResource Visible}}" />
 
-                <!-- Filter: only fields whose names have what's typed (Escape empties it) -->
-                <controls:FilterBox x:Name="FieldFilter"
-                                    Margin="10,0,10,8"
-                                    Placeholder="Filter fields"
-                                    Tag="filter:fields"
-                                    Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
-                                    ToolTip="Show only the fields whose names have this in them" />
+                <!-- Filter: only fields whose names have what's typed (Escape empties it); beside it, open or fold every section -->
+                <DockPanel Margin="10,0,6,8">
+                    <controls:FoldAllButtons Margin="4,0,0,0"
+                                             CollapseCommand="{DynamicResource Command.CollapseAll}"
+                                             CollapseTip="Collapse All: fold every component and subheading shut, on every entity"
+                                             DockPanel.Dock="Right"
+                                             ExpandCommand="{DynamicResource Command.ExpandAll}"
+                                             ExpandTip="Expand All: open every component and subheading, on every entity" />
+                    <controls:FilterBox x:Name="FieldFilter"
+                                        Placeholder="Filter fields"
+                                        Tag="filter:fields"
+                                        Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
+                                        ToolTip="Show only the fields whose names have this in them" />
+                </DockPanel>
                 <TextBlock Margin="10,0,10,8"
                            Style="{StaticResource Style.Text.Caption}"
                            Text="{Binding FilterNote}"

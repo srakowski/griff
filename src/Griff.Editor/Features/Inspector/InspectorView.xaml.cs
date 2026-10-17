@@ -24,6 +24,9 @@ public partial class InspectorView : UserControl
         // The buttons on a component's header run its menu's commands, given the component.
         Resources["Command.AddToAll"] = commands.Get<AddComponentToAllCommand>();
         Resources["Command.RemoveComponent"] = commands.Get<RemoveComponentCommand>();
+        // Expand All and Collapse All by the filter run the panel's commands, as agents do.
+        Resources["Command.ExpandAll"] = commands.Get<ExpandAllComponentsCommand>();
+        Resources["Command.CollapseAll"] = commands.Get<CollapseAllComponentsCommand>();
     }
 
     // ----- Menus: a component's (right-clicking its header) and a changed field's (its mark, or right-clicking its name),

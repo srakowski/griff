@@ -711,6 +711,41 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     }
 
     /// <summary>
+    /// Opens the section of every component the selection shows, and every subheading in them (the Expand All button by
+    /// the filter). As folding one does, it holds for those components on every entity, kept in the user's settings.
+    /// </summary>
+    public void ExpandAll() => SetAllCollapsed(false);
+
+    /// <summary>
+    /// Folds shut the section of every component the selection shows, and every subheading in them (the Collapse All
+    /// button by the filter), leaving their headers. It holds for those components on every entity, kept in the user's
+    /// settings.
+    /// </summary>
+    public void CollapseAll() => SetAllCollapsed(true);
+
+    private void SetAllCollapsed(bool collapsed)
+    {
+        var list = _settings.Settings.CollapsedComponents;
+        var changed = false;
+        foreach (var key in Components.SelectMany(s => s.Groups.Select(g => g.Key).Prepend(s.TypeKey)))
+        {
+            if (list.Contains(key) == collapsed)
+                continue;
+            if (collapsed)
+                list.Add(key);
+            else
+                list.Remove(key);
+            changed = true;
+        }
+
+        if (!changed)
+            return;
+        _settings.Save();
+        foreach (var section in Components)
+            section.Refresh();
+    }
+
+    /// <summary>
     /// Opens every section and keeps which are folded in memory from now on: demos and snapshots start the same way every
     /// time, leaving the user's own alone.
     /// </summary>

@@ -129,6 +129,7 @@ public static class Icons
     public const string CheckMark = "\uE73E";
     public const string ChevronDown = "\uE70D";
     public const string ChevronRight = "\uE76C";
+    public const string ChevronUp = "\uE70E";
     public const string ChromeMinimize = "\uE921";
     public const string ChromeMaximize = "\uE922";
     public const string ChromeRestore = "\uE923";

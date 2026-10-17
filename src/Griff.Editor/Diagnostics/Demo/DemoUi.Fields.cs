@@ -66,9 +66,14 @@ internal sealed partial class DemoUi
     public static TextBlock? ComponentHeading(string component) =>
         ComponentHeader(component) is { } header ? Descendants<TextBlock>(header).FirstOrDefault(t => t.DataContext is ComponentSection && t.Text == ((ComponentSection)t.DataContext).Title) : null;
 
-    /// <summary>The arrow on a component's header that folds its section shut or opens it.</summary>
+    /// <summary>
+    /// The arrow on a component's header that folds its section shut or opens it: the toggle showing whether it's open, not
+    /// another on the header (the Transform's 3D).
+    /// </summary>
     public static ToggleButton? FoldButton(string component) =>
-        ComponentHeader(component) is { } header ? Descendants<ToggleButton>(header).FirstOrDefault() : null;
+        ComponentHeader(component) is { } header
+            ? Descendants<ToggleButton>(header).FirstOrDefault(t => System.Windows.Data.BindingOperations.GetBinding(t, ToggleButton.IsCheckedProperty)?.Path.Path == nameof(ComponentSection.IsExpanded))
+            : null;
 
     /// <summary>A subheading in a component's section, "Dash" in Platformer Movement's.</summary>
     public static FrameworkElement? GroupRow(string component, string group) =>

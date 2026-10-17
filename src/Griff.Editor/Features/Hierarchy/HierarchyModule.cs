@@ -13,7 +13,9 @@ public sealed class HierarchyModule : IEditorModule
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddPanel<HierarchyPanel, HierarchyView>();
-        services.AddCommand<AddEntityCommand>();
+        services.AddCommand<AddEntityCommand>()
+            .AddCommand<ExpandAllEntitiesCommand>()
+            .AddCommand<CollapseAllEntitiesCommand>();
     }
 }
 
@@ -39,4 +41,23 @@ public sealed class AddEntityCommand(ISceneDocuments sceneDocuments, HierarchyPa
         panel.IsAddOpen = true;
         return Task.CompletedTask;
     }
+}
+
+/// <summary>
+/// Opens every entity in the Hierarchy that has entities inside it, so the whole scene shows: the Expand All button above
+/// the tree. Agents can read the whole tree with scene_tree whether it's open or not.
+/// </summary>
+public sealed class ExpandAllEntitiesCommand(HierarchyPanel panel) : FoldAllCommand("Hierarchy", expand: true)
+{
+    protected override bool CanExecuteCore() => panel.HasScene;
+
+    protected override void Fold() => panel.ExpandAll();
+}
+
+/// <summary>Folds every entity in the Hierarchy shut, leaving only the top-level ones showing: the Collapse All button above the tree.</summary>
+public sealed class CollapseAllEntitiesCommand(HierarchyPanel panel) : FoldAllCommand("Hierarchy", expand: false)
+{
+    protected override bool CanExecuteCore() => panel.HasScene;
+
+    protected override void Fold() => panel.CollapseAll();
 }

@@ -7,6 +7,9 @@
 
 ## Unreleased
 
+- The **Assets** panel shows the folders as a tree on the left and the picked folder's files as tiles on the right, pictures as thumbnails and everything else with an icon for its kind. Double-clicking, dragging into the scene or onto a folder, and right-clicking work on the tiles as they did on the rows, a slider sizes the tiles, and the **Tree** button brings back the one tree.
+- **Expand All** and **Collapse All** buttons on every panel with a tree or sections that fold: the Hierarchy, the Inspector (every component and subheading), the Assets panel (every folder, in either view) and the script editor (every block of code).
+
 ## 0.1.0-alpha.9 - 2026-10-17
 
 - Camera Controls pans with four new built-in actions, **PanUp**, **PanDown**, **PanLeft** and **PanRight** (WASD, the arrows and the D-pad as before), so **Game > Controls** and players can rebind them, and a game can take W or S for something else.
@@ -28,7 +31,6 @@
 - **Tooltip** shows a box by the mouse after a short delay, or writes into a Text you name, while the mouse rests on an entity. A script can set what it says, or it can show an output.
 - **Game > New Random Numbers Each Game** starts each Play with different random numbers, instead of the same ones every Play until the editor restarts.
 - **Game > Play Fullscreen** (Alt+Enter) plays the game over the whole screen, and switches back to the Game tab without stopping the game. F6, F10 and Shift+F5 now also work while a game running in the Game tab has the keyboard.
-- The **Assets** panel shows the folders as a tree on the left and the picked folder's files as tiles on the right, pictures as thumbnails and everything else with an icon for its kind. Double-clicking, dragging into the scene or onto a folder, and right-clicking work on the tiles as they did on the rows, a slider sizes the tiles, and the **Tree** button brings back the one tree.
 - For agents (MCP): clicking a button by its label finds a button whose label is on the button itself, **Scene_Open** takes a scene's name, and **Edit_Undo** and **Edit_Redo** can name the scene or prefab to undo in.
 
 ## 0.1.0-alpha.7 - 2026-10-16

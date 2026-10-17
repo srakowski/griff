@@ -12,5 +12,7 @@ public sealed class AssetsModule : IEditorModule
         .AddSingleton<AssetPlacement>()
         .AddCommand<AddAssetToSceneCommand>()
         .AddCommand<OpenAssetExternallyCommand>()
-        .AddCommand<ShowAssetInExplorerCommand>();
+        .AddCommand<ShowAssetInExplorerCommand>()
+        .AddCommand<ExpandAllAssetsCommand>()
+        .AddCommand<CollapseAllAssetsCommand>();
 }

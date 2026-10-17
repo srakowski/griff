@@ -282,7 +282,13 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
                 var wantFolded = bool.Parse(foldWant);
                 System.Windows.Controls.Primitives.ToggleButton? FoldOf(string name) => name.Split('.', 2) is [var component, var group] ? DemoUi.GroupFoldButton(component, group) : DemoUi.FoldButton(name);
                 if (!await Until(() => FoldOf(foldName) is { } fold && fold.IsChecked != wantFolded, 3000))
-                    throw new InvalidOperationException($"Expected {foldName} to be {(wantFolded ? "folded shut" : "open")}.");
+                {
+                    var foldArrow = FoldOf(foldName);
+                    var foldSection = foldArrow?.DataContext as Features.Inspector.ComponentSection;
+                    throw new InvalidOperationException($"Expected {foldName} to be {(wantFolded ? "folded shut" : "open")} " +
+                        $"(its arrow: {(foldArrow is null ? "not found" : $"checked {foldArrow.IsChecked}, enabled {foldArrow.IsEnabled}")}; " +
+                        $"its section: {(foldSection is null ? "none" : $"expanded {foldSection.IsExpanded}")}).");
+                }
                 break;
             case "colordrag":
                 // "colordrag: hue = 200", "colordrag: square = 0.8, 0.6", "colordrag: alpha = 0.5": drags in the open color picker.
@@ -668,6 +674,13 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
             case "assetsize":
                 // "assetsize: 112": drag the Assets panel's tile size slider to that many pixels across.
                 await ui.AssetTileSize(double.Parse(a, CultureInfo.InvariantCulture));
+                break;
+            case "expectexpanded":
+                // "expectexpanded: Hierarchy = Level, Room": exactly these rows are open (Assets: folders by path), or none.
+                var (expandedPanel, expandedWant) = Split2(a, '=');
+                var wantExpanded = expandedWant.Equals("none", StringComparison.OrdinalIgnoreCase) ? "" : string.Join(", ", expandedWant.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+                if (!await Until(() => string.Join(", ", DemoUi.ExpandedRows(expandedPanel)) == wantExpanded, 3000))
+                    throw new InvalidOperationException($"Expected {(wantExpanded.Length == 0 ? "nothing" : wantExpanded)} open in {expandedPanel}, but {(DemoUi.ExpandedRows(expandedPanel) is { Count: > 0 } open ? string.Join(", ", open) : "nothing")} is.");
                 break;
             case "expectassetfolder":
                 // "expectassetfolder: Sprites": the folder whose contents show as tiles ("" or "Assets" for Assets itself).
@@ -1858,6 +1871,8 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
             "color" => ui.ColorPart(name),
             "transform" => DemoUi.TransformPart(name),
             "filter" => DemoUi.FilterBox(name),
+            "expandall" => DemoUi.FoldAllButton(name, expand: true),
+            "collapseall" => DemoUi.FoldAllButton(name, expand: false),
             "profiler" => DemoUi.ProfilerPart(name),
             "tables" => DemoUi.TablesPart(name),
             "sims" => DemoUi.SimsPart(name),
@@ -1875,7 +1890,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
             "assets" => DemoUi.AssetsPart(name),
             // A genre's windows and panels: the Dialogue Editor's dialogue:, the Move List's moves:, the Chart's chart:.
             var genre when DemoGenre.All.Select(g => g.Part(genre, name)).FirstOrDefault(p => p is not null) is { } genrePart => genrePart,
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, editor:, component:, addall:, remove:, need:, needadd:, addlist:, entitylist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, dialogue:, moves:, chart:, sound:, image:, pick:, picker:, color:, transform:, filter:, profiler:, tables:, sims:, asset:, assets:, world:, gameworld:, hud:, tiles:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, editor:, component:, addall:, remove:, need:, needadd:, addlist:, entitylist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, dialogue:, moves:, chart:, sound:, image:, pick:, picker:, color:, transform:, filter:, expandall:, collapseall:, profiler:, tables:, sims:, asset:, assets:, world:, gameworld:, hud:, tiles:)."),
         };
     }
 

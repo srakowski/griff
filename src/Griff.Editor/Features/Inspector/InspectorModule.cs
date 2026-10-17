@@ -18,5 +18,7 @@ public sealed class InspectorModule : IEditorModule
         .AddCommand<MoveComponentDownCommand>()
         .AddCommand<RemoveComponentCommand>()
         .AddCommand<RevertFieldToPrefabCommand>()
-        .AddCommand<ApplyFieldToPrefabCommand>();
+        .AddCommand<ApplyFieldToPrefabCommand>()
+        .AddCommand<ExpandAllComponentsCommand>()
+        .AddCommand<CollapseAllComponentsCommand>();
 }

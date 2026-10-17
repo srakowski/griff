@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Griff.Editor.Features.Scripts.Editor;
 using Griff.Editor.Features.Scripts.Language;
 using ICSharpCode.AvalonEdit.Document;
@@ -146,6 +147,23 @@ public sealed class ScriptDocument : ObservableObject, IDisposable
         else
             NavigateRequested(this, (offset, length));
     }
+
+    /// <summary>Raised to open every folded block of the code (true) or fold every one shut (false).</summary>
+    public event EventHandler<bool>? FoldAllRequested;
+
+    /// <summary>Opens every block of the code that's folded shut: the Expand All button above it.</summary>
+    public void ExpandAll() => FoldAllRequested?.Invoke(this, true);
+
+    /// <summary>Folds every block of the code shut (classes, methods, comments): the Collapse All button above it.</summary>
+    public void CollapseAll() => FoldAllRequested?.Invoke(this, false);
+
+    /// <summary>Runs <see cref="ExpandAll"/>, for the button above the code.</summary>
+    public IRelayCommand ExpandAllCommand => _expandAll ??= new RelayCommand(ExpandAll);
+
+    /// <summary>Runs <see cref="CollapseAll"/>, for the button above the code.</summary>
+    public IRelayCommand CollapseAllCommand => _collapseAll ??= new RelayCommand(CollapseAll);
+
+    private IRelayCommand? _expandAll, _collapseAll;
 
     public void NavigateToLine(int line, int column = 1)
     {

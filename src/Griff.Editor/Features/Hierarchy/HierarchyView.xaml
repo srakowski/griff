@@ -37,6 +37,11 @@
                             ToolTip="Add Entity (Ctrl+Shift+A): type to find what to make, Enter makes it">
                         <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Add}" />
                     </Button>
+                    <controls:FoldAllButtons CollapseCommand="{DynamicResource Command.CollapseAll}"
+                                             CollapseTip="Collapse All: fold every entity shut, showing only the top-level ones"
+                                             DockPanel.Dock="Right"
+                                             ExpandCommand="{DynamicResource Command.ExpandAll}"
+                                             ExpandTip="Expand All: open every entity with entities inside it" />
                     <TextBlock VerticalAlignment="Center" Style="{StaticResource Style.Text.Overline}" Text="{Binding SceneName}" />
                 </DockPanel>
             </Border>

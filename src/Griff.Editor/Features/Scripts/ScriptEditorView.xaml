@@ -128,6 +128,10 @@
                                 ToolTip="Find and Replace (Ctrl+F, Ctrl+H)">
                             <TextBlock FontSize="13" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Search}" />
                         </Button>
+                        <controls:FoldAllButtons CollapseCommand="{Binding CollapseAllCommand}"
+                                                 CollapseTip="Collapse All: fold every class, method and comment shut"
+                                                 ExpandCommand="{Binding ExpandAllCommand}"
+                                                 ExpandTip="Expand All: open every folded block of the code" />
                         <ToggleButton x:Name="ComponentToggle"
                                       Margin="4,0,0,0"
                                       Padding="8,0"

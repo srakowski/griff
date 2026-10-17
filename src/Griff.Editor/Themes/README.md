@@ -76,6 +76,7 @@ Each control dictionary merges `Foundation.xaml` itself, so `StaticResource` loo
 | `Controls.NumberField` | Number input; drag the label to scrub. Raises `EditCompleted` once per drag or typed value |
 | `Controls.CommitTextBox` | Text input that commits on Enter or focus loss and reverts on Escape |
 | `Controls.ChromeWindow` | Base class for every window |
+| `Controls.FoldAllButtons` | Expand All and Collapse All on a panel's toolbar, running the panel's commands; every panel with a tree or folds uses it |
 
 ## Not yet styled
 

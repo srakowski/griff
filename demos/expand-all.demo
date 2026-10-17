@@ -1,0 +1,44 @@
+title: Expand All, Collapse All
+intro: Every panel with a tree or sections that fold has an Expand All and a Collapse All button on its toolbar, the same pair everywhere.
+project: Empty | Expand All
+
+# Two things with things inside them, and a picture two folders down.
+create: Dialogue Box
+deselect
+create: Grid Enemy
+deselect
+write: Sprites/Enemies/hex.png | hex-tilemaps/hex.png
+
+chapter: The Hierarchy | Open or shut every entity at once
+expectexpanded: Hierarchy = none
+explain: expandall:Hierarchy | Expand All | Above the Hierarchy, beside the plus, Expand All opens every entity that has entities inside it, so the whole scene shows.
+click: expandall:Hierarchy
+expectexpanded: Hierarchy = Dialogue Box, Enemy
+explain: collapseall:Hierarchy | Collapse All | Collapse All folds them all shut again, leaving only the top-level entities.
+click: collapseall:Hierarchy
+expectexpanded: Hierarchy = none
+say: The arrow keys and the numpad keys still open and shut one row at a time, and numpad star opens a row's whole branch.
+
+chapter: The Inspector | Every component and subheading
+select: Enemy
+explain: collapseall:Inspector | Collapse All | Beside the field filter, Collapse All folds every component's section shut, and every subheading in them, leaving a list of headers.
+click: collapseall:Inspector
+expectfolded: Transform = true
+expectfolded: Sprite = true
+say: As folding one section does, it holds for those components on every entity, and the editor remembers it next time.
+click: expandall:Inspector
+expectfolded: Transform = false
+expectfolded: Sprite = false
+explain: expandall:Inspector | Expand All | Expand All opens them all again.
+
+chapter: The Assets panel | Every folder, in either view
+explain: expandall:Assets | Expand All | On the Assets toolbar, Expand All opens every folder in the folder tree.
+click: expandall:Assets
+explain: assets:folders | Every folder | Sprites, and the Enemies folder inside it, are open now.
+click: assets:tree
+explain: panel:Assets | The Tree view too | The Tree view shares the same folders, so they're open here as well.
+click: collapseall:Assets
+expectexpanded: Assets = none
+say: Collapse All folds every folder shut but Assets itself, in both views.
+click: assets:tiles
+say: The script editor has the pair too, above the code, folding every class, method and comment. And agents run every one of them as a command, such as Hierarchy Expand All.

@@ -1,5 +1,5 @@
 # Publishes an editor release when a version tag is pushed (git tag v0.1.0-alpha.1; git push origin v0.1.0-alpha.1): builds
-# the editor in Release, runs both test suites, zips the editor with its players, free fonts, LICENSE and third-party
+# the editor in Release once CI has passed on the tagged commit, zips the editor with its players, free fonts, LICENSE and third-party
 # notices and packs the same as the installer and its updates with Velopack (tools/release.ps1, which you can run
 # yourself), and publishes a GitHub Release with all of it, whose notes are the commits since the previous tag
 # (tools/release-notes.ps1). A tag with a pre-release label (v0.1.0-alpha.1) makes a pre-release on the "prerelease"
@@ -12,9 +12,10 @@ on:
     # v0.1.0, and pre-releases like v0.1.0-alpha.1 (tools/release.ps1 checks the rest of the label).
     tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']
 
-# Building and testing only read the repository; the one job that publishes gets contents: write.
+# Building only reads the repository (and CI's runs); the one job that publishes gets contents: write.
 permissions:
   contents: read
+  actions: read
 
 # A tag is released once; a second push of the same tag waits rather than racing it.
 concurrency:
@@ -25,6 +26,26 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
+      # The tests are CI's: it ran both suites on this commit, as here, and the release waits for that run and needs it to
+      # have passed. Running them again only gave the runner's software OpenGL, which refuses contexts now and then, a second
+      # chance to fail a commit CI had passed.
+      - name: Check CI passed on this commit
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          for ($minutes = 0; ; $minutes++) {
+            $runs = @(gh run list --workflow ci.yml --commit $env:SHA --json status,conclusion | ConvertFrom-Json)
+            if ($runs | Where-Object conclusion -eq 'success') { break }
+            if (-not ($runs | Where-Object status -ne 'completed') -or $minutes -ge 60) {
+              Write-Error "CI hasn't passed on $env:SHA (Actions, CI): run it again there, then the release."
+              exit 1
+            }
+            Start-Sleep -Seconds 60
+          }
+
       # All history and tags, so the notes can see the previous release.
       - uses: actions/checkout@v7
         with:
@@ -66,33 +87,11 @@ jobs:
           $version = $env:TAG.Substring(1)
           ./tools/release.ps1 -Version $version
 
-      # The tests run as CI runs them (Debug): in Release on the runner, Mesa refuses the Scene view tests' offscreen contexts.
-      - name: Engine tests
-        run: dotnet test tests/Griff.Tests --logger "console;verbosity=normal" --logger "trx;LogFileName=engine.trx" --results-directory TestResults --blame-hang-timeout 10m
-
-      - name: Editor tests
-        if: ${{ !cancelled() }}
-        run: dotnet test tests/Griff.Editor.Tests --logger "console;verbosity=normal" --logger "trx;LogFileName=editor.trx" --results-directory TestResults --blame-hang-timeout 10m
-
       - name: Write the release notes
         shell: pwsh
         env:
           TAG: ${{ github.ref_name }}
         run: ./tools/release-notes.ps1 -Tag $env:TAG -Out artifacts/release/release-notes.md
-
-      # Each failed test as an annotation on the run, readable without signing in (see ci.yml).
-      - name: Name the failed tests
-        if: ${{ failure() }}
-        shell: pwsh
-        run: ./tools/test-failures.ps1 -Results TestResults
-
-      - name: Keep the test results
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-results
-          path: TestResults
-          if-no-files-found: ignore
 
       # The Velopack folder as vpk left it (vpk upload reads it whole, and uploads only this version's files).
       - name: Keep the zip, the installer and the notes for the release

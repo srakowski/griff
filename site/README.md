@@ -199,8 +199,8 @@ a hyphen: `v0.1.0-alpha.1`, `v0.1.0-alpha.2`, then `v0.1.0-beta.1` and so on (Se
 Below 1.0 a new minor version (`v0.2.0`) is a release with new features, and may change how projects and scripts work; a
 patch (`v0.1.1`) only fixes. The workflow ignores any other tag.
 
-1. **Check main is ready**: it is pushed, its CI run (Actions → CI) is green and its Site run deployed. The workflow runs
-   both test suites again and stops before releasing anything if one fails.
+1. **Check main is ready**: it is pushed, its CI run (Actions → CI) is green and its Site run deployed. The workflow waits
+   for that CI run and stops before releasing anything unless it passed (run CI again there if it failed by chance).
 2. **Tag and push** it (a pre-release here; `v0.1.0` the same way for a release):
 
    ```sh
@@ -210,7 +210,7 @@ patch (`v0.1.1`) only fixes. The workflow ignores any other tag.
    ```
 
 3. **Watch** Actions → Release (about 15 minutes). The build job builds the editor in Release on Windows with the tag's
-   version (`-p:Version=0.1.0-alpha.1`: the editor's title bar says "Griff 0.1.0-alpha.1"), runs the tests, zips the editor
+   version (`-p:Version=0.1.0-alpha.1`: the editor's title bar says "Griff 0.1.0-alpha.1"), zips the editor
    with its game players, free fonts, LICENSE and `THIRD-PARTY-NOTICES.txt` as `Griff-0.1.0-alpha.1-win-x64.zip` (the
    portable copy), and packs the same with Velopack (`vpk`, a tool in `dotnet-tools.json`) on the tag's channel:
    `prerelease` for a pre-release tag, `stable` for a release. That makes `GriffEditor-prerelease-Setup.exe` (the

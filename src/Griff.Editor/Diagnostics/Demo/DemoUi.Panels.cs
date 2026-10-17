@@ -56,6 +56,52 @@ internal sealed partial class DemoUi
         await DragTab(id, to, () => Host.Layout.Float(id));
     }
 
+    /// <summary>
+    /// Drags a panel's tab along its group's tabs so it ends up at <paramref name="index"/> among them (0 is the first).
+    /// </summary>
+    public async Task MoveTab(string panel, int index)
+    {
+        var layout = Host.Layout;
+        var id = layout.PanelId(panel);
+        var group = layout.GroupOf(id);
+        var from = group.Panels.IndexOf(id);
+        index = Math.Clamp(index, 0, group.Panels.Count - 1);
+        // Just inside the near edge of the tab it takes the place of: before it going left, after it going right.
+        var other = Host.Tab(group.Panels[index]);
+        var r = ScreenRect(other);
+        var to = index <= from ? new Point(r.Left + 6 * Scale, r.Top + r.Height / 2) : new Point(r.Right - 6 * Scale, r.Top + r.Height / 2);
+        if (index == from)
+            return;
+
+        var before = layout.Summary;
+        var start = Center(Host.Tab(id));
+        // Along the tabs, with time to see the box between them.
+        await input.Drag(start, [new Point(start.X + (to.X > start.X ? 12 : -12) * Scale, start.Y), to], 700, holdMs: 500);
+        await Settle(300);
+        if (layout.Summary == before)
+        {
+            layout.Move(id, index);
+            Log?.Invoke($"FORCED tab move of {id}: {layout.Summary}");
+            await Settle();
+        }
+    }
+
+    /// <summary>Clicks the close button on a panel's tab, closing the panel (View > Panels opens it again).</summary>
+    public async Task ClosePanel(string panel)
+    {
+        var layout = Host.Layout;
+        var id = layout.PanelId(panel);
+        var close = Descendants<Button>((DependencyObject)Host.Tab(id).Header).First(b => Equals(b.Tag, "Close"));
+        await Click(close);
+        await Settle(300);
+        if (layout.IsOpen(id))
+        {
+            layout.Close(id);
+            Log?.Invoke($"FORCED closepanel {id}");
+            await Settle();
+        }
+    }
+
     /// <summary>Clicks the close button on the floating window a panel is in, putting its panels back.</summary>
     public async Task CloseFloating(string panel)
     {

@@ -1,0 +1,17 @@
+title: Your own workspace
+intro: Put the editor's tabs in the order you want, close the panels you don't need, and keep what you're working on in the middle.
+project: Platformer | Workspace
+
+chapter: Order and close tabs | Drag a tab along its group, or close it
+explain: panel:Assets | Tabs in any order | The panels under the scene are tabs: Assets, Output, Profiler, Tables, Simulations and Chart.
+movetab: Profiler > 0
+expectlayout: Hierarchy | (Documents / Profiler, Assets, Output, Tables, Simulations, Chart) | Inspector
+explain: panel:Profiler | Moved first | Drag a tab along its group's tabs, and a box shows the gap it will go in.
+closepanel: Simulations
+closepanel: Chart
+expectlayout: Hierarchy | (Documents / Profiler, Assets, Output, Tables) | Inspector; closed: Simulations, Chart
+say: Not making a rhythm game, or balancing with simulations? Close those panels with the cross on their tabs, or a middle-click.
+explain: menu:View | View, Panels | Every panel is listed under View, Panels. Pick a closed one and it opens again where it started.
+menu: View > Panels > Chart
+expectlayout: Hierarchy | (Documents / Profiler, Assets, Output, Tables, Chart) | Inspector; closed: Simulations
+explain: panel:Chart | Back again | Saved layouts remember the order of the tabs and which panels are closed, and Reset Layout opens them all again.

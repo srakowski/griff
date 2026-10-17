@@ -9,7 +9,7 @@ namespace Griff.Editor.Shell;
 /// <summary>
 /// Puts the tool panels on screen where <see cref="PanelLayout"/> says: splits with splitters around the document area,
 /// tabbed groups, and floating windows. Each panel's view and tab are made once and moved as the layout changes;
-/// dragging a tab moves the panel (<see cref="PanelDrag"/>).
+/// dragging a tab moves the panel (<see cref="PanelDrag"/>), and its close button (or a middle-click) closes it.
 /// </summary>
 public sealed class PanelHost(IEnumerable<PanelDescriptor> descriptors, PanelLayout layout)
 {
@@ -62,6 +62,8 @@ public sealed class PanelHost(IEnumerable<PanelDescriptor> descriptors, PanelLay
             var view = descriptor.View();
             view.DataContext = panel;
             var tab = new TabItem { Header = CreateHeader(panel), Content = view, Tag = panel.Id };
+            tab.AddHandler(System.Windows.Controls.Primitives.Selector.SelectedEvent, new RoutedEventHandler((_, _) => Refresh(tab)));
+            tab.AddHandler(System.Windows.Controls.Primitives.Selector.UnselectedEvent, new RoutedEventHandler((_, _) => Refresh(tab)));
             drag.Watch(tab);
             _tabs[panel.Id] = tab;
         }
@@ -88,6 +90,13 @@ public sealed class PanelHost(IEnumerable<PanelDescriptor> descriptors, PanelLay
 
         if (placed.Maximized)
             main.WindowState = WindowState.Maximized;
+    }
+
+    // The close button shows on the tab showing.
+    private static void Refresh(TabItem tab)
+    {
+        if (tab.Header is StackPanel header && header.Children.OfType<Button>().LastOrDefault() is { } close)
+            close.Opacity = tab.IsSelected || header.IsMouseOver ? 1 : 0;
     }
 
     /// <summary>A panel's tab, by its id.</summary>
@@ -294,14 +303,61 @@ public sealed class PanelHost(IEnumerable<PanelDescriptor> descriptors, PanelLay
             window.Activate();
     }
 
-    private static object CreateHeader(ToolPanel panel)
+    // [icon] Title [x]: the close button shows on the tab showing and under the mouse; middle-click closes too, and a
+    // right-click offers what else can be done with the panel.
+    private StackPanel CreateHeader(ToolPanel panel)
     {
-        if (panel.Icon is null)
-            return panel.Title;
+        var header = new StackPanel { Orientation = Orientation.Horizontal, Background = System.Windows.Media.Brushes.Transparent };
+        if (panel.Icon is not null)
+            header.Children.Add(Icons.Create(panel.Icon, 12));
+        header.Children.Add(new TextBlock { Text = panel.Title, Margin = new Thickness(panel.Icon is null ? 0 : 6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
 
-        var header = new StackPanel { Orientation = Orientation.Horizontal };
-        header.Children.Add(Icons.Create(panel.Icon, 12));
-        header.Children.Add(new TextBlock { Text = panel.Title, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+        var glyph = new TextBlock { Text = Icons.ChromeClose, FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        glyph.SetResourceReference(FrameworkElement.StyleProperty, "Style.Icon");
+        var close = new Button
+        {
+            Content = glyph,
+            Width = 16,
+            Height = 16,
+            Margin = new Thickness(6, 0, -6, 0),
+            Focusable = false,
+            ToolTip = $"Close {panel.Title} (View > Panels opens it again)",
+            Tag = "Close",
+        };
+        close.SetResourceReference(FrameworkElement.StyleProperty, "Style.Button.Toolbar");
+        close.Click += (_, _) => layout.Close(panel.Id);
+        header.Children.Add(close);
+
+        void Update() => close.Opacity = header.IsMouseOver || _tabs.GetValueOrDefault(panel.Id)?.IsSelected == true ? 1 : 0;
+        header.MouseEnter += (_, _) => Update();
+        header.MouseLeave += (_, _) => Update();
+        header.Loaded += (_, _) => Update();
+        header.MouseUp += (_, e) =>
+        {
+            if (e.ChangedButton == System.Windows.Input.MouseButton.Middle)
+                layout.Close(panel.Id);
+        };
+        var menu = new ContextMenu();
+        header.ContextMenu = menu;
+        header.ContextMenuOpening += (_, _) => FillMenu(menu, panel.Id);
+        Update();
         return header;
+    }
+
+    // What a panel's tab offers on a right-click: closing it, floating it, putting it back where it starts out.
+    private void FillMenu(ContextMenu menu, string id)
+    {
+        menu.Items.Clear();
+        void Add(string text, Action action)
+        {
+            var item = new MenuItem { Header = text };
+            item.Click += (_, _) => action();
+            menu.Items.Add(item);
+        }
+
+        Add("_Close", () => layout.Close(id));
+        if (layout.GroupOf(id).Float is null)
+            Add("_Float", () => layout.Float(id));
+        Add("_Put Back", () => layout.Return(id));
     }
 }

@@ -700,6 +700,15 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
                 var floatBy = floatOffset.Length == 0 ? new double[2] : Numbers(floatOffset, 2);
                 await ui.FloatPanel(floatPanel, floatBy[0], floatBy[1]);
                 break;
+            case "movetab":
+                // "movetab: Output > 0": drag the panel's tab along its group's tabs to that place among them (0 is the first).
+                var (moveTabPanel, moveTabIndex) = Split2(a, '>');
+                await ui.MoveTab(moveTabPanel, int.Parse(moveTabIndex, CultureInfo.InvariantCulture));
+                break;
+            case "closepanel":
+                // "closepanel: Profiler": click the close button on the panel's tab (View > Panels opens it again).
+                await ui.ClosePanel(a);
+                break;
             case "closefloat":
                 // "closefloat: Output": close the floating window the panel is in, putting its panels back.
                 await ui.CloseFloating(a);

@@ -72,7 +72,7 @@ public sealed class DeleteLayoutCommand(PanelLayout layout, IDialogService dialo
     }
 }
 
-/// <summary>Puts every panel back where it starts out (Hierarchy on the left, Inspector on the right, Assets, Output and Profiler under the scene), closing floating windows.</summary>
+/// <summary>Puts every panel back where it starts out (Hierarchy on the left, Inspector on the right, Assets, Output and Profiler under the scene), closing floating windows and opening closed panels.</summary>
 public sealed class ResetLayoutCommand(PanelLayout layout) : EditorCommand
 {
     public override string Id => "View.ResetLayout";
@@ -82,6 +82,32 @@ public sealed class ResetLayoutCommand(PanelLayout layout) : EditorCommand
     protected override Task ExecuteCoreAsync()
     {
         layout.Reset();
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Shows a tool panel, bringing its tab to the front; one that was closed (with its tab's close button) opens again where
+/// it starts out. The submenu lists every panel.
+/// </summary>
+public sealed class ShowPanelCommand(PanelLayout layout, IDialogService dialogs) : EditorCommand
+{
+    public override string Id => "View.Panels";
+    public override string Text => "_Panels";
+    public override MenuPlacement? Placement { get; } = new(Menus.View, Group: 3, Order: 0);
+    public override IReadOnlyList<string>? Choices => layout.Panels.Select(p => p.Title).ToList();
+
+    protected override Task ExecuteCoreAsync()
+    {
+        var titles = layout.Panels.Select(p => p.Title).ToList();
+        var name = dialogs.Prompt("Show Panel", "Panel", layout.Closed.Count > 0 ? layout.Title(layout.Closed[0]) : titles[0], text =>
+            titles.Any(t => t.Equals(text.Trim(), StringComparison.OrdinalIgnoreCase)) ? null : $"Panels: {string.Join(", ", titles)}.");
+        return name is null ? Task.CompletedTask : ChooseCoreAsync(name);
+    }
+
+    protected override Task ChooseCoreAsync(string choice)
+    {
+        layout.Show(choice);
         return Task.CompletedTask;
     }
 }

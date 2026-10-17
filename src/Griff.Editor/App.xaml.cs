@@ -142,6 +142,7 @@ public partial class App : Application
         services.AddCommand<LoadLayoutCommand>();
         services.AddCommand<DeleteLayoutCommand>();
         services.AddCommand<ResetLayoutCommand>();
+        services.AddCommand<ShowPanelCommand>();
         services.AddSingleton<StartPage>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();

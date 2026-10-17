@@ -31,6 +31,7 @@
 - **Tooltip** shows a box by the mouse after a short delay, or writes into a Text you name, while the mouse rests on an entity. A script can set what it says, or it can show an output.
 - **Game > New Random Numbers Each Game** starts each Play with different random numbers, instead of the same ones every Play until the editor restarts.
 - **Game > Play Fullscreen** (Alt+Enter) plays the game over the whole screen, and switches back to the Game tab without stopping the game. F6, F10 and Shift+F5 now also work while a game running in the Game tab has the keyboard.
+- Panel tabs can be dragged along their group to reorder them, and closed with the **×** on the tab (or a middle-click, or the tab's right-click menu). **View > Panels** brings any panel back, and saved layouts and **Reset Layout** remember the order and which panels are closed.
 - For agents (MCP): clicking a button by its label finds a button whose label is on the button itself, **Scene_Open** takes a scene's name, and **Edit_Undo** and **Edit_Redo** can name the scene or prefab to undo in.
 
 ## 0.1.0-alpha.7 - 2026-10-16

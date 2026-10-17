@@ -350,6 +350,102 @@ public class PanelLayoutTests
         Assert.Equal((DockDropKind.Tab, "Output"), (drop.Kind, drop.Target));
     }
 
+    [Fact]
+    public void ReordersTabsWithinTheirGroup() => WithLayout(layout =>
+    {
+        layout.Move("Profiler", 0);
+        Assert.Equal("Hierarchy | (Documents / Profiler, Assets, Output, Tables, Simulations, Chart) | Inspector", layout.Summary);
+        Assert.Equal("Profiler", layout.GroupOf("Assets").Selected);
+
+        // Dropped between two tabs of its own group: before the one at the index, as the drop says it.
+        layout.Tab("Profiler", "Assets", at: 3);
+        Assert.Equal("Hierarchy | (Documents / Assets, Output, Profiler, Tables, Simulations, Chart) | Inspector", layout.Summary);
+        layout.Tab("Assets", "Output", at: 6);
+        Assert.Equal("Hierarchy | (Documents / Output, Profiler, Tables, Simulations, Chart, Assets) | Inspector", layout.Summary);
+
+        // Into another group at a place among its tabs.
+        layout.Tab("Inspector", "Output", at: 1);
+        Assert.Equal("Hierarchy | (Documents / Output, Inspector, Profiler, Tables, Simulations, Chart, Assets)", layout.Summary);
+    });
+
+    [Fact]
+    public void DroppingATabWhereItIsChangesNothing() => WithLayout(layout =>
+    {
+        var group = new DockArea(new Rect(0, 0, 600, 300), "Assets", "Assets", Floating: false, 28,
+            [new Rect(0, 0, 80, 28), new Rect(80, 0, 80, 28), new Rect(160, 0, 80, 28), new Rect(240, 0, 80, 28), new Rect(320, 0, 80, 28), new Rect(400, 0, 80, 28)]);
+        var drop = DockTargets.Find(new Point(85, 10), new Rect(0, 0, 1000, 600), [group], new Size(320, 400));
+        Assert.Equal((DockDropKind.Tab, "Assets", 1), (drop.Kind, drop.Target, drop.Index));
+        Assert.Equal(new Rect(20, 0, 120, 28), drop.Preview);
+        Assert.Equal(2, DockTargets.Find(new Point(150, 10), new Rect(0, 0, 1000, 600), [group], new Size(320, 400)).Index);
+
+        // Output is the second tab: before or after itself, it stays where it is.
+        Assert.False(layout.WouldChange("Output", drop));
+        Assert.False(layout.WouldChange("Output", drop with { Index = 2 }));
+        Assert.True(layout.WouldChange("Output", drop with { Index = 0 }));
+        Assert.True(layout.WouldChange("Inspector", drop));
+
+        layout.Apply("Chart", drop);
+        Assert.Equal("Hierarchy | (Documents / Assets, Chart, Output, Profiler, Tables, Simulations) | Inspector", layout.Summary);
+    });
+
+    [Fact]
+    public void ClosedPanelsComeBackFromTheViewMenu() => EditorHost.Run(services =>
+    {
+        var layout = services.GetRequiredService<PanelLayout>();
+        layout.Close("Profiler");
+        layout.Close("inspector");
+        Assert.Equal("Hierarchy | (Documents / Assets, Output, Tables, Simulations, Chart); closed: Inspector, Profiler", layout.Summary);
+        Assert.False(layout.IsOpen("Profiler"));
+        Assert.Contains("closed", Assert.Throws<InvalidOperationException>(() => layout.GroupOf("Profiler")).Message);
+
+        // View > Panels lists every panel, and picking a closed one opens it where it starts out.
+        var panels = services.GetRequiredService<CommandRegistry>().All.Single(c => c.Id == "View.Panels");
+        Assert.Contains("Profiler", panels.Choices!);
+        Assert.Contains("Inspector", panels.Choices!);
+        panels.ChooseAsync("Profiler").GetAwaiter().GetResult();
+        Assert.Equal("Hierarchy | (Documents / Assets, Output, Profiler, Tables, Simulations, Chart); closed: Inspector", layout.Summary);
+        Assert.Equal("Profiler", layout.GroupOf("Assets").Selected);
+        panels.ChooseAsync("Inspector").GetAwaiter().GetResult();
+        Assert.Equal(Start, layout.Summary);
+
+        // Closing the last panel in a floating window takes the window away; Show brings it back docked.
+        layout.Float("Output");
+        layout.Close("Output");
+        Assert.Empty(layout.Floats);
+        layout.Show("Output");
+        Assert.True(layout.IsOpen("Output"));
+
+        layout.Close("Hierarchy");
+        layout.Reset();
+        Assert.Equal(Start, layout.Summary);
+    });
+
+    [Fact]
+    public void LayoutsKeepTabOrderAndClosedPanels() => WithLayout((layout, settings) =>
+    {
+        layout.Move("Chart", 0);
+        layout.Close("Simulations");
+        layout.Close("Hierarchy");
+        const string Mine = "(Documents / Chart, Assets, Output, Profiler, Tables) | Inspector; closed: Hierarchy, Simulations";
+        Assert.Equal(Mine, layout.Summary);
+        layout.Save("Mine");
+        layout.Remember();
+
+        // Through the settings file, as the next session reads it.
+        var read = new TestSettings();
+        read.Settings.PanelLayout = JsonSerializer.Deserialize<EditorSettings>(JsonSerializer.Serialize(settings.Settings))!.PanelLayout;
+        Assert.Equal(Mine, NextSession(layout, read).Summary);
+
+        layout.Reset();
+        Assert.Equal(Start, layout.Summary);
+        layout.Load("Mine");
+        Assert.Equal(Mine, layout.Summary);
+
+        // A layout kept before the panels could close leaves none closed.
+        settings.Settings.PanelLayout = new PanelLayoutData { Root = Part.Split(true, Part.Tabs("Hierarchy"), new PanelLayoutPart { Kind = PanelLayoutPart.DocumentsKind }), Closed = null! };
+        Assert.DoesNotContain("closed", NextSession(layout, settings).Summary);
+    });
+
     // Stand-ins for the editor's panels, whose views need the editor's theme.
     private sealed class Tree : ToolPanel
     {

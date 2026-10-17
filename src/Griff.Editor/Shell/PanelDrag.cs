@@ -7,8 +7,9 @@ using Griff.Editor.Core.Panels;
 namespace Griff.Editor.Shell;
 
 /// <summary>
-/// Moves a panel by dragging its tab: to an edge of the window, beside or into another group, or out on its own. A box
-/// shows where it will go while dragging; Ctrl floats it wherever it's dropped, and Escape calls the drag off.
+/// Moves a panel by dragging its tab: along its group's tabs, to an edge of the window, beside or into another group, or
+/// out on its own. A box shows where it will go while dragging; Ctrl floats it wherever it's dropped, and Escape calls the
+/// drag off.
 /// </summary>
 public sealed class PanelDrag(PanelHost host)
 {
@@ -86,6 +87,9 @@ public sealed class PanelDrag(PanelHost host)
         var panel = (string)tab.Tag;
         var drop = DockTargets.Find(point, host.Workspace is { } workspace ? Bounds(workspace) : Rect.Empty, Areas(), FloatSize(tab),
             floatOnly: Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
+        // Along its own group's tabs, the drop moves its tab.
+        if (drop is { Kind: DockDropKind.Tab, Index: >= 0 } && host.Layout.GroupOf(drop.Target!) == host.Layout.GroupOf(panel))
+            drop = drop with { Label = "Move the tab here" };
         _drop = host.Layout.WouldChange(panel, drop) ? drop : null;
         if (_drop is null)
             _preview!.Hide();
@@ -115,10 +119,12 @@ public sealed class PanelDrag(PanelHost host)
         {
             if (!element.IsVisible || PresentationSource.FromVisual(element) is null)
                 continue;
-            var header = element is TabControl control && control.Template.FindName("HeaderPanel", control) is FrameworkElement strip ? strip.ActualHeight : 28;
+            var control = element as TabControl;
+            var header = control?.Template.FindName("HeaderPanel", control) is FrameworkElement strip ? strip.ActualHeight : 28;
+            var tabs = control?.Items.OfType<TabItem>().Where(t => t.IsVisible).Select(Bounds).ToList();
             areas.Add(group is null
                 ? new DockArea(Bounds(element), null, PanelLayout.Documents, Floating: false)
-                : new DockArea(Bounds(element), group.Panels[0], host.Layout.Title(group.Selected ?? group.Panels[0]), group.Float is not null, header));
+                : new DockArea(Bounds(element), group.Panels[0], host.Layout.Title(group.Selected ?? group.Panels[0]), group.Float is not null, header, tabs));
         }
 
         return areas;

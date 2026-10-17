@@ -76,11 +76,12 @@ public sealed class FloatingPanels(DockGroup group)
 
 /// <summary>
 /// Where the tool panels are: docked around the document area in splits and tabbed groups, or floating in windows of
-/// their own. Dragging a panel's tab calls <see cref="Dock"/>, <see cref="Tab"/> or <see cref="Float"/>, and so can an
-/// agent (ui_invoke on PanelLayout); <see cref="Summary"/> says where everything is. Panels are named by their id or
-/// title (Hierarchy, Inspector, Assets, Output, Profiler), and the document area is "Documents". The layout is kept between
-/// sessions, layouts can be saved by name (<see cref="Save"/>, <see cref="Load"/>), and <see cref="Reset"/> puts every
-/// panel back where it starts out.
+/// their own. Dragging a panel's tab calls <see cref="Dock"/>, <see cref="Tab"/>, <see cref="Float"/> or (along its own
+/// group's tabs) <see cref="Move"/>, and so can an agent (ui_invoke on PanelLayout); <see cref="Close"/> closes a panel
+/// until <see cref="Show"/> (View > Panels) opens it again. <see cref="Summary"/> says where everything is. Panels are
+/// named by their id or title (Hierarchy, Inspector, Assets, Output, Profiler), and the document area is "Documents". The
+/// layout is kept between sessions, layouts can be saved by name (<see cref="Save"/>, <see cref="Load"/>), and
+/// <see cref="Reset"/> puts every panel back where it starts out.
 /// </summary>
 public sealed class PanelLayout
 {
@@ -92,6 +93,7 @@ public sealed class PanelLayout
 
     private readonly IReadOnlyList<ToolPanel> _panels;
     private readonly List<FloatingPanels> _floats = [];
+    private readonly HashSet<string> _closed = [];
     private ISettingsStore _settings;
     private int _holding;
 
@@ -124,6 +126,9 @@ public sealed class PanelLayout
 
     public IReadOnlyList<ToolPanel> Panels => _panels;
 
+    /// <summary>The ids of the panels closed (<see cref="Close"/>), in the order the panels start out in.</summary>
+    public IReadOnlyList<string> Closed => _panels.Where(p => _closed.Contains(p.Id)).Select(p => p.Id).ToList();
+
     /// <summary>Where the editor's window was when it last closed, to open there again; null the first time.</summary>
     public EditorWindowData? EditorWindow => _settings.Settings.PanelLayout?.Window;
 
@@ -132,10 +137,12 @@ public sealed class PanelLayout
 
     /// <summary>
     /// Where everything is, e.g. "Hierarchy | (Documents / Assets, Output) | Inspector": "|" between parts side by side,
-    /// "/" between parts one above another, "," between panels tabbed together, then any floating windows.
+    /// "/" between parts one above another, "," between panels tabbed together (in the order of their tabs), then any
+    /// floating windows and the panels closed ("; closed: Profiler").
     /// </summary>
     public string Summary =>
-        Describe(Root, nested: false) + string.Concat(_floats.Select(f => "; floating: " + string.Join(", ", f.Group.Panels)));
+        Describe(Root, nested: false) + string.Concat(_floats.Select(f => "; floating: " + string.Join(", ", f.Group.Panels)))
+        + (_closed.Count > 0 ? "; closed: " + string.Join(", ", Closed) : "");
 
     /// <summary>
     /// Docks a panel on a side of another panel (and whatever it's tabbed with), of "Documents", or, with no
@@ -157,20 +164,61 @@ public sealed class PanelLayout
         Raise();
     }
 
-    /// <summary>Tabs a panel with another, docked or floating, and shows it.</summary>
-    public void Tab(string panel, string with)
+    /// <summary>
+    /// Tabs a panel with another, docked or floating, and shows it: its tab goes before the tab at <paramref name="at"/>
+    /// among theirs (0 is the first), or after the last one when that's left out.
+    /// </summary>
+    public void Tab(string panel, string with, int at = -1)
     {
         var id = PanelId(panel);
         var target = GroupOf(PanelId(with));
-        if (GroupOf(id) != target)
+        var from = target.Panels.IndexOf(id);
+        if (from >= 0)
+        {
+            // Along its own group's tabs: taking it out first moves the ones after it down one.
+            if (at >= 0)
+            {
+                target.Panels.RemoveAt(from);
+                target.Panels.Insert(Math.Clamp(at > from ? at - 1 : at, 0, target.Panels.Count), id);
+            }
+        }
+        else
         {
             Take(id);
-            target.Panels.Add(id);
+            target.Panels.Insert(at < 0 ? target.Panels.Count : Math.Min(at, target.Panels.Count), id);
         }
 
         target.Selected = id;
         Raise();
     }
+
+    /// <summary>Moves a panel's tab to <paramref name="index"/> among its group's tabs (0 is the first), and shows it.</summary>
+    public void Move(string panel, int index)
+    {
+        var id = PanelId(panel);
+        var group = GroupOf(id);
+        group.Panels.Remove(id);
+        group.Panels.Insert(Math.Clamp(index, 0, group.Panels.Count), id);
+        group.Selected = id;
+        Raise();
+    }
+
+    /// <summary>
+    /// Closes a panel: its tab goes until View > Panels (or <see cref="Show"/>) opens it again where it starts out. Kept
+    /// layouts remember which panels are closed.
+    /// </summary>
+    public void Close(string panel)
+    {
+        var id = PanelId(panel);
+        if (_closed.Contains(id))
+            return;
+        Take(id);
+        _closed.Add(id);
+        Raise();
+    }
+
+    /// <summary>Whether a panel is in the layout (docked or floating), rather than closed.</summary>
+    public bool IsOpen(string panel) => !_closed.Contains(PanelId(panel));
 
     /// <summary>
     /// Floats a panel in a window of its own, at that place and size in screen units (left out, it opens near the middle
@@ -256,10 +304,15 @@ public sealed class PanelLayout
         Raise();
     }
 
-    /// <summary>Brings a panel to the front of its group (and its floating window to the front).</summary>
+    /// <summary>
+    /// Brings a panel to the front of its group (and its floating window to the front), opening it again where it starts
+    /// out if it was closed.
+    /// </summary>
     public void Show(string panel)
     {
         var id = PanelId(panel);
+        if (_closed.Contains(id))
+            Return(id);
         GroupOf(id).Selected = id;
         Shown?.Invoke(this, id);
     }
@@ -297,11 +350,12 @@ public sealed class PanelLayout
         _settings.Save();
     }
 
-    /// <summary>Puts every panel back where it starts out, closing any floating windows.</summary>
+    /// <summary>Puts every panel back where it starts out (opening the ones closed), closing any floating windows.</summary>
     public void Reset()
     {
         Root = Default();
         _floats.Clear();
+        _closed.Clear();
         Raise();
     }
 
@@ -337,12 +391,13 @@ public sealed class PanelLayout
             Width = f.Bounds.Width,
             Height = f.Bounds.Height,
         }).ToList(),
+        Closed = [.. Closed],
     };
 
     /// <summary>
     /// Puts everything where kept data says, without raising <see cref="Changed"/>. Panels it doesn't name (ones added
-    /// since it was kept) go back where they start out, and names that aren't panels any more are dropped. Data
-    /// without exactly one document area leaves the layout as it was and returns false.
+    /// since it was kept) go back where they start out, ones it has closed stay closed, and names that aren't panels any
+    /// more are dropped. Data without exactly one document area leaves the layout as it was and returns false.
     /// </summary>
     internal bool Restore(PanelLayoutData data)
     {
@@ -369,10 +424,12 @@ public sealed class PanelLayout
         Root = root;
         _floats.Clear();
         _floats.AddRange(floats);
+        _closed.Clear();
+        _closed.UnionWith(_panels.Select(p => p.Id).Where(id => !placed.Contains(id) && (data.Closed ?? []).Contains(id, StringComparer.OrdinalIgnoreCase)));
         _holding++;
         try
         {
-            foreach (var missing in _panels.Where(p => !placed.Contains(p.Id)).ToList())
+            foreach (var missing in _panels.Where(p => !placed.Contains(p.Id) && !_closed.Contains(p.Id)).ToList())
                 Return(missing.Id);
         }
         finally
@@ -448,18 +505,23 @@ public sealed class PanelLayout
     {
         var id = PanelId(panel);
         return Groups().FirstOrDefault(g => g.Panels.Contains(id))
-            ?? throw new InvalidOperationException($"{id} isn't in the layout.");
+            ?? throw new InvalidOperationException(_closed.Contains(id) ? $"{id} is closed (View > Panels opens it)." : $"{id} isn't in the layout.");
     }
 
     /// <summary>Every group, docked ones first.</summary>
     internal IEnumerable<DockGroup> Groups() => Nodes(Root).OfType<DockGroup>().Concat(_floats.Select(f => f.Group));
 
-    /// <summary>Whether a drop would change anything: tabbing a panel where it already is, or docking it beside itself alone, doesn't.</summary>
+    /// <summary>
+    /// Whether a drop would change anything: tabbing a panel where it already is (or dropping its tab right where it is
+    /// among its group's), or docking it beside itself alone, doesn't.
+    /// </summary>
     internal bool WouldChange(string panel, DockDrop drop)
     {
         var own = GroupOf(panel);
         return drop.Kind switch
         {
+            DockDropKind.Tab when drop.Index >= 0 && GroupOf(drop.Target!) == own =>
+                own.Panels.IndexOf(PanelId(panel)) is var at && drop.Index != at && drop.Index != at + 1,
             DockDropKind.Tab => GroupOf(drop.Target!) != own,
             DockDropKind.Dock => drop.Target is null || Node(drop.Target) != own || own.Panels.Count > 1,
             _ => true,
@@ -472,7 +534,7 @@ public sealed class PanelLayout
         switch (drop.Kind)
         {
             case DockDropKind.Tab:
-                Tab(panel, drop.Target!);
+                Tab(panel, drop.Target!, drop.Index);
                 break;
             case DockDropKind.Dock:
                 Dock(panel, drop.Side, drop.Target);
@@ -573,6 +635,7 @@ public sealed class PanelLayout
     // Takes a panel out of its group, taking away the group (or its floating window) if that leaves it empty.
     private void Take(string id)
     {
+        _closed.Remove(id);
         if (Groups().FirstOrDefault(g => g.Panels.Contains(id)) is not { } group)
             return;
         group.Panels.Remove(id);

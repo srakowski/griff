@@ -13,6 +13,9 @@ public sealed class PanelLayoutData
 
     public List<FloatingLayoutData> Floating { get; set; } = [];
 
+    /// <summary>The panels closed (their tabs gone until View > Panels opens them again).</summary>
+    public List<string> Closed { get; set; } = [];
+
     /// <summary>Where the editor's own window was, for the layout it last had (a saved layout leaves the window be).</summary>
     public EditorWindowData? Window { get; set; }
 }

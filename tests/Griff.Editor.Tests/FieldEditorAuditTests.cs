@@ -164,6 +164,7 @@ public sealed partial class FieldEditorAuditTests
         Switch.OffMessage: Names:Message
         Switch.Prompt: Entity
         Switch.Clock: Entity
+        CameraControls.StayInside: Entity
         Chase.Target: Entity
         Chase.Around: Entity
         Follow.Target: Entity

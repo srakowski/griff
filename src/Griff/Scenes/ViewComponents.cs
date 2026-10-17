@@ -1,5 +1,4 @@
 using System.Numerics;
-using Griff.Input;
 
 namespace Griff.Scenes;
 
@@ -269,8 +268,6 @@ public enum CameraDrag
 [NetLocal]
 public sealed class CameraControls : Component
 {
-    // The world point the mouse took hold of as a drag began, while it's dragging.
-    private Vector2? _held;
 
     /// <summary>
     /// How fast the keys and the screen's edges pan, in screen heights a second: 1 crosses the screen's height in a second,
@@ -304,80 +301,10 @@ public sealed class CameraControls : Component
     public string? StayInside { get; set; }
 
     /// <summary>True while a mouse button is dragging the view.</summary>
-    public bool IsDragging => _held is not null;
+    public bool IsDragging => HeldAt is not null;
 
-    /// <summary>
-    /// Pans and zooms the camera by what <paramref name="input"/> says over <paramref name="seconds"/> of real time, on a
-    /// view <paramref name="aspect"/> times as wide as it's high. While <paramref name="mouseOnHud"/>, the wheel and a new
-    /// drag are the HUD's. Called by the game each frame.
-    /// </summary>
-    public void Advance(Runtime.IInput input, float seconds, float aspect, bool mouseOnHud)
-    {
-        if (Entity?.Scene is not { } scene || Entity.GetComponent<Camera>() is not { } camera)
-            return;
-        var transform = Entity.Transform;
-        var position = new Vector2(transform.WorldPosition.X, transform.WorldPosition.Y);
-        var start = position;
-        var size = camera.Size;
-        aspect = aspect > 0 ? aspect : 1;
-        var mouse = input.MouseWorld;
-        var mouseFree = input.IsMouseInView && !mouseOnHud;
-
-        var pan = PanWithKeys ? input.Move : Vector2.Zero;
-        if (EdgeScroll && input.IsMouseInView && _held is null)
-        {
-            // Where the mouse is across the view, from -1 to 1 each way; the edge is its outer 3%.
-            var across = (mouse - position) / new Vector2(size * aspect, size);
-            pan += new Vector2(across.X >= 0.97f ? 1 : across.X <= -0.97f ? -1 : 0, across.Y >= 0.97f ? 1 : across.Y <= -0.97f ? -1 : 0);
-        }
-
-        if (pan != Vector2.Zero && seconds > 0)
-            position += (pan.LengthSquared() > 1 ? Vector2.Normalize(pan) : pan) * PanSpeed * size * 2 * seconds;
-
-        // A drag keeps the point it took hold of under the mouse.
-        if (!Held(input))
-            _held = null;
-        else if (_held is { } held)
-            position += held - mouse;
-        else if (mouseFree && Pressed(input))
-            _held = mouse;
-
-        if (ZoomStep > 0 && input.Scroll != 0 && mouseFree && _held is null)
-        {
-            var (low, high) = (MathF.Max(MathF.Min(ZoomMin, ZoomMax), 0.01f), MathF.Max(MathF.Max(ZoomMin, ZoomMax), 0.01f));
-            var zoomed = Math.Clamp(size * MathF.Pow(1 - Math.Clamp(ZoomStep, 0, 0.9f), input.Scroll), low, high);
-            if (zoomed != size)
-            {
-                // Toward the mouse: the point under it stays there.
-                position = mouse + (position - mouse) * (zoomed / size);
-                camera.Size = size = zoomed;
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(StayInside) && EntityNames.Find(scene, StayInside, new NameLookup(Entity)) is { } area &&
-            Follow.AreaOf(area) is { } bounds)
-            position = Follow.Clamp(position, bounds, new Vector2(size * aspect, size));
-        if (position != start)
-            Follow.SetWorld(transform, position);
-    }
-
-    private bool Held(Runtime.IInput input) => DragButton switch
-    {
-        CameraDrag.Left => input.IsDown(MouseButton.Left),
-        CameraDrag.Middle => input.IsDown(MouseButton.Middle),
-        CameraDrag.Right => input.IsDown(MouseButton.Right),
-        CameraDrag.MiddleOrRight => input.IsDown(MouseButton.Middle) || input.IsDown(MouseButton.Right),
-        _ => false,
-    };
-
-    private bool Pressed(Runtime.IInput input) => DragButton switch
-    {
-        CameraDrag.Left => input.WasPressed(MouseButton.Left),
-        CameraDrag.Middle => input.WasPressed(MouseButton.Middle),
-        CameraDrag.Right => input.WasPressed(MouseButton.Right),
-        CameraDrag.MiddleOrRight => input.WasPressed(MouseButton.Middle) || input.WasPressed(MouseButton.Right),
-        _ => false,
-    };
+    // The world point the mouse took hold of as a drag began, while it's dragging (see Runtime.ViewSystem).
+    internal Vector2? HeldAt { get; set; }
 }
 
 /// <summary>

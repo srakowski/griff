@@ -36,7 +36,7 @@ public sealed class SceneDocument : ObservableObject
     private void LayOutScreen()
     {
         if (!IsRuntime && !IsPrefab)
-            ScreenAnchor.LayOutAll(Scene, (float)SceneViewModel.CameraAspect);
+            Griff.Runtime.ScreenLayout.LayOutAll(Scene, (float)SceneViewModel.CameraAspect);
     }
 
     /// <summary>Raised after any edit is executed, undone or redone.</summary>

@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
@@ -32,8 +33,70 @@ internal sealed class ViewSystem : GameSystem
             return;
         var onHud = MouseOnHud();
         foreach (var control in controls)
-            control.Advance(Game.Input, Game.Time.UnscaledDelta, AspectOf(control.Entity!), onHud);
+            Advance(control, Game.Input, Game.Time.UnscaledDelta, AspectOf(control.Entity!), onHud);
     }
+
+    // Pans and zooms a camera by what `input` says over `seconds` of real time, on a view `aspect` times as wide as it's
+    // high. While `mouseOnHud`, the wheel and a new drag are the HUD's.
+    private static void Advance(CameraControls controls, IInput input, float seconds, float aspect, bool mouseOnHud)
+    {
+        if (controls.Entity is not { Scene: { } scene } entity || entity.GetComponent<Camera>() is not { } camera)
+            return;
+        var transform = entity.Transform;
+        var position = new Vector2(transform.WorldPosition.X, transform.WorldPosition.Y);
+        var start = position;
+        var size = camera.Size;
+        aspect = aspect > 0 ? aspect : 1;
+        var mouse = input.MouseWorld;
+        var mouseFree = input.IsMouseInView && !mouseOnHud;
+
+        var pan = controls.PanWithKeys ? input.Move : Vector2.Zero;
+        if (controls.EdgeScroll && input.IsMouseInView && controls.HeldAt is null)
+        {
+            // Where the mouse is across the view, from -1 to 1 each way; the edge is its outer 3%.
+            var across = (mouse - position) / new Vector2(size * aspect, size);
+            pan += new Vector2(across.X >= 0.97f ? 1 : across.X <= -0.97f ? -1 : 0, across.Y >= 0.97f ? 1 : across.Y <= -0.97f ? -1 : 0);
+        }
+
+        if (pan != Vector2.Zero && seconds > 0)
+            position += (pan.LengthSquared() > 1 ? Vector2.Normalize(pan) : pan) * controls.PanSpeed * size * 2 * seconds;
+
+        // A drag keeps the point it took hold of under the mouse.
+        if (!Dragging(controls.DragButton, input.IsDown))
+            controls.HeldAt = null;
+        else if (controls.HeldAt is { } held)
+            position += held - mouse;
+        else if (mouseFree && Dragging(controls.DragButton, input.WasPressed))
+            controls.HeldAt = mouse;
+
+        if (controls.ZoomStep > 0 && input.Scroll != 0 && mouseFree && controls.HeldAt is null)
+        {
+            var (low, high) = (MathF.Max(MathF.Min(controls.ZoomMin, controls.ZoomMax), 0.01f), MathF.Max(MathF.Max(controls.ZoomMin, controls.ZoomMax), 0.01f));
+            var zoomed = Math.Clamp(size * MathF.Pow(1 - Math.Clamp(controls.ZoomStep, 0, 0.9f), input.Scroll), low, high);
+            if (zoomed != size)
+            {
+                // Toward the mouse: the point under it stays there.
+                position = mouse + (position - mouse) * (zoomed / size);
+                camera.Size = size = zoomed;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(controls.StayInside) && EntityNames.Find(scene, controls.StayInside, new NameLookup(entity)) is { } area &&
+            Follow.AreaOf(area) is { } bounds)
+            position = Follow.Clamp(position, bounds, new Vector2(size * aspect, size));
+        if (position != start)
+            Follow.SetWorld(transform, position);
+    }
+
+    // Whether the drag button is down (or was pressed), as `button` says of each mouse button.
+    private static bool Dragging(CameraDrag drag, Func<MouseButton, bool> button) => drag switch
+    {
+        CameraDrag.Left => button(MouseButton.Left),
+        CameraDrag.Middle => button(MouseButton.Middle),
+        CameraDrag.Right => button(MouseButton.Right),
+        CameraDrag.MiddleOrRight => button(MouseButton.Middle) || button(MouseButton.Right),
+        _ => false,
+    };
 
     // The mouse is over the HUD: a button, something a system shows there, or anything pinned to the screen with a sprite
     // under the mouse (a bar's backdrop, an open panel).

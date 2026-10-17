@@ -503,7 +503,7 @@ public sealed partial class SceneViewModel(IProjectSession projectSession, IScen
                 if (_moving[i].Transform.Entity?.GetComponent<ScreenAnchor>() is { } pin)
                 {
                     anchors.Add(pin);
-                    offsets.Add(pin.OffsetFor(targets[i], camera, (float)CameraAspect));
+                    offsets.Add(ScreenLayout.OffsetFor(pin, targets[i], camera, (float)CameraAspect));
                 }
                 else
                 {

@@ -18,7 +18,7 @@ internal sealed partial class HudSystem : GameSystem
         if (anchors.Count == 0)
             return;
 
-        var (center, half, scale) = ScreenAnchor.ViewOf(Views.FindCamera(Game.Scene), Game.ViewAspect);
+        var (center, half, scale) = ScreenLayout.ViewOf(Views.FindCamera(Game.Scene), Game.ViewAspect);
         // What's behind the minigame that has the screen isn't seen, so it isn't pinned to its camera either.
         var shown = Game.Minigame;
         foreach (var anchor in anchors)
@@ -26,7 +26,7 @@ internal sealed partial class HudSystem : GameSystem
             // An entity's first anchor places it.
             if (anchor.Entity!.GetComponent<ScreenAnchor>() != anchor || MinigameRoot.IsBehind(anchor.Entity, shown))
                 continue;
-            anchor.Place(center, half, scale);
+            ScreenLayout.Place(anchor, center, half, scale);
         }
     }
 

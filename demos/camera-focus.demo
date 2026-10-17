@@ -10,7 +10,7 @@ set: Tilemap.Tiles = 111122221111222211112222111122221111\n111122221111222211112
 deselect
 create: Sprite
 rename: Walker
-set: Transform.Position = 10, -4
+set: Transform.Position = 10, -4, 0
 add: Mover
 set: Mover.Speed = 1.5
 say: The walker paces back and forth across the level by itself.

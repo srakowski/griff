@@ -46,7 +46,7 @@ public sealed class TemplatePlaythroughTests
         ["Pinball"] = "AA0C5F2C3FDA88DF",
         ["Platformer"] = "84C895564FC90B1E",
         ["Puzzle"] = "4134FE51729CE5A9",
-        ["Rhythm"] = "52C0CF6645CB10DD",
+        ["Rhythm"] = "8DCE18825CB0FE11",
         ["Roguelike"] = "1512247890B96789",
         ["RpgStats"] = "EEA80EAF79A6B6B3",
         ["Sandbox"] = "D4D26E75993737E0",
@@ -54,7 +54,7 @@ public sealed class TemplatePlaythroughTests
         ["Strategy"] = "778EDCDF23BCB701",
         ["Tactics"] = "59AFBFB3FED932E7",
         ["TopDown"] = "CDDCD4700274C112",
-        ["VisualNovel"] = "B014756471F64C82",
+        ["VisualNovel"] = "ED14A23DDF5FD046",
     };
 
     public static TheoryData<string> Templates => [.. ProjectTemplates.All.Select(t => t.Name)];

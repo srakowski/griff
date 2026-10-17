@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.10 - 2026-10-17
+
 - The **Assets** panel shows the folders as a tree on the left and the picked folder's files as tiles on the right, pictures as thumbnails and everything else with an icon for its kind. Double-clicking, dragging into the scene or onto a folder, and right-clicking work on the tiles as they did on the rows, a slider sizes the tiles, and the **Tree** button brings back the one tree.
 - **Expand All** and **Collapse All** buttons on every panel with a tree or sections that fold: the Hierarchy, the Inspector (every component and subheading), the Assets panel (every folder, in either view) and the script editor (every block of code).
 - With a tilemap selected, the Scene view's new **Select** tool (V), first under the tile palette, is the cursor: click and drag to select and move things without painting, then pick the Brush (B) to paint again. The tool stays as you left it.

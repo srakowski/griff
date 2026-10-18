@@ -305,7 +305,10 @@ public sealed class CameraControls : Component
     /// <summary>The mouse button that drags the world along with the mouse, or None.</summary>
     public CameraDrag DragButton { get; set; } = CameraDrag.MiddleOrRight;
 
-    /// <summary>Whether resting the mouse at the screen's edge pans that way.</summary>
+    /// <summary>
+    /// Whether resting the mouse at the screen's edge pans that way. Not while it's on the HUD (a button row along the bottom,
+    /// an open panel), so reaching for a button doesn't pan the world away.
+    /// </summary>
     public bool EdgeScroll { get; set; }
 
     /// <summary>The closest the wheel zooms in: the camera's smallest Size.</summary>

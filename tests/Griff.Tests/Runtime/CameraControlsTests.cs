@@ -237,6 +237,37 @@ public class CameraControlsTests
     }
 
     [Fact]
+    public void EdgeScroll_WaitsWhileTheMouseRestsOnTheHud_AndPansBesideIt()
+    {
+        _lens.HudSize = 5;
+        var row = new Entity("Buttons");
+        row.AddComponent<Sprite>().Size = new Vector2(6, 1);
+        var pin = row.AddComponent<ScreenAnchor>();
+        pin.Anchor = Anchor.Bottom;
+        pin.Offset = new Vector2(0, 0.5f);
+        _scene.Add(row);
+        _controls.EdgeScroll = true;
+        var game = CreateGame();
+        Tick(game);
+
+        // Resting on the button row along the bottom edge: the world stays put.
+        for (var i = 0; i < 30; i++)
+        {
+            MouseOnScreen(new Vector2(0, -0.99f));
+            Tick(game);
+        }
+        Assert.Equal(Vector2.Zero, At);
+
+        // On the bottom edge beside the row, it pans down.
+        for (var i = 0; i < 30; i++)
+        {
+            MouseOnScreen(new Vector2(0.8f, -0.99f));
+            Tick(game);
+        }
+        Assert.True(At.Y < 0);
+    }
+
+    [Fact]
     public void FocusOn_FollowsAWalkingCharacterAtItsSize_TheKeysAndWheelWaiting_ThenHandsBackAtTheOldSize()
     {
         _lens.Size = 9;

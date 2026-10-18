@@ -72,9 +72,10 @@ internal sealed class ViewSystem : GameSystem
         var mouseFree = input.IsMouseInView && !mouseOnHud;
 
         var pan = controls.PanWithKeys ? KeyPan(input) : Vector2.Zero;
-        if ((edgeScroll ?? controls.EdgeScroll) && input.IsMouseInView && controls.HeldAt is null)
+        if ((edgeScroll ?? controls.EdgeScroll) && mouseFree && controls.HeldAt is null)
         {
-            // The edge is the view's outer 3%.
+            // The edge is the view's outer 3%, where the mouse isn't on the HUD: reaching for a button along the bottom
+            // doesn't pan the world away, as the wheel and a drag don't.
             pan += new Vector2(across.X >= 0.97f ? 1 : across.X <= -0.97f ? -1 : 0, across.Y >= 0.97f ? 1 : across.Y <= -0.97f ? -1 : 0);
         }
 

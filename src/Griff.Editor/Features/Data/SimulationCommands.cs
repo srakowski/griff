@@ -81,9 +81,11 @@ public sealed class OpenSimulationCommand(SimulationStore store, SimulationsPane
 /// <summary>
 /// Shows the Simulations panel: balance simulations played thousands of times headless and seeded (each class against
 /// each enemy in an arena, by the game's own rules, or a script), and their results as a table, a matrix coloured by how
-/// one-sided each pair is, a sweep of a column by steps and values over a run, with charts and findings. Read and change it
-/// with ui_inspect, ui_set and ui_invoke on the Simulations panel (SimulationName, Arena, FirstTable, Runs, Sweeps,
-/// RunAsync, Summary, Findings, Pairs, ResultsJson, MatrixLines, SweepLines, OverARunLines, Value...).
+/// one-sided each pair is, a sweep of a column by steps and values over a run, with charts and findings. A scene run plays
+/// the whole game from a scene instead (PlaysScene, Scene, Script as its strategy, ActEvery, TrackEvery, EndWhen, Flags,
+/// ClosePanels), as fast as it goes. Read and change it with ui_inspect, ui_set and ui_invoke on the Simulations panel
+/// (SimulationName, Arena, FirstTable, Runs, Sweeps, RunAsync, Summary, Findings, Pairs, ResultsJson, MatrixLines,
+/// SweepLines, OverARunLines, Value...).
 /// </summary>
 public sealed class ShowSimulationsCommand(PanelLayout layout) : EditorCommand
 {
@@ -137,7 +139,11 @@ public sealed class StopSimulationCommand(SimulationsPanel panel) : EditorComman
     }
 }
 
-/// <summary>Exports the results of the simulation showing in the Simulations panel to a CSV file, asking where: a row a pair (at each step), a column a measure.</summary>
+/// <summary>
+/// Exports the results of the simulation showing in the Simulations panel to a CSV file, asking where: a row a pair (at
+/// each step), a column a measure. A scene run (or one tracking every so many seconds) also writes every point of its
+/// values over a run to "... over time.csv" beside it.
+/// </summary>
 public sealed class ExportSimulationResultsCommand(SimulationsPanel panel, IDialogService dialogs) : EditorCommand
 {
     public override string Id => "Data.ExportResults";

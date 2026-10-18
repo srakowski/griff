@@ -1,4 +1,6 @@
 using Griff.Data;
+using Griff.Runtime;
+using Griff.Scenes;
 
 namespace Griff.Simulations;
 
@@ -8,6 +10,29 @@ namespace Griff.Simulations;
 /// Script; Griff makes a new one for each run and calls <see cref="Run"/> with the run's pair of rows. <c>Rand</c> and
 /// dice rolls give the run's own numbers, so the same seed plays the same runs on any machine and any number of cores.
 /// </summary>
+/// <remarks>
+/// In a scene run (a simulation with a Scene) it's a strategy instead: each run plays the real game headless, calling
+/// <see cref="Setup"/> before the game's first step, <see cref="Act"/> every Act Every seconds of game time (to play through
+/// the game's own components, as a player would), <see cref="IsOver"/> after each step, and <see cref="Done"/> as it ends.
+/// <see cref="SimulationRun.Game"/> is the game being played.
+/// <code>
+/// public class HireEarly : SimulationScript
+/// {
+///     public override void Setup(SimulationRun run) => run.Game!.SetFlag("SkipIntro");
+///
+///     public override void Act(SimulationRun run)
+///     {
+///         var shop = run.Game!.Find&lt;Shop&gt;()!;            // the game's own component
+///         if (shop.Cash &gt;= shop.WorkerCost) shop.HireWorker();
+///     }
+///
+///     public override void Done(SimulationRun run)
+///     {
+///         if (run.Game!.Find&lt;Shop&gt;()!.Cash &gt; 0) run.Win(); else run.Lose();
+///     }
+/// }
+/// </code>
+/// </remarks>
 /// <example><code>
 /// public class Gauntlet : SimulationScript
 /// {
@@ -27,15 +52,47 @@ namespace Griff.Simulations;
 /// </code></example>
 public abstract class SimulationScript
 {
-    /// <summary>Plays one run, saying how it went through <paramref name="run"/> (<see cref="SimulationRun.Win"/>, <see cref="SimulationRun.Earn"/>...).</summary>
-    public abstract void Run(SimulationRun run);
+    /// <summary>
+    /// Plays one run, saying how it went through <paramref name="run"/> (<see cref="SimulationRun.Win"/>,
+    /// <see cref="SimulationRun.Earn"/>...). Left as it is, it plays the simulation's scene with this script as its
+    /// strategy (<see cref="SimulationRun.Play"/>).
+    /// </summary>
+    public virtual void Run(SimulationRun run) => run.Play();
+
+    /// <summary>
+    /// In a scene run, called on the new game before its first step: set flags or save data (<c>run.Game.SetFlag</c>,
+    /// <c>run.Game.SaveData</c>), change its components, or set <c>run.Game.Time.Scale</c> for coarser steps where that's safe.
+    /// </summary>
+    public virtual void Setup(SimulationRun run)
+    {
+    }
+
+    /// <summary>
+    /// In a scene run, called after the game's first step, then every Act Every seconds of game time, and on each step a
+    /// panel pauses the game: play the game through its own components (sign offers, hire, buy, move), close or answer a
+    /// panel, <see cref="SimulationRun.Track"/> a value or <see cref="SimulationRun.End"/> the run.
+    /// </summary>
+    public virtual void Act(SimulationRun run)
+    {
+    }
+
+    /// <summary>In a scene run, asked after each step: true ends the run there (cash run out, a goal reached).</summary>
+    public virtual bool IsOver(SimulationRun run) => false;
+
+    /// <summary>
+    /// In a scene run, called as it ends, with the game as it was at the end: say how it went (<see cref="SimulationRun.Win"/>,
+    /// <see cref="SimulationRun.Lose"/>, <see cref="SimulationRun.Earn"/>).
+    /// </summary>
+    public virtual void Done(SimulationRun run)
+    {
+    }
 }
 
 /// <summary>
 /// One run of a simulation: the pair of rows it plays (<see cref="First"/> against <see cref="Second"/>), the tables (with
 /// a sweep's step in them), and what came of it: who won, how many turns and seconds it took, the damage each side dealt,
 /// what the first side earned (gold, XP) and any value tracked over the run. A script simulation fills it in; the no-code
-/// matchup fills it in from the arena's fight.
+/// matchup fills it in from the arena's fight; a scene run from the game it plays (<see cref="Game"/>) and its strategy.
 /// </summary>
 public sealed class SimulationRun
 {
@@ -120,7 +177,9 @@ public sealed class SimulationRun
 
     /// <summary>
     /// A value over the run (health left, gold in hand, the level reached): a point on its chart each call, and its last
-    /// value is its result, averaged over the runs.
+    /// value is its result, averaged over the runs. A run keeps its first <see cref="SimulationRunner.MostPoints"/>
+    /// points (then the last takes the latest value), or every point, up to <see cref="SimulationRunner.MostTrackedPoints"/>,
+    /// in a scene run or with Track Every set.
     /// </summary>
     public void Track(string name, double value)
     {
@@ -132,11 +191,53 @@ public sealed class SimulationRun
         }
 
         var values = _series[index].Values;
-        if (values.Count < SimulationRunner.MostPoints)
+        if (values.Count < (_plan?.Simulation is { } simulation && (simulation.TrackEvery > 0 || simulation.IsSceneRun) ? SimulationRunner.MostTrackedPoints : SimulationRunner.MostPoints))
             values.Add(double.IsFinite(value) ? value : 0);
         else
             values[^1] = double.IsFinite(value) ? value : 0;
     }
+
+    // Puts `value` in place of the last point of `name` (or adds it, if it has none).
+    internal void TrackLast(string name, double value)
+    {
+        var index = _series.FindIndex(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (index < 0 || _series[index].Values.Count == 0)
+            Track(name, value);
+        else
+            _series[index].Values[^1] = double.IsFinite(value) ? value : 0;
+    }
+
+    /// <summary>The game a scene run is playing, while it plays (in the strategy's Setup, Act, IsOver and Done); null otherwise.</summary>
+    public Game? Game { get; internal set; }
+
+    /// <summary>The scene the game is playing, while a scene run plays; null otherwise.</summary>
+    public Scene? Scene => Game?.Scene;
+
+    /// <summary>How many steps its games have taken (a scene run's, and its fights').</summary>
+    public long Steps { get; internal set; }
+
+    /// <summary>True once <see cref="End"/> is called: the scene run stops after the step under way.</summary>
+    public bool IsEnding { get; private set; }
+
+    /// <summary>Ends the scene run playing after the step under way, as its end condition would.</summary>
+    public void End() => IsEnding = true;
+
+    /// <summary>
+    /// Plays the simulation's scene from its start, headless and as fast as the computer goes, until its time limit, the
+    /// scene changing, the game quitting or its end condition, with the run's script as its strategy (its Setup, Act,
+    /// IsOver and Done) and the tracked values read every Track Every seconds. What a script's <c>Run</c> does unless
+    /// it says otherwise; a script can call it more than once (a new game each time).
+    /// </summary>
+    public void Play()
+    {
+        if (_plan is null || _step is null || !_plan.HasScene)
+            throw new InvalidOperationException("This simulation has no scene to play: set its Scene.");
+        IsEnding = false;
+        SimulationRunner.PlayScene(_plan, _step, this, Script);
+    }
+
+    // The script playing the run, if it has one: the scene run's strategy.
+    internal SimulationScript? Script { get; set; }
 
     /// <summary>
     /// Plays the simulation's arena once with <paramref name="first"/> against <paramref name="second"/> (rows of any

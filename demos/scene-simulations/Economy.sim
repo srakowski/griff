@@ -1,0 +1,14 @@
+{
+  "first": { "table": "Strategies" },
+  "second": {},
+  "runs": 8,
+  "seed": 1,
+  "timeLimit": 7200,
+  "rewards": [],
+  "track": ["Cash = Shop.Cash", "Workers = Shop.Workers"],
+  "script": "HireWhenRich",
+  "scene": "Shop",
+  "actEvery": 10,
+  "closePanels": true,
+  "stepRate": 20
+}

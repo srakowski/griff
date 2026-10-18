@@ -71,7 +71,9 @@ public sealed class SimulationStore : FileStore<Simulation>
             return new AssetFeedback($"The simulation doesn't read: {problem}", IsError: true);
         var simulation = entry.Value!;
         var problems = Check?.Invoke(simulation) ?? [];
-        var plays = simulation.IsScripted
+        var plays = simulation.IsSceneRun
+            ? $"the whole {simulation.Scene} scene{(simulation.IsScripted ? $" with the {simulation.Script} strategy" : "")}"
+            : simulation.IsScripted
             ? $"the {simulation.Script} script"
             : $"{simulation.First.Label("the first side")} against {simulation.Second.Label("the second side")} in {simulation.Arena ?? "no arena yet"}";
         return problems.Count == 0

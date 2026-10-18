@@ -108,6 +108,7 @@ Its settings, down the side of the panel and saved to its file as they change (C
 - **Runs** a pair (200), the **Seed** the runs' random numbers come from, and the **Time Limit** in seconds of game time.
 - **Rewards**: the second side's columns the first earns by beating it (`Gold, XP`), dice rolled.
 - **Track**: outputs read through each fight, a line each, as a Counter reads them: `Gold = Purse.Count`, `XP = Hero.Amount:XP`.
+- **Track every**: seconds of game time between their points (`0.5`), every point kept; 0 (as it starts) takes one each turn (or each second), the first 200 of them.
 - **Sweep a column by steps**: a **Table**'s **Column** (a number, not a formula) set to each value **From** one **to** another **by** a step, in every row or one **Row**, and the whole matchup played at each. A Classes table whose Health and Damage are formulas of its Level (`=[Base Health] + Growth * (Level - 1)`, `=Dice(1, Sides, Level)`) swept over Level from 1 to 10 plays each class at each level against each enemy.
 - **Or a script**, for everything else (below).
 
@@ -120,9 +121,9 @@ The panel's results come in four tabs, each beside a chart of the **Measure** pi
 - **Results**: every pair, a row each, with every measure, charted as bars.
 - **Matrix**: a row for each of the first side's rows and a column for each of the second's, each cell coloured by how one-sided the pair is: the panel's own colour when each side wins as often, more of the accent the more the row wins, more of the blue the more the column does. Resting on a cell says how it went (`Warrior against Ogre: won 2 of 200, lost 198; 2.1 turns...`), and the chart beside it shows each row's measure over all the columns: which class is strongest.
 - **Sweep**: a line for each of the first side's rows (and all of them together) over the sweep's steps, and its table.
-- **Over a Run**: a pair's values as a fight goes, a point each turn (each second without a Turn Order): each side's health, the values tracked and what was earned.
+- **Over a Run**: a pair's values as a fight goes, a point each turn (each second without a Turn Order, or every **Track every** seconds, named by the second each is at): each side's health, the values tracked and what was earned. A run of thousands of points is thinned evenly for the chart (the first and last kept, the title saying how many are drawn); the grid beside it has them all.
 
-With a sweep, **Step** (by the chart's title) picks which step the results, the matrix and the run show. Over the results, under their summary, what stands out is said in a line or two each: pairs where one side wins 95% of the time or more, a row far from the rest (`Rogue wins 88% of its fights, 31 points over the middle Classes row (57%): too strong?`, `Ogre is beaten in 0% of fights...: too strong?`; over a sweep, once for the levels in a row it stands out at, `At Level 5 to 8, Mage wins 81% to 100% of its fights, 21 to 34 points over the middle Classes row: too strong?`, the first side's rows before the second's), fights the time limit ends, and over a sweep, levels that change nothing (`Mage: Level 4 to 6 change nothing (30% to 30.5%): dead levels.`, `Warrior: every fight won from Level 7 on, so the levels after it change nothing.`) and levels that jump (`Level 4 to 5 jumps from 5% to 55%, where a step usually changes it 5 points.`). What the games said as they played (a Table Values naming a column the table hasn't got) is listed too. **Export** (the panel's export button) writes every pair at every step to a CSV file for a spreadsheet.
+With a sweep, **Step** (by the chart's title) picks which step the results, the matrix and the run show. Over the results, under their summary, what stands out is said in a line or two each: pairs where one side wins 95% of the time or more, a row far from the rest (`Rogue wins 88% of its fights, 31 points over the middle Classes row (57%): too strong?`, `Ogre is beaten in 0% of fights...: too strong?`; over a sweep, once for the levels in a row it stands out at, `At Level 5 to 8, Mage wins 81% to 100% of its fights, 21 to 34 points over the middle Classes row: too strong?`, the first side's rows before the second's), fights the time limit ends, and over a sweep, levels that change nothing (`Mage: Level 4 to 6 change nothing (30% to 30.5%): dead levels.`, `Warrior: every fight won from Level 7 on, so the levels after it change nothing.`) and levels that jump (`Level 4 to 5 jumps from 5% to 55%, where a step usually changes it 5 points.`). What the games said as they played (a Table Values naming a column the table hasn't got) is listed too. **Export** (the panel's export button) writes every pair at every step to a CSV file for a spreadsheet; a scene run (or one with **Track every**) also writes every point of its values over a run, a column for each pair's each value, to `... over time.csv` beside it.
 
 ## Script simulations
 
@@ -150,6 +151,45 @@ public class Gauntlet : SimulationScript
 
 A game can play its own simulations too, the same as the editor does: `Game.Simulate("Balance")` gives the results (`results.Steps[0].Pair("Warrior", "Ogre")["Win %"]`, `results.Findings`), exported or in the browser, for a debug menu or a game that tunes itself.
 
+## Scene runs: the whole game over time
+
+A fight has sides to beat; an economy doesn't. Tick **Play a whole scene over time** and each run plays the real game instead: the **Scene** you pick, from its start, headless and with no frame pacing (steps back to back, as fast as the computer goes, on every core), until the **Time Limit** in seconds of game time, the scene changing (to a Game Over scene), `Game.Quit`, or **End when**. It's how to see what a change does to a whole curve (cash and reputation over sixty game days, for each strategy, at each rent) before anyone plays it. The open scene in the editor is never touched, nor Play: each run loads its own copy of the scene, with the project's scripts compiled as Play has them, its own tables and its own save data (in memory, so it starts as a new game).
+
+- **Scene**: the scene each run plays. Turning scene runs on starts with the arena's scene and no sides.
+- **Act every**: seconds of game time between calls to the strategy's `Act` (below), e.g. `10` for a game hour of ten seconds.
+- **Step rate**: steps a second of game time, `0` for the game's own. Fewer play faster in coarser steps (20 takes a third of the steps 60 does) where the game stands it: a Grid Movement still takes every cell a long step covers (see [Game speed](/docs/ui/#game-speed)), but fast bodies and short timers get coarser.
+- **End when**: a flag (`GameOver`, or `not Open`, as a Needs Flag reads it), or an entity's output against a number (`Director.Cash < 0`, with `<`, `<=`, `>`, `>=`, `=` or `!=`). Empty plays on to the time limit.
+- **Flags**: set as each run starts, before the scene's first step (`SkipIntro`), so a run can start past an opening.
+- **Close panels that pause it**: an opening letter or a tour that pauses the game is closed as soon as it opens, as though the player read it. Left off, a strategy answers them: `Act` is also called on each step a panel pauses the game. A game held still for a minute of steps with nothing closing it ends its run there, saying so with the results.
+- **Track** and **Track every**: the values read through the run (`Cash = Director.Cash`), e.g. a point each game day (`240`), every point kept (each second without Track every).
+- A side with a **Table** plays each of its rows in turn: a `Strategies` table whose rows the strategy reads (`run.First["Keep"]`), or rows given to the side's **Entity** through its Table Values. A **Sweep** changes a cell by steps as it does for a matchup (the rent, from 300 to 700 by 100), and the **Runs** and **Seed** work as they do there: the same seed plays the same runs on one core or many.
+
+The strategy is a `SimulationScript` picked as the **Script**. In a scene run it plays the game rather than a model of it: `Setup` is called on the new game before its first step, `Act` after the first step and then every **Act every** seconds, `IsOver` after each step (true ends the run there), and `Done` as it ends, with `run.Game` the game being played. It acts through the game's own components and methods, as a player's clicks would.
+
+```csharp
+public class HireWhenRich : SimulationScript
+{
+    public override void Setup(SimulationRun run) => run.Game!.SaveData.Set("tour.seen", true);
+
+    public override void Act(SimulationRun run)
+    {
+        var shop = run.Game!.Find<Shop>()!;                 // the game's own component
+        var keep = run.First is { } row ? row["Keep"].AsNumber : 0;
+        if (shop.Cash - shop.HireCost >= keep)
+            shop.Hire();
+    }
+
+    public override void Done(SimulationRun run)
+    {
+        if (run.Game!.Find<Shop>()!.Cash > 0) run.Win(); else run.Lose();
+    }
+}
+```
+
+`run.End()` ends a run after the step under way, `run.Track` adds a point of a value of its own, and a script that still overrides `Run` can call `run.Play()` to play the scene (more than once, a new game each time). Without a script, the scene plays with nobody acting. The results are the matchup's: each row's **Win %** (as the strategy's `Done` says), **Seconds** of game time played, and each value tracked, at the end and over a run; the summary says how many game steps were played and how many a second, and what stands out is where each value ends (and, over a sweep, how that moves from the first step to the last).
+
+How fast: a step costs what the game's systems and scripts cost, with nothing drawn. On a 16-thread desktop, a small economy scene plays about 280,000 steps a second on one core (864,000 steps, sixty game days of ten-second hours at 60 steps a second, in about 3 s), and the Platformer and Top-Down templates' scenes 45,000 to 55,000 (their walkers, physics and HUD), a run on each core at once. A run of sixty game days of a busy scene is a matter of seconds to a quarter of a minute, so a strategy and a sweep of twenty runs a step take a minute or two; a coarser **Step rate** cuts that by as much.
+
 ## Simulation files
 
 A simulation is a `.sim` file in Assets, a line a setting:
@@ -168,7 +208,7 @@ A simulation is a `.sim` file in Assets, a line a setting:
 }
 ```
 
-A scripted one has `"script": "Gauntlet"`. What the file holds that Griff doesn't know is kept. Agents write one with `asset_write` (the answer says what it plays, or what's missing for it to run), run it with `Data_RunSimulation` (which answers with the summary and what stands out) and read the rest from the Simulations panel (see [Agents](/docs/agents/)).
+A scripted one has `"script": "Gauntlet"`. A scene run has `"scene": "Gameplay"`, with `"actEvery"`, `"trackEvery"`, `"stepRate"`, `"endWhen"`, `"flags"` and `"closePanels"` when they're set. What the file holds that Griff doesn't know is kept. Agents write one with `asset_write` (the answer says what it plays, or what's missing for it to run), run it with `Data_RunSimulation` (which answers with the summary and what stands out) and read the rest from the Simulations panel (see [Agents](/docs/agents/)).
 
 ## A walkthrough: the RPG Stats template
 

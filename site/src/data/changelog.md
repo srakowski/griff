@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+- A balance simulation can play the whole game over time: tick **Play a whole scene over time** in the Simulations panel and each run plays a **Scene** headless, steps back to back on every core, until its **Time Limit**, the scene changing, `Game.Quit` or **End when** (a flag, or `Director.Cash < 0`). A `SimulationScript` is its strategy: `Setup` before the first step, `Act` every **Act every** seconds of game time (and while a panel pauses the game), `IsOver` and `Done`, playing through the game's own components with `run.Game`. **Flags** set before it starts, **Close panels that pause it** skips an opening letter, **Step rate** plays in coarser steps, and **Track every** takes a point every so many seconds with every point kept (charts thin them for drawing; **Export** writes them all to `... over time.csv`). Seeds, sweeps over a table's cell and a side's table of strategies work as for a matchup.
+
 ## 0.1.0-alpha.16 - 2026-10-17
 
 - A Table Values line can set a list of names: a property that is an `IReadOnlyList<string>` (a script's `Priorities`, a Game Speed's `Speeds`) takes a text cell split on commas and line breaks, each name trimmed and empty ones dropped, and the Inspector marks it as set from the table like any other field. The data tables guide and its demo say so.

@@ -76,7 +76,8 @@ public sealed class AssetTools(IAgentProject project) : IAgentToolSource
                 "object of its cells by column) is read straight away and reaches the running game; the answer says if it doesn't read, and " +
                 "what's wrong with its formulas. A balance simulation (.sim: JSON with \"arena\", a scene; \"first\" and \"second\", each " +
                 "{ \"entity\", \"table\", \"rows\" }; \"runs\", \"seed\", \"timeLimit\", \"rewards\", \"track\", \"sweep\" { \"table\", \"column\", \"from\", " +
-                "\"to\", \"step\" } or \"script\") is read straight away; the answer says what's missing for it to run (Data_RunSimulation runs it).",
+                "\"to\", \"step\" } or \"script\"; or a scene run: \"scene\", with \"script\" its strategy, \"actEvery\", \"trackEvery\", \"stepRate\", " +
+                "\"endWhen\", \"flags\" and \"closePanels\") is read straight away; the answer says what's missing for it to run (Data_RunSimulation runs it).",
             InputSchema = Schema.Object([
                 ("path", Schema.String("The path under Assets, e.g. \"Scripts/Spinner.cs\" or \"Sprites/hero.png\".")),
                 ("text", Schema.String("The file's text.")),

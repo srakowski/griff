@@ -1,0 +1,9 @@
+{
+  "columns": [
+    { "name": "Keep", "type": "number" }
+  ],
+  "rows": {
+    "Hire Early": { "Keep": 60 },
+    "Hire Late": { "Keep": 400 }
+  }
+}

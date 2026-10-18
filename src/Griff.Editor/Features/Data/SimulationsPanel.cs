@@ -275,6 +275,79 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
         set => Change(s => s with { Script = Blank(value) }, "Set the Script");
     }
 
+    /// <summary>
+    /// True when each run plays a whole scene over time (a scene run: an economy over weeks of game time) rather than a
+    /// fight in the arena; turning it on plays the arena's scene (or the open one), with no sides, and off plays the arena again.
+    /// </summary>
+    public bool PlaysScene
+    {
+        get => Simulation?.IsSceneRun == true;
+        set
+        {
+            if (value == PlaysScene || Simulation is not { } simulation)
+                return;
+            var scene = simulation.Arena ?? (_sceneDocuments.EditScene is { IsPrefab: false } open ? open.Name : Scenes is [var first, ..] ? first : null);
+            // The arena's sides aren't the scene's: a scene run starts with none (a side's table of strategies is picked after).
+            Change(s => value ? s with { Scene = scene, First = new SimulationSide(), Second = new SimulationSide() } : s with { Scene = null },
+                value ? "Play a whole scene" : "Play the arena");
+        }
+    }
+
+    /// <summary>True when it plays fights in the arena (not a whole scene).</summary>
+    public bool PlaysArena => !PlaysScene;
+
+    /// <summary>The scene a scene run plays from its start, e.g. "Gameplay"; empty plays the arena.</summary>
+    public string? Scene
+    {
+        get => Simulation?.Scene;
+        set => Change(s => s with { Scene = Blank(value) }, "Set the Scene");
+    }
+
+    /// <summary>Seconds of game time between a scene run's calls to its strategy's Act, e.g. 10 for a game hour of 10 s.</summary>
+    public double ActEvery
+    {
+        get => Simulation?.ActEvery ?? 1;
+        set => Change(s => s with { ActEvery = double.IsFinite(value) && value > 0 ? value : 1 }, "Set Act Every");
+    }
+
+    /// <summary>
+    /// Seconds of game time between the points of the values tracked, e.g. 240 for a point a game day, every point kept;
+    /// 0 takes a point each turn of a fight (or each second).
+    /// </summary>
+    public double TrackEvery
+    {
+        get => Simulation?.TrackEvery ?? 0;
+        set => Change(s => s with { TrackEvery = double.IsFinite(value) ? Math.Max(0, value) : 0 }, "Set Track Every");
+    }
+
+    /// <summary>What ends a scene run before its time limit: a flag ("GameOver") or an output against a number ("Director.Cash &lt; 0"); empty for none.</summary>
+    public string? EndWhen
+    {
+        get => Simulation?.EndWhen;
+        set => Change(s => s with { EndWhen = Blank(value) }, "Set End When");
+    }
+
+    /// <summary>Steps a second of game time a scene run takes: fewer plays faster in coarser steps (20 takes a third of 60's); 0 takes the game's own.</summary>
+    public int StepRate
+    {
+        get => Simulation?.StepRate ?? 0;
+        set => Change(s => s with { StepRate = value <= 0 ? 0 : Math.Clamp(value, Time.MinStepRate, Time.MaxStepRate) }, "Set the Step Rate");
+    }
+
+    /// <summary>Flags set as each scene run starts, separated by commas: "SkipIntro".</summary>
+    public string Flags
+    {
+        get => string.Join(", ", Simulation?.Flags ?? []);
+        set => Change(s => s with { Flags = Names(value) }, "Set the starting Flags");
+    }
+
+    /// <summary>True to close a panel that pauses the game as soon as it opens in a scene run (an opening letter), as though it were read.</summary>
+    public bool ClosePanels
+    {
+        get => Simulation?.ClosePanels == true;
+        set => Change(s => s with { ClosePanels = value }, value ? "Close panels" : "Leave panels open");
+    }
+
     /// <summary>The project's script simulations, to pick from.</summary>
     public IReadOnlyList<string> ScriptNames => [.. _scriptSession.ScriptTypes.Where(t => t.IsSubclassOf(typeof(SimulationScript)) && !t.IsAbstract).Select(t => t.Name).Order(StringComparer.OrdinalIgnoreCase)];
 
@@ -554,7 +627,7 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
     // The arena as the editor has it (the open scene) or its file, read again only when the file changes.
     private Scene? ArenaScene()
     {
-        if (Arena is not { } arena || _projectSession.Project is not { } project)
+        if ((PlaysScene ? Scene : Arena) is not { } arena || _projectSession.Project is not { } project)
             return null;
         if (_sceneDocuments.EditScene is { IsPrefab: false } open && string.Equals(open.Name, arena, StringComparison.OrdinalIgnoreCase))
             return open.Scene;
@@ -696,7 +769,7 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
 
     /// <summary>The pairs at the step showing, to pick which <see cref="OverARunLines"/> and its chart show.</summary>
     public IReadOnlyList<string> RunPairs => Results is { } results && results.Steps.ElementAtOrDefault(_step) is { } step
-        ? [.. step.Pairs.Select(p => $"{p.First} vs {p.Second}")]
+        ? [.. step.Pairs.Select(results.PairName)]
         : [];
 
     /// <summary>The pair whose values over a run show, e.g. "Warrior vs Goblin".</summary>
@@ -710,8 +783,35 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
         }
     }
 
-    /// <summary>The picked pair's values over a run, a point each turn (or second): "1: Hero Health 14, Enemy Health 10".</summary>
-    public IReadOnlyList<string> OverARunLines => RunTable() is { } table ? [.. Lines(table)] : [];
+    /// <summary>
+    /// The picked pair's values over a run, a point each turn (or second, or every Track Every seconds, named by the second
+    /// it's at): "1: Hero Health 14, Enemy Health 10". A long run's are thinned evenly to <see cref="MostLines"/>, the first
+    /// and last kept; exporting the results writes every point.
+    /// </summary>
+    public IReadOnlyList<string> OverARunLines
+    {
+        get
+        {
+            if (RunTable() is not { } table)
+                return [];
+            var lines = Lines(table).ToList();
+            return [.. Thin(lines.Count, MostLines).Select(i => lines[i])];
+        }
+    }
+
+    /// <summary>The most points <see cref="OverARunLines"/> lists.</summary>
+    public const int MostLines = 500;
+
+    /// <summary>The most points a chart of a run draws: a longer run is thinned evenly for drawing, the first and last kept.</summary>
+    public const int MostChartPoints = 400;
+
+    // Which of `count` points to show when at most `most` fit: all of them, or `most` spread evenly from the first to the last.
+    internal static IEnumerable<int> Thin(int count, int most)
+    {
+        if (count <= most)
+            return Enumerable.Range(0, count);
+        return Enumerable.Range(0, most).Select(i => (int)Math.Round(i * (count - 1) / (double)(most - 1), MidpointRounding.AwayFromZero)).Distinct();
+    }
 
     /// <summary>The grid for the tab showing (the sweep's, or the run's), or null.</summary>
     public DataView? TabView { get; private set; }
@@ -723,21 +823,35 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
     {
         if (Results is not { } results || results.Steps.ElementAtOrDefault(_step) is not { } step || RunPair is not { } picked)
             return null;
-        var index = step.Pairs.ToList().FindIndex(p => string.Equals($"{p.First} vs {p.Second}", picked, StringComparison.OrdinalIgnoreCase));
+        var index = step.Pairs.ToList().FindIndex(p => string.Equals(results.PairName(p), picked, StringComparison.OrdinalIgnoreCase));
         return index < 0 ? null : results.OverARun(_step, index / step.SecondRows.Count, index % step.SecondRows.Count);
     }
 
     private static IEnumerable<string> Lines(Table table) => table.Rows.Select(r =>
         $"{r.Name}: {string.Join(", ", table.Columns.Select((c, i) => (c.Name, Cell: r.Cells[i])).Where(c => !c.Cell.IsEmpty).Select(c => $"{c.Name} {(c.Cell.Kind is TableValueKind.Number ? SimulationResults.Number(c.Cell.AsNumber) : c.Cell.ToString())}"))}");
 
-    /// <summary>Writes every pair at every step to a CSV file, for a spreadsheet.</summary>
+    /// <summary>
+    /// Writes every pair at every step to a CSV file, for a spreadsheet. A scene run, or one tracking values every so many
+    /// seconds, also writes every point of them, each pair's each value a column, to "... over time.csv" beside it.
+    /// </summary>
     public void ExportCsv(string path)
     {
         if (Results is not { } results)
             throw new InvalidOperationException("There are no results to export yet: run the simulation first.");
         File.WriteAllText(path, TableText.ToCsv(results.ToTable()));
         Message = $"Exported {results.ToTable().Rows.Count} pairs to {Path.GetFileName(path)}.";
+        if (results.IsSceneRun || results.Simulation.TrackEvery > 0)
+        {
+            var overTime = results.OverTime();
+            var beside = OverTimePath(path);
+            File.WriteAllText(beside, TableText.ToCsv(overTime));
+            Message += $" Every point of the values over a run ({overTime.Rows.Count.ToString("N0", CultureInfo.InvariantCulture)}) went to {Path.GetFileName(beside)}.";
+        }
     }
+
+    /// <summary>Where exporting to <paramref name="path"/> writes the values over a run: "Balance results over time.csv" beside "Balance results.csv".</summary>
+    public static string OverTimePath(string path) =>
+        Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path) + " over time" + Path.GetExtension(path));
 
     // ----- Showing it
 
@@ -766,9 +880,9 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
             ResultsView = View(results.ToTable(_step), "Pair");
             var step = results.Steps[_step];
             MatrixColumns = step.SecondRows;
-            Matrix = [.. step.FirstRows.Select((name, f) => new SimulationMatrixRow(name, [.. step.SecondRows.Select((_, s) => SimulationMatrixCell.Of(step.Pair(f, s), _measure))]))];
+            Matrix = [.. step.FirstRows.Select((name, f) => new SimulationMatrixRow(name, [.. step.SecondRows.Select((_, s) => SimulationMatrixCell.Of(step.Pair(f, s), _measure, results.IsSceneRun))]))];
             TabView = _tab == "Sweep" && results.SweepLabel is { } label ? View(results.SweepTable(_measure), label)
-                : _tab == "Over a Run" && RunTable() is { } run ? View(run, "Turn")
+                : _tab == "Over a Run" && RunTable() is { } run ? View(run, results.PointLabel)
                 : null;
         }
 
@@ -839,14 +953,17 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
                     break;
                 }
 
-                var lines = run.Columns.Select((c, i) => new TableChartLine(c.Name, [.. run.Rows.Select(r => r.Cells[i].IsEmpty ? double.NaN : r.Cells[i].AsNumber)])).ToList();
-                Chart.ShowValues($"{RunPair}{at}, over a run (a point each turn, or second)", [], lines, [.. run.Rows.Select(r => r.Name)]);
+                // Thousands of points are thinned evenly for drawing; the grid and the export have them all.
+                var shown = Thin(run.Rows.Count, MostChartPoints).ToList();
+                var lines = run.Columns.Select((c, i) => new TableChartLine(c.Name, [.. shown.Select(r => run.Rows[r].Cells[i] is { IsEmpty: false } cell ? cell.AsNumber : double.NaN)])).ToList();
+                var every = results.Simulation.TrackEvery > 0 ? $"every {SimulationResults.Number(results.Simulation.TrackEvery)} s" : results.IsSceneRun ? "each second" : "each turn, or second";
+                Chart.ShowValues($"{RunPair}{at}, over a run (a point {every}{(shown.Count < run.Rows.Count ? $", {shown.Count} of {run.Rows.Count:N0} drawn" : "")})", [], lines, [.. shown.Select(r => run.Rows[r].Name)]);
                 break;
             }
 
             default:
             {
-                var points = step.Pairs.Select(p => Point($"{p.First} vs {p.Second}", p[_measure])).ToList();
+                var points = step.Pairs.Select(p => Point(results.PairName(p), p[_measure])).ToList();
                 Chart.ShowValues($"{_measure} of each pair{at}", points);
                 break;
             }
@@ -899,13 +1016,14 @@ public sealed record SimulationMatrixRow(string Name, IReadOnlyList<SimulationMa
 /// </summary>
 public sealed record SimulationMatrixCell(string Text, double Value, double Lean, string Tooltip)
 {
-    internal static SimulationMatrixCell Of(SimulationPairResult pair, string measure)
+    internal static SimulationMatrixCell Of(SimulationPairResult pair, string measure, bool sceneRun = false)
     {
         var value = pair[measure];
         var text = !double.IsFinite(value) ? "-" : measure.EndsWith('%') ? SimulationResults.Percent(value) : SimulationResults.Number(value);
         var lean = pair.Runs == 0 ? 0 : (pair.Wins - pair.Losses) / (double)pair.Runs;
         var tooltip = $"{pair.First} against {pair.Second}: won {pair.Wins} of {pair.Runs}, lost {pair.Losses}" + (pair.Draws > 0 ? $", drew {pair.Draws}" : "") +
-                      $"; {pair["Turns"]:0.#} turns, {pair["Seconds"]:0.#} s, {pair["Damage Dealt"]:0.#} damage dealt and {pair["Damage Taken"]:0.#} taken on average";
+                      (sceneRun ? $"; {pair["Seconds"]:0.#} s of game time on average"
+                          : $"; {pair["Turns"]:0.#} turns, {pair["Seconds"]:0.#} s, {pair["Damage Dealt"]:0.#} damage dealt and {pair["Damage Taken"]:0.#} taken on average");
         return new SimulationMatrixCell(text, value, lean, tooltip);
     }
 }

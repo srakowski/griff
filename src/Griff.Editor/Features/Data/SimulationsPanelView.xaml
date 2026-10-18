@@ -115,6 +115,41 @@
                 Tag="sims:settings">
             <ScrollViewer Padding="8,0,8,6" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
+                    <CheckBox Margin="0,8,0,0" Content="Play a whole scene over time" IsChecked="{Binding PlaysScene}" Tag="sims:playsscene"
+                              ToolTip="Each run plays the real game from a scene's start, headless and as fast as it goes (an economy over weeks of game time), a script's strategy acting as it goes, rather than a fight in an arena" />
+                    <Grid Visibility="{Binding PlaysScene, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="64" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="Scene" />
+                        <ComboBox Grid.Column="1" Grid.ColumnSpan="3" Margin="0,1" ItemsSource="{Binding Scenes}" SelectedItem="{Binding Scene, Mode=TwoWay}" Tag="sims:scene"
+                                  ToolTip="The scene each run plays from its start, until the time limit, the scene changing (a Game Over), the game quitting or End when" />
+                        <TextBlock Grid.Row="1" Style="{StaticResource Label}" Text="Act every" />
+                        <controls:CommitTextBox Grid.Row="1" Grid.Column="1" Margin="0,1" Tag="sims:actevery" Text="{Binding ActEvery}"
+                                                ToolTip="Seconds of game time between calls to the strategy's Act (the script's), e.g. 10 for a game hour of 10 s" />
+                        <TextBlock Grid.Row="1" Grid.Column="2" Margin="8,0,6,0" Style="{StaticResource Label}" Text="Step rate" />
+                        <controls:CommitTextBox Grid.Row="1" Grid.Column="3" Margin="0,1" Tag="sims:steprate" Text="{Binding StepRate}"
+                                                ToolTip="Steps a second of game time: fewer plays faster in coarser steps (20 takes a third of 60's), where the game stands it; 0 takes the game's own" />
+                        <TextBlock Grid.Row="2" Style="{StaticResource Label}" Text="End when" />
+                        <controls:CommitTextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,1" FontFamily="{StaticResource Font.Mono}" Tag="sims:endwhen" Text="{Binding EndWhen}"
+                                                ToolTip="What ends a run before its time limit: a flag (GameOver, or not Open), or an output against a number (Director.Cash &lt; 0); empty plays on" />
+                        <TextBlock Grid.Row="3" Style="{StaticResource Label}" Text="Flags" />
+                        <controls:CommitTextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,1" Tag="sims:flags" Text="{Binding Flags}"
+                                                ToolTip="Flags set as each run starts, before its first step, separated by commas: SkipIntro" />
+                        <CheckBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,3" Content="Close panels that pause it" IsChecked="{Binding ClosePanels}" Tag="sims:closepanels"
+                                  ToolTip="Close a panel that pauses the game as soon as it opens (an opening letter, a tour), as though the player read it; off leaves them to the strategy" />
+                    </Grid>
+
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="64" />
@@ -133,9 +168,10 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <TextBlock Grid.ColumnSpan="2" Style="{StaticResource Heading}" Text="Arena" />
-                        <TextBlock Grid.Row="1" Style="{StaticResource Label}" Text="Scene" />
+                        <TextBlock Grid.ColumnSpan="2" Style="{StaticResource Heading}" Text="Arena" Visibility="{Binding PlaysArena, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
+                        <TextBlock Grid.Row="1" Style="{StaticResource Label}" Text="Scene" Visibility="{Binding PlaysArena, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
                         <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,1" ItemsSource="{Binding Scenes}" SelectedItem="{Binding Arena, Mode=TwoWay}" Tag="sims:arena"
+                                  Visibility="{Binding PlaysArena, Converter={x:Static converters:BoolToVisibilityConverter.Default}}"
                                   ToolTip="The scene the fights are played in: the sides' entities, and what they fight with (Health, attacks, a Turn Order)" />
 
                         <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Style="{StaticResource Heading}" Text="First side (its wins are counted)" />
@@ -178,7 +214,10 @@
                         <TextBlock Grid.Column="2" Margin="8,0,6,0" Style="{StaticResource Label}" Text="Seed" />
                         <controls:CommitTextBox Grid.Column="3" Margin="0,1" Tag="sims:seed" Text="{Binding Seed}" ToolTip="Where the runs' random numbers start: the same seed plays the same fights, on any machine" />
                         <TextBlock Grid.Row="1" Style="{StaticResource Label}" Text="Time limit" />
-                        <controls:CommitTextBox Grid.Row="1" Grid.Column="1" Margin="0,1" Tag="sims:timelimit" Text="{Binding TimeLimit}" ToolTip="Seconds of game time a fight lasts at most before it's a draw" />
+                        <controls:CommitTextBox Grid.Row="1" Grid.Column="1" Margin="0,1" Tag="sims:timelimit" Text="{Binding TimeLimit}" ToolTip="Seconds of game time a fight lasts at most before it's a draw (or a scene run plays, at most)" />
+                        <TextBlock Grid.Row="1" Grid.Column="2" Margin="8,0,6,0" Style="{StaticResource Label}" Text="Track every" />
+                        <controls:CommitTextBox Grid.Row="1" Grid.Column="3" Margin="0,1" Tag="sims:trackevery" Text="{Binding TrackEvery}"
+                                                ToolTip="Seconds of game time between the points of the values tracked (240 for a point a game day), every point kept; 0 takes one each turn (or second)" />
                         <TextBlock Grid.Row="2" Style="{StaticResource Label}" Text="Rewards" />
                         <controls:CommitTextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,1" Tag="sims:rewards" Text="{Binding Rewards}" ToolTip="The second side's columns the first earns by beating it, separated by commas: Gold, XP" />
                         <TextBlock Grid.Row="3" VerticalAlignment="Top" Margin="0,3,6,0" Style="{StaticResource Label}" Text="Track" />
@@ -219,7 +258,8 @@
                         </StackPanel>
                     </Grid>
 
-                    <TextBlock Style="{StaticResource Heading}" Text="Or a script" />
+                    <TextBlock Style="{StaticResource Heading}" Text="Or a script" Visibility="{Binding PlaysArena, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
+                    <TextBlock Style="{StaticResource Heading}" Text="Strategy (a script)" Visibility="{Binding PlaysScene, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
                     <ComboBox Margin="0,1" ItemsSource="{Binding ScriptChoices}" SelectedItem="{Binding Script, Mode=TwoWay, TargetNullValue=''}" Tag="sims:script"
                               ToolTip="A script (a class deriving from SimulationScript) that plays each run instead: a gauntlet of fights, an economy. None plays the arena." />
 

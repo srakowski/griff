@@ -16,9 +16,10 @@ public sealed class SimulationResults
     public const string WinRate = "Win %";
 
     private SimulationResults(Simulation simulation, IReadOnlyList<SimulationStepResults> steps, IReadOnlyList<string> measures,
-        int runs, TimeSpan elapsed, int threads, IReadOnlyList<string> warnings, string firstLabel, string secondLabel)
+        int runs, TimeSpan elapsed, int threads, IReadOnlyList<string> warnings, string firstLabel, string secondLabel, long gameSteps)
     {
         Simulation = simulation;
+        GameSteps = gameSteps;
         Steps = steps;
         Measures = measures;
         TotalRuns = runs;
@@ -57,6 +58,30 @@ public sealed class SimulationResults
     /// <summary>How many threads shared them.</summary>
     public int Threads { get; }
 
+    /// <summary>How many steps the runs' games took in all.</summary>
+    public long GameSteps { get; }
+
+    /// <summary>How many game steps were played a second of real time, all the threads together.</summary>
+    public double StepsPerSecond => Elapsed.TotalSeconds > 0 ? GameSteps / Elapsed.TotalSeconds : 0;
+
+    /// <summary>True if it played a whole scene each run (see <see cref="Data.Simulation.Scene"/>), rather than fights.</summary>
+    public bool IsSceneRun => Simulation.IsSceneRun;
+
+    /// <summary>
+    /// What a pair is called: "Warrior vs Slime", or in a scene run with no second table just its first row ("Hire
+    /// Early"), or the scene's name.
+    /// </summary>
+    public string PairName(SimulationPairResult pair) => HasSecondSide ? $"{pair.First} vs {pair.Second}" : pair.First;
+
+    // A scene run's second side counts only when it has rows to play.
+    private bool HasSecondSide => !IsSceneRun || !string.IsNullOrWhiteSpace(Simulation.Second.Table);
+
+    /// <summary>
+    /// What each point of a value over a run is: "Turn" (each turn of a fight, or each second), or "Second" when they're
+    /// taken every so many seconds (named by the second of game time each is at).
+    /// </summary>
+    public string PointLabel => Simulation.TrackEvery > 0 || IsSceneRun ? "Second" : "Turn";
+
     /// <summary>What the games said as they played (a Table Values naming a column the table hasn't got), each once.</summary>
     public IReadOnlyList<string> Warnings { get; }
 
@@ -76,6 +101,16 @@ public sealed class SimulationResults
         {
             var pairs = Steps.SelectMany(s => s.Pairs).ToList();
             var text = $"{TotalRuns.ToString("N0", CultureInfo.InvariantCulture)} runs in {Elapsed.TotalSeconds.ToString("0.0#", CultureInfo.InvariantCulture)} s on {Threads} thread{(Threads == 1 ? "" : "s")}.";
+            if (IsSceneRun)
+            {
+                // How fast the game played, and how long its runs lasted.
+                text = text[..^1] + $": {GameSteps.ToString("N0", CultureInfo.InvariantCulture)} game steps, {Math.Round(StepsPerSecond).ToString("N0", CultureInfo.InvariantCulture)} a second.";
+                var played = pairs.Where(p => p.Runs > 0).ToList();
+                if (played.Count > 0)
+                    text += $" {FirstLabel} played {Number(played.Sum(p => p.Values["Seconds"] * p.Runs) / played.Sum(p => p.Runs))} s of game time a run on average.";
+                return text;
+            }
+
             if (pairs.Count == 0)
                 return text;
             var runs = pairs.Sum(p => p.Runs);
@@ -100,7 +135,9 @@ public sealed class SimulationResults
     /// </summary>
     public Table ToTable(int step = -1)
     {
-        var columns = new List<TableColumn> { new(FirstLabel, ColumnType.Text), new(SecondLabel, ColumnType.Text) };
+        var columns = new List<TableColumn> { new(FirstLabel, ColumnType.Text) };
+        if (HasSecondSide)
+            columns.Add(new TableColumn(SecondLabel, ColumnType.Text));
         if (SweepLabel is { } sweep)
             columns.Add(new TableColumn(sweep));
         columns.Add(new TableColumn("Runs", ColumnType.WholeNumber));
@@ -121,12 +158,14 @@ public sealed class SimulationResults
         {
             foreach (var pair in s.Pairs)
             {
-                var cells = new List<TableValue> { TableValue.Of(pair.First), TableValue.Of(pair.Second) };
+                var cells = new List<TableValue> { TableValue.Of(pair.First) };
+                if (HasSecondSide)
+                    cells.Add(TableValue.Of(pair.Second));
                 if (SweepLabel is not null)
                     cells.Add(s.Value is { } v ? TableValue.Of(v) : TableValue.Empty);
                 cells.Add(TableValue.Of((long)pair.Runs));
                 cells.AddRange(Measures.Select(m => Cell(pair.Values.GetValueOrDefault(m, double.NaN))));
-                var name = (SweepLabel is not null && s.Value is { } at ? $"{SweepLabel} {Number(at)}: " : "") + $"{pair.First} vs {pair.Second}";
+                var name = (SweepLabel is not null && s.Value is { } at ? $"{SweepLabel} {Number(at)}: " : "") + PairName(pair);
                 var unique = name;
                 for (var n = 2; !names.Add(unique); n++)
                     unique = $"{name} ({n})";
@@ -167,7 +206,8 @@ public sealed class SimulationResults
 
     /// <summary>
     /// A pair's values over a run, averaged over its runs: a row for each point (each turn, or each second without turns;
-    /// named 1, 2, 3...), a column for each value (each side's health, gold and XP earned, the tracked values).
+    /// named 1, 2, 3...; or every Track Every seconds, named by the second each is at: 0, 240, 480...), a column for each
+    /// value (each side's health, gold and XP earned, the tracked values).
     /// </summary>
     public Table OverARun(int step, int first, int second)
     {
@@ -176,10 +216,50 @@ public sealed class SimulationResults
         var length = series.Count == 0 ? 0 : series.Values.Max(s => s.Count);
         var columns = series.Keys.Select(k => new TableColumn(k)).ToList();
         var rows = Enumerable.Range(0, length).Select(i => (
-            (i + 1).ToString(CultureInfo.InvariantCulture),
+            PointName(i),
             (IReadOnlyList<TableValue>)[.. series.Values.Select(s => s.Count == 0 ? TableValue.Empty : Cell(s[Math.Min(i, s.Count - 1)]))]));
         return new Table("Over a Run", columns, rows);
     }
+
+    /// <summary>
+    /// Every pair's values over a run at every step, every point of them: a row for each point (named as in
+    /// <see cref="OverARun"/>), a column for each pair's each value ("Hire Early: Cash", "Base Rent 300: Hire Early: Cash"
+    /// in a sweep). What exporting the results writes beside them for values tracked every so many seconds.
+    /// </summary>
+    public Table OverTime()
+    {
+        var columns = new List<TableColumn>();
+        var series = new List<IReadOnlyList<double>>();
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var step in Steps)
+        {
+            foreach (var pair in step.Pairs)
+            {
+                foreach (var (name, values) in pair.OverARun)
+                {
+                    var title = (SweepLabel is not null && step.Value is { } at ? $"{SweepLabel} {Number(at)}: " : "") + $"{PairName(pair)}: {name}";
+                    var unique = title;
+                    for (var n = 2; !taken.Add(unique); n++)
+                        unique = $"{title} ({n})";
+                    columns.Add(new TableColumn(unique));
+                    series.Add(values);
+                }
+            }
+        }
+
+        var length = series.Count == 0 ? 0 : series.Max(s => s.Count);
+        var rows = Enumerable.Range(0, length).Select(i => (
+            PointName(i),
+            (IReadOnlyList<TableValue>)[.. series.Select(s => s.Count == 0 ? TableValue.Empty : TableValue.Of(s[Math.Min(i, s.Count - 1)]))]));
+        return new Table("Over Time", columns, rows);
+    }
+
+    // The name of a point over a run: its number from 1, or the second of game time it's at when they're taken every so
+    // many (a scene run's are each second without Track Every).
+    private string PointName(int index) =>
+        Simulation.TrackEvery > 0 ? Number(index * Simulation.TrackEvery).Replace(",", "", StringComparison.Ordinal)
+        : IsSceneRun ? index.ToString(CultureInfo.InvariantCulture)
+        : (index + 1).ToString(CultureInfo.InvariantCulture);
 
     private static TableValue Cell(double value) => double.IsFinite(value) ? TableValue.Of(Math.Round(value, 4)) : TableValue.Empty;
 
@@ -192,8 +272,43 @@ public sealed class SimulationResults
 
     // ----- What stands out
 
+    // A scene run's: where each tracked value ends (and, in a sweep, how that moves from the first step to the last), and
+    // how often each row won when the strategy says.
+    private List<string> FindInSceneRuns()
+    {
+        var found = new List<string>();
+        var tracked = Measures.Skip(5).ToList();
+        if (Steps.Count >= 2 && SweepLabel is { } sweep)
+        {
+            var (first, last) = (Steps[0], Steps[^1]);
+            foreach (var measure in tracked)
+            {
+                var (from, to) = (first.Average(measure), last.Average(measure));
+                if (double.IsFinite(from) && double.IsFinite(to))
+                    found.Add($"{measure} ends at {Number(from)} at {sweep} {Number(first.Value ?? 0)}, and at {Number(to)} at {sweep} {Number(last.Value ?? 0)}.");
+            }
+        }
+        else if (Steps.Count > 0)
+        {
+            foreach (var pair in Steps[0].Pairs.Where(p => p.Runs > 0))
+            {
+                var ends = tracked.Where(m => double.IsFinite(pair[m])).Select(m => $"{m} {Number(pair[m])}").ToList();
+                if (ends.Count > 0)
+                    found.Add($"{PairName(pair)} ends with {string.Join(", ", ends)} on average.");
+            }
+        }
+
+        // How often each row came out ahead, where the strategy says (its Done's Win or Lose).
+        var outcomes = Steps.SelectMany(s => s.Pairs.Where(p => p.Wins + p.Losses > 0).Select(p => (Step: s, Pair: p))).Take(6);
+        foreach (var (step, pair) in outcomes)
+            found.Add((SweepLabel is not null && step.Value is { } v ? $"At {SweepLabel} {Number(v)}, " : "") + $"{PairName(pair)} wins {Percent(100 * pair.WinRate)} of its runs.");
+        return found;
+    }
+
     private List<string> Find()
     {
+        if (IsSceneRun)
+            return FindInSceneRuns();
         var found = new List<(double Weight, string Text)>();
         var outliers = new List<Outlier>();
         for (var index = 0; index < Steps.Count; index++)
@@ -399,7 +514,10 @@ public sealed class SimulationResults
                 tracked.Add(name);
         }
 
-        var measures = new List<string> { WinRate, "Loss %", "Draw %", "Turns", "Seconds", "Turns to Win", "Seconds to Win", "Damage Dealt", "Damage Taken" };
+        // A scene run has no turns or damage of its own: its outcome is the strategy's to say, and the rest is tracked.
+        var measures = plan.Simulation.IsSceneRun
+            ? new List<string> { WinRate, "Loss %", "Draw %", "Seconds", "Seconds to Win" }
+            : new List<string> { WinRate, "Loss %", "Draw %", "Turns", "Seconds", "Turns to Win", "Seconds to Win", "Damage Dealt", "Damage Taken" };
         measures.AddRange(earned);
         measures.AddRange(tracked.Where(t => !measures.Contains(t, StringComparer.OrdinalIgnoreCase)));
 
@@ -419,7 +537,8 @@ public sealed class SimulationResults
             steps.Add(new SimulationStepResults(step.Value, firstRows, secondRows, pairs));
         }
 
-        return new SimulationResults(simulation, steps, measures, total, elapsed, threads, plan.Warnings, plan.FirstLabel, plan.SecondLabel);
+        return new SimulationResults(simulation, steps, measures, total, elapsed, threads, plan.Warnings, plan.FirstLabel, plan.SecondLabel,
+            Interlocked.Read(ref plan.StepsPlayed));
     }
 }
 

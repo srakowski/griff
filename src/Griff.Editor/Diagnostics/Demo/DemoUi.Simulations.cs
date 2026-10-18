@@ -18,7 +18,9 @@ internal sealed partial class DemoUi
     /// <c>progress</c>, <c>undo</c>, <c>redo</c>, <c>export</c>, <c>summary</c>, <c>settings</c> and each setting
     /// (<c>arena</c>, <c>first:entity</c>, <c>first:table</c>, <c>first:rows</c>, the same for <c>second:</c>, <c>runs</c>,
     /// <c>seed</c>, <c>timelimit</c>, <c>rewards</c>, <c>track</c>, <c>sweeps</c>, <c>sweep:table</c>, <c>sweep:column</c>,
-    /// <c>sweep:row</c>, <c>sweep:from</c>, <c>sweep:to</c>, <c>sweep:step</c>, <c>script</c>), <c>size</c>,
+    /// <c>sweep:row</c>, <c>sweep:from</c>, <c>sweep:to</c>, <c>sweep:step</c>, <c>script</c>, and a scene run's
+    /// <c>playsscene</c>, <c>scene</c>, <c>actevery</c>, <c>steprate</c>, <c>trackevery</c>, <c>endwhen</c>, <c>flags</c> and
+    /// <c>closepanels</c>), <c>size</c>,
     /// <c>problems</c>, <c>findings</c>, <c>tabs</c>, <c>measure</c>, <c>step</c>, <c>pair</c>, <c>results</c> (the grid of
     /// pairs), <c>tabgrid</c> (the sweep's or run's grid), <c>matrix</c>, <c>chart</c>, <c>charttitle</c>,
     /// <c>chartsummary</c>, <c>message</c>, or <c>tab:Matrix</c> (a tab).
@@ -61,6 +63,14 @@ internal sealed partial class DemoUi
         ["sweep:to"] = nameof(SimulationsPanel.SweepTo),
         ["sweep:step"] = nameof(SimulationsPanel.SweepStep),
         ["script"] = nameof(SimulationsPanel.Script),
+        ["playsscene"] = nameof(SimulationsPanel.PlaysScene),
+        ["scene"] = nameof(SimulationsPanel.Scene),
+        ["actevery"] = nameof(SimulationsPanel.ActEvery),
+        ["steprate"] = nameof(SimulationsPanel.StepRate),
+        ["trackevery"] = nameof(SimulationsPanel.TrackEvery),
+        ["endwhen"] = nameof(SimulationsPanel.EndWhen),
+        ["flags"] = nameof(SimulationsPanel.Flags),
+        ["closepanels"] = nameof(SimulationsPanel.ClosePanels),
         ["measure"] = nameof(SimulationsPanel.Measure),
         ["step"] = nameof(SimulationsPanel.StepIndex),
         ["pair"] = nameof(SimulationsPanel.RunPair),

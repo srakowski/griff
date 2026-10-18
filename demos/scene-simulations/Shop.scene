@@ -1,0 +1,31 @@
+{
+  "formatVersion": 1,
+  "entities": [
+    {
+      "id": "6f1d2c1a-5b7e-4a39-9a51-2f3c8d0e4b11",
+      "name": "Camera",
+      "components": [
+        { "type": "Transform", "position": [0, 0, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1] },
+        { "type": "Camera", "size": 5 }
+      ]
+    },
+    {
+      "id": "0b9e4f62-8c3d-4e1a-b7f5-61a2d9c03e27",
+      "name": "Shop",
+      "components": [
+        { "type": "Transform", "position": [0, 0, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1] },
+        { "type": "Sprite", "size": [2, 1.5], "tint": "#E8A33DFF" },
+        { "type": "Shop" },
+        { "type": "Griff.TableValues", "table": "Economy", "row": "Base", "sets": ["Shop.Rent = Rent"] }
+      ]
+    },
+    {
+      "id": "c4a7e3d9-2f6b-4c80-9e1d-7b5a3f2c8e64",
+      "name": "Letter",
+      "components": [
+        { "type": "Transform", "position": [0, 0, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1] },
+        { "type": "Panel", "open": true }
+      ]
+    }
+  ]
+}

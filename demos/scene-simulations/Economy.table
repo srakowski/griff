@@ -1,0 +1,8 @@
+{
+  "columns": [
+    { "name": "Rent", "type": "number" }
+  ],
+  "rows": {
+    "Base": { "Rent": 20 }
+  }
+}

@@ -21,7 +21,9 @@ namespace Griff.Data;
 ///   "sweep": { "table": "Classes", "column": "Level", "from": 1, "to": 10, "step": 1 }
 /// }
 /// </code>
-/// A scripted simulation has <c>"script": "Gauntlet"</c>. What the file holds that this version of Griff doesn't know is kept.
+/// A scripted simulation has <c>"script": "Gauntlet"</c>. A scene run has <c>"scene": "Gameplay"</c>, and may have
+/// <c>"actEvery"</c>, <c>"trackEvery"</c>, <c>"endWhen"</c>, <c>"flags"</c>, <c>"closePanels"</c> and <c>"stepRate"</c>, each written only when
+/// it isn't as it starts. What the file holds that this version of Griff doesn't know is kept.
 /// </summary>
 public static class SimulationFile
 {
@@ -32,7 +34,8 @@ public static class SimulationFile
     public const string Folder = "Simulations";
 
     private static readonly JsonSerializerOptions StringOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
-    private static readonly string[] Known = ["arena", "first", "second", "runs", "seed", "timeLimit", "rewards", "track", "sweep", "script"];
+    private static readonly string[] Known = ["arena", "first", "second", "runs", "seed", "timeLimit", "rewards", "track", "sweep", "script",
+        "scene", "actEvery", "trackEvery", "endWhen", "flags", "closePanels", "stepRate"];
 
     /// <summary>The name of the simulation in the file at <paramref name="path"/>: its file name without <see cref="Extension"/>.</summary>
     public static string NameOf(string path) => Path.GetFileNameWithoutExtension(path);
@@ -107,6 +110,13 @@ public static class SimulationFile
                 Track = Texts(root, "track", where) ?? [],
                 Sweep = root.TryGetProperty("sweep", out var sweep) && sweep.ValueKind == JsonValueKind.Object ? Sweep(sweep, where + " sweep's") : null,
                 Script = Text(root, "script", where),
+                Scene = Text(root, "scene", where),
+                ActEvery = Math.Max(0.001, Number(root, "actEvery", where) ?? 1),
+                TrackEvery = Math.Max(0, Number(root, "trackEvery", where) ?? 0),
+                EndWhen = Text(root, "endWhen", where),
+                Flags = Texts(root, "flags", where) ?? [],
+                ClosePanels = Bool(root, "closePanels", where) ?? false,
+                StepRate = (int)Math.Clamp(Number(root, "stepRate", where) ?? 0, 0, 240),
                 Kept = [.. root.EnumerateObject().Where(p => !Known.Contains(p.Name)).Select(p => new KeyValuePair<string, JsonElement>(p.Name, p.Value.Clone()))],
             };
         }
@@ -152,6 +162,18 @@ public static class SimulationFile
         throw new InvalidDataException($"{where} \"{key}\" should be a number, not {value.GetRawText()}.");
     }
 
+    private static bool? Bool(JsonElement element, string key, string where)
+    {
+        if (!element.TryGetProperty(key, out var value) || value.ValueKind == JsonValueKind.Null)
+            return null;
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => throw new InvalidDataException($"{where} \"{key}\" should be true or false, not {value.GetRawText()}."),
+        };
+    }
+
     private static IReadOnlyList<string>? Texts(JsonElement element, string key, string where)
     {
         if (!element.TryGetProperty(key, out var value) || value.ValueKind == JsonValueKind.Null)
@@ -189,6 +211,20 @@ public static class SimulationFile
 
         if (simulation.Script is { Length: > 0 } script)
             lines.Add($"  \"script\": {Quote(script)}");
+        if (simulation.Scene is { Length: > 0 } scene)
+            lines.Add($"  \"scene\": {Quote(scene)}");
+        if (simulation.ActEvery != 1)
+            lines.Add($"  \"actEvery\": {TableFile.Number(simulation.ActEvery)}");
+        if (simulation.TrackEvery > 0)
+            lines.Add($"  \"trackEvery\": {TableFile.Number(simulation.TrackEvery)}");
+        if (simulation.EndWhen is { Length: > 0 } end)
+            lines.Add($"  \"endWhen\": {Quote(end)}");
+        if (simulation.Flags.Count > 0)
+            lines.Add($"  \"flags\": {List(simulation.Flags)}");
+        if (simulation.ClosePanels)
+            lines.Add("  \"closePanels\": true");
+        if (simulation.StepRate > 0)
+            lines.Add($"  \"stepRate\": {simulation.StepRate.ToString(CultureInfo.InvariantCulture)}");
         foreach (var (key, value) in simulation.Kept)
             lines.Add($"  {Quote(key)}: {value.GetRawText()}");
         return "{\n" + string.Join(",\n", lines) + "\n}\n";

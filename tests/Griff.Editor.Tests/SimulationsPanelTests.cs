@@ -305,6 +305,86 @@ public sealed class SimulationsPanelTests : IDisposable
     });
 
     [Fact]
+    public void ASceneRun_PlaysTheProjectsScene_WithAStrategyFromItsScripts_ChartedThinned_AndExportedWhole() => EditorHost.Run(services =>
+    {
+        var (workspace, panel) = Open(services);
+        var assets = workspace.Project!.AssetsPath;
+        Directory.CreateDirectory(Path.Combine(assets, "Scripts"));
+        File.WriteAllText(Path.Combine(assets, "Scripts", "Till.cs"), """
+            using Griff;
+            using Griff.Scenes;
+
+            public class Till : Behavior
+            {
+                /// <summary>Cash in the till.</summary>
+                [Output] public float Cash { get; set; }
+
+                protected override void Update() => Cash += Time.Delta;
+            }
+            """);
+        File.WriteAllText(Path.Combine(assets, "Scripts", "Spend.cs"), """
+            using Griff;
+            using Griff.Simulations;
+
+            public class Spend : SimulationScript
+            {
+                public override void Act(SimulationRun run)
+                {
+                    var till = run.Game!.Find<Till>()!;
+                    if (till.Cash >= 50) till.Cash -= 50;
+                }
+            }
+            """);
+        Assert.True(workspace.ReloadScripts()!.Success);
+        var scene = new Scene();
+        var shop = new Entity("Shop");
+        shop.AddComponent((Component)Activator.CreateInstance(services.GetRequiredService<IScriptSession>().ScriptTypes.First(t => t.Name == "Till"))!);
+        scene.Add(shop);
+        File.WriteAllText(Path.Combine(assets, "Scenes", "Shop.scene"), workspace.Serializer.SaveToString(scene));
+
+        // Turned on, it plays the arena's scene; pick the shop, its strategy and how often it acts and tracks.
+        panel.PlaysScene = true;
+        Assert.Equal("Arena", panel.Scene);
+        Assert.False(panel.PlaysArena);
+        panel.Scene = "Shop";
+        panel.Script = "Spend";
+        (panel.Runs, panel.TimeLimit, panel.ActEvery, panel.TrackEvery) = (3, 2000, 60, 1);
+        panel.Track = "Cash = Shop.Cash";
+        panel.EndWhen = "Shop.Cash > 1000";
+        panel.StepRate = 20;
+        Assert.Empty(panel.SettingsProblems);
+        var file = SimFile(workspace);
+        Assert.Contains("\"scene\": \"Shop\"", file, StringComparison.Ordinal);
+        Assert.Contains("\"trackEvery\": 1", file, StringComparison.Ordinal);
+        Assert.Contains("\"stepRate\": 20", file, StringComparison.Ordinal);
+        Assert.Equal("Shop", panel.EntityNames.Single());
+
+        // The open scene is the arena, and stays as it was.
+        var open = workspace.Serializer.SaveToString(services.GetRequiredService<ISceneDocuments>().EditScene!.Scene);
+        var said = Wait(panel.RunAsync());
+        Assert.StartsWith("3 runs in ", said, StringComparison.Ordinal);
+        Assert.Contains("game steps", said, StringComparison.Ordinal);
+        Assert.Equal(open, workspace.Serializer.SaveToString(services.GetRequiredService<ISceneDocuments>().EditScene!.Scene));
+        Assert.Equal(["Arena"], [services.GetRequiredService<ISceneDocuments>().EditScene!.Name]);
+
+        // Two thousand points a run: all in the grid and the export, thinned evenly for the chart and the lines.
+        panel.Tab = "Over a Run";
+        Assert.Equal(["Shop"], panel.RunPairs);
+        Assert.Equal(2001, panel.TabView!.Count);
+        Assert.Equal(SimulationsPanel.MostChartPoints, panel.Chart.Labels.Count);
+        Assert.Equal("0", panel.Chart.Labels[0]);
+        Assert.Equal("2000", panel.Chart.Labels[^1]);
+        Assert.Equal(SimulationsPanel.MostLines, panel.OverARunLines.Count);
+        Assert.StartsWith("0: Cash ", panel.OverARunLines[0], StringComparison.Ordinal);
+
+        var export = Path.Combine(_root, "Shop results.csv");
+        panel.ExportCsv(export);
+        var overTime = File.ReadAllLines(SimulationsPanel.OverTimePath(export));
+        Assert.Equal(2002, overTime.Length);
+        Assert.StartsWith("2000,", overTime[^1], StringComparison.Ordinal);
+    });
+
+    [Fact]
     public void Agents_WriteRunAndReadSimulations_ThroughTheCommandsAndThePanel() => EditorHost.Run(services =>
     {
         var (workspace, panel) = Open(services);

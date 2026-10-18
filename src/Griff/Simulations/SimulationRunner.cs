@@ -93,7 +93,8 @@ public sealed class SimulationException(IReadOnlyList<string> problems)
 /// Plays a <see cref="Simulation"/>: every pair of rows (each of the first side's against each of the second's), its
 /// <see cref="Simulation.Runs"/> times, at each step of its sweep, headless and as fast as the computer goes, spread over
 /// the cores (see <see cref="Workers"/>). Each run is a game of its own (the arena loaded afresh, the rows set through
-/// Table Values, stepped until a side is beaten or time runs out) or a call to the simulation's script, with random
+/// Table Values, stepped until a side is beaten or time runs out), a whole scene played over time (a scene run, its
+/// script's strategy acting as it goes; see <see cref="Simulation.Scene"/>) or a call to the simulation's script, with random
 /// numbers from a seed made of the simulation's <see cref="Simulation.Seed"/>, the step, the rows' names and the run's
 /// number, so the results are the same to the last bit on every machine, in the web player, and on any number of cores.
 /// </summary>
@@ -101,6 +102,12 @@ public static class SimulationRunner
 {
     /// <summary>The most points a value tracked over a run keeps; past it, the last point takes the latest value.</summary>
     public const int MostPoints = 200;
+
+    /// <summary>
+    /// The most points a value tracked every so many seconds (see <see cref="Simulation.TrackEvery"/>) keeps: a point a game
+    /// hour for over eleven years, or a point a game minute for over two months.
+    /// </summary>
+    public const int MostTrackedPoints = 100_000;
 
     // Runs of one pair played together as one piece of work, their sums kept in order: the work shared across the cores,
     // and added up in the same order however many share it.
@@ -156,8 +163,10 @@ public static class SimulationRunner
             {
                 for (var s = 0; s < step.Second.Count; s++)
                 {
-                    for (var start = 0; start < simulation.Runs; start += RunsPerBlock)
-                        blocks.Add(new Block(step, f, s, start, Math.Min(simulation.Runs, start + RunsPerBlock)));
+                    // A scene run is long enough to be a piece of work of its own, so a few of them share every core.
+                    var size = simulation.IsSceneRun ? 1 : RunsPerBlock;
+                    for (var start = 0; start < simulation.Runs; start += size)
+                        blocks.Add(new Block(step, f, s, start, Math.Min(simulation.Runs, start + size)));
                 }
             }
         }
@@ -193,13 +202,23 @@ public static class SimulationRunner
 
         public bool HasArena => ArenaText is not null;
 
+        // A scene run's scene, as it's loaded afresh for each run.
+        public string? SceneText { get; set; }
+
+        public bool HasScene => SceneText is not null;
+
+        public SimulationEnd? End { get; set; }
+
+        // The steps every run's games took, counted as they finish.
+        public long StepsPlayed;
+
         public Type? Script { get; set; }
 
         public List<Step> Steps { get; } = [];
 
         public IReadOnlyList<SimulationTrack> Tracks { get; set; } = [];
 
-        public string FirstLabel => Simulation.First.Label("First");
+        public string FirstLabel => Simulation.First.Label(Simulation.IsSceneRun ? Simulation.Scene!.Trim() : "First");
 
         // A mirror match (Classes against Classes) tells its sides apart.
         public string SecondLabel => Simulation.Second.Label("Second") is var label && string.Equals(label, FirstLabel, StringComparison.OrdinalIgnoreCase)
@@ -300,8 +319,13 @@ public static class SimulationRunner
                     : $"There's no script simulation called {name}. The scripts: {string.Join(", ", scripts.Select(t => t.Name))}.");
         }
 
-        // The arena: needed to play the matchup, and for a script's fights if it's set.
-        if (!simulation.IsScripted || !string.IsNullOrWhiteSpace(simulation.Arena))
+        if (plan.Script is { } script && !simulation.IsSceneRun && script.GetMethod(nameof(SimulationScript.Run))?.DeclaringType == typeof(SimulationScript))
+            problems.Add($"{script.Name} has no Run of its own, so it plays a scene: set the simulation's Scene for it to play, or give it a Run.");
+
+        // The arena: needed to play the matchup, and for a script's fights if it's set. A scene run plays its scene instead.
+        if (simulation.IsSceneRun)
+            PrepareScene(plan, problems);
+        else if (!simulation.IsScripted || !string.IsNullOrWhiteSpace(simulation.Arena))
             PrepareArena(plan, problems);
 
         if (problems.Count > 0)
@@ -398,6 +422,42 @@ public static class SimulationRunner
         Check(simulation.First, "first");
         Check(simulation.Second, "second");
         plan.ArenaText = plan.Serializer.SaveToString(arena);
+    }
+
+    private static void PrepareScene(Plan plan, List<string> problems)
+    {
+        var simulation = plan.Simulation;
+        var name = simulation.Scene!.Trim();
+        if (plan.Host.LoadScene is null)
+        {
+            problems.Add("This game can't load scenes, so it can't play the simulation's scene.");
+            return;
+        }
+
+        Scene scene;
+        try
+        {
+            scene = plan.Host.LoadScene(name);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or IOException or System.Text.Json.JsonException)
+        {
+            problems.Add($"The scene, {name}, doesn't load: {ex.Message}");
+            return;
+        }
+
+        // A side's entity is only needed to give it the side's rows; one named has to be there.
+        foreach (var (side, which) in new[] { (simulation.First, "first"), (simulation.Second, "second") })
+        {
+            if (!string.IsNullOrWhiteSpace(side.Entity) && Fighters(scene, side.Entity).Count == 0)
+                problems.Add($"{name} has no entity called {side.Entity.Trim()} for the {which} side's rows.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(simulation.EndWhen) && simulation.End() is null)
+            problems.Add($"The end condition, \"{simulation.EndWhen.Trim()}\", doesn't read: write a flag's name (GameOver), or an entity's output against a number (Director.Cash < 0).");
+        if (!double.IsFinite(simulation.ActEvery) || simulation.ActEvery <= 0)
+            problems.Add("Act Every has to be more than 0 seconds.");
+        plan.End = simulation.End();
+        plan.SceneText = plan.Serializer.SaveToString(scene);
     }
 
     private static List<Entity> Fighters(Scene scene, string? name)
@@ -497,15 +557,21 @@ public static class SimulationRunner
             if (plan.Script is { } type)
             {
                 var script = (SimulationScript)Activator.CreateInstance(type)!;
+                run.Script = script;
                 try
                 {
                     script.Run(run);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    plan.Problems.Report($"{type.Name} threw in a run of {first?.Name ?? plan.FirstLabel} against {second?.Name ?? plan.SecondLabel}: {ex.GetType().Name}: {ex.Message}");
+                    var of = plan.HasScene && second is null ? first?.Name ?? plan.FirstLabel : $"{first?.Name ?? plan.FirstLabel} against {second?.Name ?? plan.SecondLabel}";
+                    plan.Problems.Report($"{type.Name} threw in a run of {of}: {ex.GetType().Name}: {ex.Message}");
                     run.Draw();
                 }
+            }
+            else if (plan.HasScene)
+            {
+                PlayScene(plan, step, run, null);
             }
             else
             {
@@ -596,19 +662,23 @@ public static class SimulationRunner
                 run.Track(reward, run.Earned(reward));
         }
 
+        // Points each turn (or second), or every Track Every seconds of game time when it's set.
+        var every = simulation.TrackEvery > 0 ? new Every(simulation.TrackEvery) : null;
         var order = scene.AllNow<TurnOrder>().Items.FirstOrDefault();
-        if (order is not null)
+        if (order is not null && every is null)
             order.TurnStarted += _ => Sample();
 
         var delta = 1.0 / Math.Max(1, host.StepRate);
         var steps = (long)Math.Ceiling(simulation.TimeLimit * host.StepRate);
         var perSecond = Math.Max(1, host.StepRate);
         var outcome = 0;
+        long stepped = 0;
         try
         {
             for (long i = 1; i <= steps; i++)
             {
                 game.Tick(delta);
+                stepped = i;
                 var firstDown = Beaten(scene, firsts);
                 var secondDown = Beaten(scene, seconds);
                 if (firstDown || secondDown || game.Scene != scene || game.IsQuitting)
@@ -618,7 +688,7 @@ public static class SimulationRunner
                 }
 
                 // The first point once the rows' values are in (as the first step begins), then each turn or second.
-                if (!sampled || (order is null && i % perSecond == 0))
+                if (every is not null ? every.Due(game.Time.Total) : !sampled || (order is null && i % perSecond == 0))
                     Sample();
             }
         }
@@ -626,6 +696,9 @@ public static class SimulationRunner
         {
             Sample();
             game.Stop();
+            Interlocked.Add(ref plan.StepsPlayed, stepped);
+            if (run is not null)
+                run.Steps += stepped;
         }
 
         return new SimulationFight
@@ -638,6 +711,156 @@ public static class SimulationRunner
             HealthLeft = HealthOf(firsts, firstHealth),
             EnemyHealthLeft = HealthOf(seconds, secondHealth),
         };
+    }
+
+    /// <summary>
+    /// One scene run: the simulation's scene loaded afresh, each side's entity (if it names one) given the side's row
+    /// through Table Values, its flags set, then <paramref name="strategy"/>'s Setup, and the game stepped back to back
+    /// (no frame pacing) until its time limit, the scene changing, the game quitting, its end condition, the strategy's
+    /// IsOver or <see cref="SimulationRun.End"/>. The strategy acts every Act Every seconds of game time (and on each
+    /// step a panel pauses the game), and the tracked values are read every Track Every seconds (or each second).
+    /// </summary>
+    internal static void PlayScene(Plan plan, Step step, SimulationRun run, SimulationScript? strategy)
+    {
+        var simulation = plan.Simulation;
+        var scene = plan.Serializer.LoadFromString(plan.SceneText!);
+        foreach (var entity in Fighters(scene, simulation.First.Entity))
+            Assign(entity, run.First);
+        foreach (var entity in Fighters(scene, simulation.Second.Entity))
+            Assign(entity, run.Second);
+
+        var host = plan.Host;
+        var game = new LoadedGame(null, host.Components, scene, new ProblemLog())
+        {
+            SceneName = simulation.Scene!.Trim(),
+            Scenes = host.LoadScene,
+            Prefabs = host.LoadPrefab,
+            StepRate = host.StepRate,
+            Modules = host.Modules,
+        }.NewGame(new GameHostOptions { Tables = step.Tables, Problems = plan.Problems.Report });
+        foreach (var flag in simulation.Flags)
+        {
+            if (!string.IsNullOrWhiteSpace(flag))
+                game.SetFlag(flag.Trim());
+        }
+
+        var tracks = plan.Tracks.Select(t => (t, new OutputReader())).ToList();
+        var end = plan.End;
+        var endReader = new OutputReader();
+        Entity? Owner() => game.Scene.Roots.Count > 0 ? game.Scene.Roots[0] : null;
+        long sampledAt = -1;
+        // A point of each tracked value; the last, taken as the run ends, takes the place of one taken earlier in that step
+        // (before the strategy acted), so the values end as the game did.
+        void Sample(long at)
+        {
+            var again = sampledAt == at;
+            sampledAt = at;
+            var owner = Owner();
+            foreach (var (track, reader) in tracks)
+            {
+                var value = owner is not null && reader.Find(owner, track.Entity, track.Output) ? reader.Number : 0;
+                if (again)
+                    run.TrackLast(track.Name, value);
+                else
+                    run.Track(track.Name, value);
+            }
+        }
+
+        bool Ends()
+        {
+            if (run.IsEnding || game.Scene != scene || game.IsQuitting)
+                return true;
+            if (end is not null)
+            {
+                if (end.Flag is { } flag)
+                {
+                    if (game.FlagHolds(flag))
+                        return true;
+                }
+                else if (Owner() is { } owner && endReader.Find(owner, end.Entity, end.Output) && end.Holds(endReader.Number))
+                {
+                    return true;
+                }
+            }
+
+            return strategy?.IsOver(run) == true;
+        }
+
+        // Coarser steps where the game stands them: the simulation's step rate, else the game's.
+        var stepRate = simulation.StepRate > 0 ? Math.Clamp(simulation.StepRate, Time.MinStepRate, Time.MaxStepRate) : Math.Max(1, host.StepRate);
+        game.Time.StepRate = stepRate;
+        var delta = 1.0 / stepRate;
+        var limit = simulation.TimeLimit;
+        var acts = new Every(simulation.ActEvery);
+        var samples = new Every(simulation.TrackEvery > 0 ? simulation.TrackEvery : 1);
+        // A game held still this many steps in a row (a panel waiting for a press nobody makes) has stopped.
+        var stuckAfter = stepRate * 60L;
+        long taken = 0, still = 0;
+        var lastTime = 0.0;
+        run.Game = game;
+        try
+        {
+            strategy?.Setup(run);
+            while (true)
+            {
+                game.Tick(delta);
+                taken++;
+                if (simulation.ClosePanels)
+                {
+                    for (var i = game.OpenPanels.Count; i > 0 && game.IsPaused && game.TopPanel is { } top; i--)
+                        game.ClosePanel(top);
+                }
+
+                var now = game.Time.Total;
+                if (game.Scene == scene && samples.Due(now))
+                    Sample(taken);
+                if (strategy is not null && game.Scene == scene && (acts.Due(now) || game.IsPaused))
+                    strategy.Act(run);
+                if (Ends() || now >= limit - Every.Tolerance)
+                    break;
+
+                if (now > lastTime)
+                {
+                    (lastTime, still) = (now, 0);
+                }
+                else if (++still >= stuckAfter)
+                {
+                    plan.Problems.Report($"{simulation.Scene!.Trim()}'s game time stood still for {stuckAfter:N0} steps at {SimulationResults.Number(now)} s" +
+                                         (game.IsPaused ? ", paused by a panel" : "") + ", so its runs end there. Turn on Close Panels, or close or answer it in the strategy's Act.");
+                    break;
+                }
+            }
+
+            if (game.Scene == scene)
+                Sample(taken);
+            strategy?.Done(run);
+        }
+        finally
+        {
+            run.Seconds += game.Time.Total;
+            run.Steps += taken;
+            run.Game = null;
+            Interlocked.Add(ref plan.StepsPlayed, taken);
+            game.Stop();
+        }
+    }
+
+    // Says when each of a run of evenly spaced times (every so many seconds of game time, from 0) has come: once for each
+    // time it passes, however long the steps, and never twice for one.
+    private sealed class Every(double seconds)
+    {
+        // Game time adds up a step's float at a time; within this, a time has come.
+        public const double Tolerance = 1e-6;
+
+        private long _next;
+
+        public bool Due(double now)
+        {
+            if (now + Tolerance < _next * seconds)
+                return false;
+            _next = (long)Math.Floor((now + Tolerance) / seconds) + 1;
+            return true;
+        }
     }
 
     // Gives an entity its side's row through its Table Values: the one reading the side's table (or the only one), else a

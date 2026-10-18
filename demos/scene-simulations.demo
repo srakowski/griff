@@ -1,0 +1,57 @@
+title: Scene simulations
+intro: The whole game played headless, a month of game time in seconds, with a strategy acting as it goes.
+project: Empty | Shop
+write: Tables/Economy.table | scene-simulations/Economy.table
+write: Tables/Strategies.table | scene-simulations/Strategies.table
+write: Scripts/Shop.cs | scene-simulations/Shop.cs
+write: Scripts/HireWhenRich.cs | scene-simulations/HireWhenRich.cs
+write: Scenes/Shop.scene | scene-simulations/Shop.scene
+write: Simulations/Economy.sim | scene-simulations/Economy.sim
+scene: Shop
+
+chapter: A game, not a fight | Data > Simulations
+explain: entity:Shop | The game | A small shop: each game hour of ten seconds it takes money for every worker hired and pays a rent from the Economy table. An opening letter pauses it until it's read.
+say: A balance simulation can play the whole game now, rather than a fight in an arena: the real scene, headless, as fast as the computer goes.
+menu: Data > Open Simulation
+prompt: Economy
+expectsim: playsscene = true
+expectsim: scene = Shop
+explain: sims:settings | A scene run | It plays the Shop scene from its start for thirty game days. The letter is closed as it opens, and twenty steps a second play it in coarser steps, three times as fast as the game's sixty.
+expectsim: steprate = 20
+expectsim: closepanels = true
+
+chapter: A strategy | HireWhenRich
+say: The strategy is a script. Every game hour it plays the game through its own components, as a player would: here, it hires a worker whenever the shop keeps what its row of the Strategies table says.
+code: Assets/Scripts/HireWhenRich.cs | HireWhenRich.cs
+hidecode
+expectsim: script = HireWhenRich
+expectsim: first:table = Strategies
+expectsim: actevery = 10
+say: Each row of Strategies is played in turn: hire early, keeping sixty, or late, keeping four hundred.
+
+chapter: Cash over a month | Track every
+say: The shop's cash and workers are tracked once a game day, every point kept however long the run.
+simset: trackevery = 240
+expectsim: trackevery = 240
+simrun
+explain: sims:summary | Steps a second | Every run played back to back on every core, and how many game steps a second that came to.
+simtab: Over a Run
+simset: pair = Hire Early
+explain: sims:chart | A month, a point a day | Cash and workers over thirty game days, averaged over the runs. A long run's chart is thinned for drawing; exporting the results writes every point.
+
+chapter: What the rent does | A sweep
+say: A sweep plays it all again with a table's cell changed by steps: the rent, from twenty to sixty.
+simset: first:rows = Hire Early
+simset: sweeps = true
+simset: sweep:table = Economy
+expectsim: sweep:column = Rent
+simset: sweep:from = 20
+simset: sweep:to = 60
+simset: sweep:step = 20
+simrun
+expectfinding: Cash ends at
+explain: sims:findings | The whole curve moves | Where the cash ends at the lowest rent and at the highest.
+simtab: Sweep
+simset: measure = Cash
+spot: sims:chart | Cash at the end, over the rent
+say: Agents set up and run scene simulations too, through the editor's MCP.

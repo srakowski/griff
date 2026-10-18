@@ -9,9 +9,6 @@ namespace Griff.Modules.Strategy;
 // card, control groups, placing buildings, and the camera (arrow keys, screen edges, minimap, mouse wheel).
 internal sealed partial class StrategySystem
 {
-    // Two clicks on the same unit this close together pick all of its kind on screen.
-    private const double DoubleClickSeconds = 0.35;
-
     // A box smaller than this (in world units) is a click.
     private const float DragThreshold = 0.25f;
 
@@ -71,8 +68,7 @@ internal sealed partial class StrategySystem
 
     private void SetSelection(List<Entity> entities)
     {
-        Rts.Selected.Clear();
-        Rts.Selected.AddRange(entities);
+        Rts.Selection.Set(entities);
         SyncSelectionFlags();
     }
 
@@ -119,52 +115,36 @@ internal sealed partial class StrategySystem
         return null;
     }
 
-    private void ClickSelect(Commander commander, Vector2 point, bool shift)
+    // The rules Griff's selecting goes by for a commander (see SelectionState): a click picks what's under the mouse, a box
+    // only the team's units, a double-click every unit of the team of that kind on screen, Shift adds only to a selection of
+    // the team's own, and a control group keeps only the team's.
+    private sealed class CommanderRules(StrategySystem strategy, Commander commander) : ISelectionRules
     {
-        var picked = PickAt(point);
-        var now = Rts.Clock;
-        var doubled = picked is not null && picked == Rts.LastClicked && now - Rts.LastClickTime <= DoubleClickSeconds;
-        (Rts.LastClicked, Rts.LastClickTime) = (picked, now);
+        private StrategyState Rts => strategy.Rts;
 
-        if (picked is null)
-        {
-            if (!shift)
-                SetSelection([]);
-            return;
-        }
+        public Entity? PickAt(Vector2 point) => strategy.PickAt(point);
 
-        if (doubled && picked.GetComponent<Unit>() is not null && IsMine(picked, commander) && Rts.Hud is { } hud)
-        {
-            var kind = Rts.Units.Where(u => SameTeam(u.Team, commander.Team) && u.Entity!.Name == picked.Name &&
-                                            hud.View.Contains(Game.Flat(u.Entity.Transform.WorldPosition)))
+        public IEnumerable<Entity> InBox(Box box) =>
+            Rts.Units.Where(u => SameTeam(u.Team, commander.Team) && box.Overlaps(Game.Flat(u.Entity!.Transform.WorldPosition), u.Radius))
                 .Select(u => u.Entity!).ToList();
-            SetSelection(shift ? Rts.Selected.Union(kind).ToList() : kind);
-            return;
-        }
 
-        if (shift && IsMine(picked, commander) && Rts.Selected.All(e => IsMine(e, commander)))
+        public IEnumerable<Entity>? SameKind(Entity picked)
         {
-            var toggled = Rts.Selected.ToList();
-            if (!toggled.Remove(picked))
-                toggled.Add(picked);
-            SetSelection(toggled);
-            return;
+            if (picked.GetComponent<Unit>() is null || !IsMine(picked, commander) || Rts.Hud is not { } hud)
+                return null;
+            return Rts.Units.Where(u => SameTeam(u.Team, commander.Team) && u.Entity!.Name == picked.Name &&
+                                        hud.View.Contains(Game.Flat(u.Entity.Transform.WorldPosition)))
+                .Select(u => u.Entity!).ToList();
         }
 
-        SetSelection([picked]);
-    }
+        public bool CanAdd(Entity picked, IReadOnlyList<Entity> selected) => IsMine(picked, commander) && selected.All(e => IsMine(e, commander));
 
-    private void BoxSelect(Commander commander, Vector2 from, Vector2 to, bool shift)
-    {
-        var box = new Box((from + to) / 2, Vector2.Abs(to - from) / 2);
-        var inside = Rts.Units.Where(u => SameTeam(u.Team, commander.Team) && box.Overlaps(Game.Flat(u.Entity!.Transform.WorldPosition), u.Radius))
-            .Select(u => u.Entity!).ToList();
-        if (shift)
-            SetSelection(Rts.Selected.Where(e => IsMine(e, commander)).Union(inside).ToList());
-        else
-            SetSelection(inside);
-    }
+        public bool Keeps(Entity entity) => IsMine(entity, commander);
 
+        public bool StillThere(Entity entity) => strategy.IsAlive(entity);
+
+        public void SelectionSet() => strategy.SyncSelectionFlags();
+    }
     // ----- Input -----
 
     private void HandleCommands(Commander commander)
@@ -173,8 +153,8 @@ internal sealed partial class StrategySystem
         var mouse = Rts.Mouse;
         var inView = Rts.MouseInView;
         var onHud = hud is not null && inView && hud.Covers(mouse);
-        var shift = Input.IsDown(Key.LeftShift) || Input.IsDown(Key.RightShift);
-        var ctrl = Input.IsDown(Key.LeftControl) || Input.IsDown(Key.RightControl);
+        var shift = Input.IsDown("AddToSelection");
+        var ctrl = Input.IsDown("AssignGroup");
 
         Rts.HoveredButton = -1;
         if (hud is not null && inView)
@@ -188,7 +168,7 @@ internal sealed partial class StrategySystem
 
         HandleKeys(commander, shift, ctrl);
 
-        if (Input.WasPressed(MouseButton.Left) && inView)
+        if (Input.WasPressed("Select") && inView)
         {
             if (hud is not null && hud.Minimap.Contains(mouse))
             {
@@ -217,23 +197,17 @@ internal sealed partial class StrategySystem
             }
         }
 
-        if (Rts.DraggingMinimap && hud is not null && Input.IsDown(MouseButton.Left))
+        if (Rts.DraggingMinimap && hud is not null && Input.IsDown("Select"))
             CenterCamera(commander, hud.MinimapToWorld(mouse));
 
-        if (Input.WasReleased(MouseButton.Left))
+        if (Input.WasReleased("Select"))
         {
             Rts.DraggingMinimap = false;
-            if (Rts.DragFrom is { } from)
-            {
-                Rts.DragFrom = null;
-                if (Vector2.Distance(from, mouse) < DragThreshold * Math.Max(1, (Rts.Commander?.Entity?.GetComponent<Camera>()?.Size ?? 8) / 8))
-                    ClickSelect(commander, from, shift);
-                else
-                    BoxSelect(commander, from, mouse, shift);
-            }
+            var click = DragThreshold * Math.Max(1, (Rts.Commander?.Entity?.GetComponent<Camera>()?.Size ?? 8) / 8);
+            Rts.Selection.Release(new CommanderRules(this, commander), mouse, click, shift, Rts.Clock);
         }
 
-        if (Input.WasPressed(MouseButton.Right) && inView)
+        if (Input.WasPressed("Command") && inView)
         {
             if (Rts.Placing is not null || Rts.Targeting is not null)
                 (Rts.Placing, Rts.Targeting) = (null, null);
@@ -252,24 +226,16 @@ internal sealed partial class StrategySystem
 
     private void HandleKeys(Commander commander, bool shift, bool ctrl)
     {
-        for (var n = 1; n <= 9; n++)
+        // Control groups as Griff's Selection Controls keep them: the Group1 to Group9 actions, AssignGroup held keeping one.
+        for (var n = 1; n <= InputActions.GroupActions.Count; n++)
         {
-            if (!Input.WasPressed(Key.D0 + n))
+            if (!Input.WasPressed(InputActions.GroupActions[n - 1]))
                 continue;
+            var rules = new CommanderRules(this, commander);
             if (ctrl)
-            {
-                Rts.Groups[n] = MySelected(commander).ToList();
-                ShowNotice($"Group {n}: {Rts.Groups[n].Count} selected.");
-            }
-            else if (Rts.Groups.TryGetValue(n, out var group))
-            {
-                group.RemoveAll(e => !IsAlive(e));
-                SetSelection(shift ? Rts.Selected.Union(group).ToList() : group.ToList());
-                var now = Rts.Clock;
-                if (Rts.LastGroup == n && now - Rts.LastGroupTime < 0.4 && group.Count > 0)
-                    CenterCamera(commander, group.Select(e => Game.Flat(e.Transform.WorldPosition)).Aggregate(Vector2.Add) / group.Count);
-                (Rts.LastGroup, Rts.LastGroupTime) = (n, now);
-            }
+                ShowNotice($"Group {n}: {Rts.Selection.KeepGroup(rules, n).Count} selected.");
+            else if (Rts.Selection.PickGroup(rules, n, shift, Rts.Clock, out var center) && center is { } middle)
+                CenterCamera(commander, middle);
         }
 
         if (Input.WasPressed(Key.Escape))

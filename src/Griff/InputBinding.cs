@@ -104,5 +104,27 @@ public static class InputActions
             ["PanDown"] = [Key.S, Key.Down, GamepadButton.DPadDown],
             ["PanLeft"] = [Key.A, Key.Left, GamepadButton.DPadLeft],
             ["PanRight"] = [Key.D, Key.Right, GamepadButton.DPadRight],
+            // Selecting as a strategy game does (Selection Controls, the Strategy module's Commander): click or drag a box,
+            // right-click to command, Shift adds, Ctrl and a number keeps a group, the number picks it again.
+            ["Select"] = [MouseButton.Left],
+            ["Command"] = [MouseButton.Right],
+            ["AddToSelection"] = [Key.LeftShift, Key.RightShift],
+            ["AssignGroup"] = [Key.LeftControl, Key.RightControl],
+            ["Group1"] = [Key.D1],
+            ["Group2"] = [Key.D2],
+            ["Group3"] = [Key.D3],
+            ["Group4"] = [Key.D4],
+            ["Group5"] = [Key.D5],
+            ["Group6"] = [Key.D6],
+            ["Group7"] = [Key.D7],
+            ["Group8"] = [Key.D8],
+            ["Group9"] = [Key.D9],
         };
+
+    /// <summary>
+    /// The actions that pick control groups 1 to 9 when selecting (Group1 to Group9, the number keys unless rebound):
+    /// <c>GroupActions[n - 1]</c> picks group n, and with AssignGroup held keeps the selection as it.
+    /// </summary>
+    public static IReadOnlyList<string> GroupActions { get; } =
+        ["Group1", "Group2", "Group3", "Group4", "Group5", "Group6", "Group7", "Group8", "Group9"];
 }

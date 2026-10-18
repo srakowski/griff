@@ -71,8 +71,7 @@ internal sealed partial class StrategySystem
 
         var commander = new Commander { Team = team, MapCenter = Rts.Commander?.MapCenter ?? default, MapSize = Rts.Commander?.MapSize ?? new Vector2(48, 32) };
         var saved = (Selected: Rts.Selected.ToList(), Rts.Targeting, Rts.Placing, Rts.PlaceAt, Rts.PlaceOk);
-        Rts.Selected.Clear();
-        Rts.Selected.AddRange(selected);
+        Rts.Selection.Set(selected);
         _orderingFor = player;
         try
         {
@@ -104,8 +103,7 @@ internal sealed partial class StrategySystem
         finally
         {
             _orderingFor = null;
-            Rts.Selected.Clear();
-            Rts.Selected.AddRange(saved.Selected.Where(e => e.Scene == Scene));
+            Rts.Selection.Set(saved.Selected.Where(e => e.Scene == Scene));
             (Rts.Targeting, Rts.Placing, Rts.PlaceAt, Rts.PlaceOk) = (saved.Targeting, saved.Placing, saved.PlaceAt, saved.PlaceOk);
             SyncSelectionFlags();
         }

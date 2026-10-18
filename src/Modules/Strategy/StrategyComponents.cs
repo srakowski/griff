@@ -670,7 +670,9 @@ public sealed class Fighter : Component
 /// <remarks>
 /// Keys: A then click attacks-moves, S stops, H holds position, M then click moves, Esc cancels. Ctrl and a number keeps the
 /// selection as a group, the number picks it again. Shift adds to the selection, or queues up buildings to place.
-/// Double-click a unit to pick all of its kind on screen.
+/// Double-click a unit to pick all of its kind on screen. It selects by the rules of Griff's <see cref="SelectionState"/>
+/// (as <see cref="SelectionControls"/> does), with the same input actions: Select, Command, AddToSelection, AssignGroup and
+/// Group1 to Group9, which the player can rebind.
 /// </remarks>
 [Category("Strategy")]
 [Requires(typeof(Camera))]

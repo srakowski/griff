@@ -1,0 +1,73 @@
+title: Select like a strategy game
+intro: Selection Controls on the camera and a Selectable on each worker and machine: click, box, double-click, control groups and Esc, with no code.
+
+project: Empty | Selection
+
+chapter: Workers and a machine | A Selectable on each
+create: Sprite
+rename: Worker
+set: Transform.Position.X = -3
+set: Sprite.Tint = #57A0D3
+add: Selectable
+set: Selectable.Kind = Worker
+explain: component:Selectable | Selectable | A Selectable makes this worker something the player can select with the mouse.
+explain: field:Selectable.Kind | Kind | Its kind is what a double-click picks every one of.
+deselect
+create: Sprite
+rename: Worker 2
+set: Transform.Position.X = 3
+set: Sprite.Tint = #57A0D3
+add: Selectable
+set: Selectable.Kind = Worker
+deselect
+create: Sprite
+rename: Worker 3
+set: Transform.Position.Y = 3
+set: Sprite.Tint = #57A0D3
+add: Selectable
+set: Selectable.Kind = Worker
+say: Three workers.
+deselect
+create: Sprite
+rename: Reader
+set: Sprite.Size = 1.5, 1.5
+set: Sprite.Tint = #D3A057
+add: Selectable
+set: Selectable.Kind = Reader
+set: Selectable.InBox = false
+explain: field:Selectable.InBox | In Box | And a machine between two of them. Its In Box is off, so a box drawn over the workers picks only them; a click still picks the machine.
+
+chapter: The controls | Selection Controls on the camera
+deselect
+select: Main Camera
+add: SelectionControls
+explain: component:SelectionControls | Selection Controls | Selection Controls on the camera does the selecting: click, drag a box, Shift to add, double-click for every one of a kind, and Control with a number for groups.
+set: SelectionControls.DoubleClickSeconds = 1
+explain: field:SelectionControls.DoubleClickSeconds | Double Click Seconds | A double-click has to come this quickly. A second here, so the demo's mouse keeps up.
+explain: field:SelectionControls.MarkerColor | Markers | A marker goes round each thing selected: an outline in this color, or a picture of your own, nine-sliced to fit.
+explain: field:SelectionControls.BusyFlag | Busy | And while a tool is in hand, a flag or a script's Busy leaves the mouse to it.
+
+chapter: Play | Box, double-click, groups and Esc
+play
+wait: 0.5
+gamedrag: -4, -1.5, 4, 1.5
+expectvalue: Main Camera.SelectionControls.SelectedCount = 2
+say: A box over the bottom row picks the two workers and not the machine between them.
+gameclick: Reader
+expectvalue: Main Camera.SelectionControls.SelectedCount = 1
+say: A click picks the machine on its own.
+gameclick: Worker 3
+gameclick: Worker 3
+expectvalue: Main Camera.SelectionControls.SelectedCount = 3
+say: A double-click on a worker picks every worker on screen.
+hold: LeftControl+D2 0.2
+tap: Escape
+expectvalue: Main Camera.SelectionControls.SelectedCount = 0
+say: Control and 2 keeps them as group two, and Escape clears the selection.
+tap: D2
+expectvalue: Main Camera.SelectionControls.SelectedCount = 3
+tap: D2
+expectat: Main Camera = 0, 1
+say: 2 brings the group back, and 2 again quickly moves the camera to it.
+stop
+say: A right-click with something selected raises Commanded, with what's under the mouse and what's selected, for the game's script to send them there. The keys are input actions, so Game, Controls rebinds them, and players can too.

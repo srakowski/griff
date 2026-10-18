@@ -24,6 +24,7 @@ public sealed partial class Game
     private readonly SwitchSystem _switches = new();
     private readonly ItemSystem _itemUses = new();
     private readonly DragSystem _drags = new();
+    private readonly SelectionSystem _selection = new();
     private readonly ClockSystem _clock = new();
     private readonly InputSystem _inputSystem = new();
     private readonly NetworkSystem _network = new();
@@ -69,6 +70,8 @@ public sealed partial class Game
     internal ItemSystem ItemSystem => _itemUses;
 
     internal DragSystem DragSystem => _drags;
+
+    internal SelectionSystem SelectionSystem => _selection;
 
     internal ClockSystem ClockSystem => _clock;
 
@@ -472,7 +475,7 @@ public sealed partial class Game
     // Griff's own steps, in the order a frame runs them. FrameTests pins this order: change it on purpose.
     private void BuildFrame()
     {
-        GameSystem[] core = [_levels, _movement, _gridMoves, _turns, _combat, _triggers, _switches, _itemUses, _drags, _panels, _clock, _inputSystem,
+        GameSystem[] core = [_levels, _movement, _gridMoves, _turns, _combat, _triggers, _switches, _itemUses, _drags, _selection, _panels, _clock, _inputSystem,
             _network, _scriptSystem, _timerSystem, _messageSystem, _lifetimes, _effects, _tilemaps, _hud, _physicsSystem, _scenes, _menuSystem,
             _focusSystem, _pauses, _reading, _beat, _calibration, _atmosphere, _weather, _lobby, _views, _saves, _settings, _tableSystem, _minigames];
 
@@ -507,6 +510,7 @@ public sealed partial class Game
         Step(Steps.HUD, _hud.LayOutHuds);
         Step(Steps.OtherPlayersTools, _network.RunOtherPlayersTools);
         Step(Steps.Dragging, _drags.RunDragging);
+        Step(Steps.Selection, _selection.RunSelection);
         Step(Steps.Attacks, _combat.RunAttacks);
         Step(Steps.IdleGridMovers, _turns.PassIdleGridMovers);
         Step(Steps.Timers, _timerSystem.RunTimers);

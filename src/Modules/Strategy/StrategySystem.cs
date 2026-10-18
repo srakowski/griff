@@ -275,6 +275,9 @@ internal sealed partial class StrategySystem : GameSystem, IMouseOnHud, IClaimsB
             CheckDefeats();
     }
 
+    // Selected but no longer there: destroyed, hidden or dead.
+    private bool Gone(Entity entity) => entity.Scene != Scene || !entity.IsActive || !IsAlive(entity);
+
     // One strategy game's frame: its commander's controls, its units, buildings and shots, its fog.
     private void RunGame(bool simulates)
     {
@@ -282,7 +285,8 @@ internal sealed partial class StrategySystem : GameSystem, IMouseOnHud, IClaimsB
             return;
         var commander = Rts.Commander;
         Rts.Clock += Time.UnscaledDelta;
-        Rts.Selected.RemoveAll(e => e.Scene != Scene || !e.IsActive || !IsAlive(e));
+        if (Rts.Selected.Any(Gone))
+            Rts.Selection.Set(Rts.Selected.Where(e => !Gone(e)));
         SyncSelectionFlags();
 
         UpdateNav();
@@ -1387,9 +1391,11 @@ internal sealed class StrategyState
 
     public List<Building> Buildings { get; set; } = [];
 
-    public List<Entity> Selected { get; } = [];
+    // What's selected, the control groups, the box being dragged and the last click and group picked: selected as Griff's
+    // Selection Controls select, by the rules of the commander's team (see StrategySystem.Controls.cs).
+    public SelectionState Selection { get; } = new();
 
-    public Dictionary<int, List<Entity>> Groups { get; } = [];
+    public IReadOnlyList<Entity> Selected => Selection.Selected;
 
     public Dictionary<string, Entity?> Prefabs { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -1410,7 +1416,11 @@ internal sealed class StrategyState
     public List<Marker> Markers { get; } = [];
 
     // A box being dragged out to select with, from where the button went down (in the world).
-    public Vector2? DragFrom { get; set; }
+    public Vector2? DragFrom
+    {
+        get => Selection.DragFrom;
+        set => Selection.DragFrom = value;
+    }
 
     // The minimap's being dragged across to move the camera.
     public bool DraggingMinimap { get; set; }
@@ -1436,14 +1446,6 @@ internal sealed class StrategyState
 
     // Real seconds since the strategy game started, for double-clicks and double-tapped groups.
     public double Clock { get; set; }
-
-    public double LastClickTime { get; set; } = double.NegativeInfinity;
-
-    public Entity? LastClicked { get; set; }
-
-    public int LastGroup { get; set; } = -1;
-
-    public double LastGroupTime { get; set; } = double.NegativeInfinity;
 
     // The mouse as this game's commander sees it: whether it's over its camera's part of the screen, and the world point
     // under it; and that view's width over its height. Worked out as the commander's controls run.

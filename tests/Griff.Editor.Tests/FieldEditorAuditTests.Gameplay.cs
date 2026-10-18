@@ -114,6 +114,11 @@ public sealed partial class FieldEditorAuditTests
         Pickup.Price: Rows
         Pickup.Sound: Sound
         Pickup.Effect: Names:Prefab
+        Selectable.Kind: Names:Kind
+        Selectable.Size: Resizable
+        SelectionControls.BusyFlag: Names:Flag
+        SelectionControls.MarkerImage: Image
+        SelectionControls.BoxImage: Image
         ShowWhen.NeedsFlag: Names:Flag
         Spawner.Prefab: Names:Prefab
         Spawner.NeedsFlag: Names:Flag

@@ -101,6 +101,9 @@ public static class Steps
     /// <summary>The "Dragging" step of the Simulate phase.</summary>
     public static readonly StepId Dragging = new(FramePhase.Simulate, "Dragging");
 
+    /// <summary>The "Selection" step of the Simulate phase.</summary>
+    public static readonly StepId Selection = new(FramePhase.Simulate, "Selection");
+
     /// <summary>The "Attacks" step of the Simulate phase.</summary>
     public static readonly StepId Attacks = new(FramePhase.Simulate, "Attacks");
 

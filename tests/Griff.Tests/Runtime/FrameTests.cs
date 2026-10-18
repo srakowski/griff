@@ -23,7 +23,7 @@ public class FrameTests
             "Logic: Item Uses",
             "Scripts: Scripts",
             "Simulate: HUD", "Simulate: Blocks", "Simulate: Tools", "Simulate: Other Players' Tools",
-            "Simulate: Dragging", "Simulate: Cards", "Simulate: Match Boards", "Simulate: Slingshots", "Simulate: Flippers", "Simulate: Falling Boards",
+            "Simulate: Dragging", "Simulate: Cards", "Simulate: Match Boards", "Simulate: Slingshots", "Simulate: Flippers", "Simulate: Selection", "Simulate: Falling Boards",
             "Simulate: Strategy",
             "Simulate: Attacks", "Simulate: Idle Grid Movers", "Simulate: Timers", "Simulate: Coroutines",
             "Simulate: Tweens", "Simulate: Lifetimes", "Simulate: Spawners", "Simulate: Shooters", "Simulate: Movers",
@@ -61,7 +61,7 @@ public class FrameTests
         // Griff's core systems, then each module's in module order (Adventures, Battles, Block Worlds, Cards, Contraptions, Dungeons, Falling Blocks, Fighting,
         // First Person, Match-3, Physics Games, Puzzles, Strategy, Tactics, Visual Novels): every step of a module's belongs to one of its systems, in the
         // place in the frame it had before modules.
-        Assert.Equal(["Levels", "Movement", "Grid Movement", "Turns", "Combat", "Triggers", "Switches", "Items", "Dragging",
+        Assert.Equal(["Levels", "Movement", "Grid Movement", "Turns", "Combat", "Triggers", "Switches", "Items", "Dragging", "Selection",
             "Panels", "Time", "Input", "Network", "Scripts", "Timers", "Messages", "Lifetimes", "Effects",
             "Tilemaps", "HUD", "Physics", "Scenes", "Menus", "Focus", "Pauses", "Reading", "Beat", "Calibration",
             "Atmosphere", "Weather", "Lobby", "Views", "Saves", "Settings", "Tables", "Minigames", "Adventures",
@@ -153,7 +153,7 @@ public class FrameTests
 
         Assert.Empty(log);
         Assert.Null(game.GetSystem<Recorder>());
-        Assert.Equal(60, game.Systems.Count);
+        Assert.Equal(61, game.Systems.Count);
     }
 
     [Fact]

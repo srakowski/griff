@@ -601,6 +601,38 @@ public sealed class StrategyTests
         Assert.Equal(16, camera.Transform.Position.X - from, 1);
     }
 
+    // The commander selects with the same input actions as Griff's Selection Controls, so a player rebinds them.
+    [Fact]
+    public void ControlGroups_FollowTheGroupActions_Rebound()
+    {
+        var scene = new Scene();
+        var a = At(Soldier(), 0, 0);
+        var b = At(Soldier(), 3, 0);
+        scene.Add(a);
+        scene.Add(b);
+        var (game, input, _) = Commanded(scene);
+        input.Rebind("Group1", Key.F1);
+        input.Rebind("AssignGroup", Key.Tab);
+
+        Click(game, input, new Vector2(0, 0));
+        input.SetKey(Key.Tab, true);
+        input.SetKey(Key.F1, true);
+        Run(game, input, Frame);
+        input.SetKey(Key.F1, false);
+        input.SetKey(Key.Tab, false);
+        Click(game, input, new Vector2(3, 0));
+
+        input.SetKey(Key.D1, true);
+        Run(game, input, Frame);
+        input.SetKey(Key.D1, false);
+        Assert.Equal([b], game.Selected);
+
+        input.SetKey(Key.F1, true);
+        Run(game, input, Frame);
+        input.SetKey(Key.F1, false);
+        Assert.Equal([a], game.Selected);
+    }
+
     [Fact]
     public void ArrowKeys_PanTheCamera_WithinTheMap()
     {

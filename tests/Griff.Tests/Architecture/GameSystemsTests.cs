@@ -27,7 +27,7 @@ public sealed class GameSystemsTests
         { "Menus", "Menus" }, { "Lobby", "Lobby" }, { "Grids", "Tilemaps" }, { "SwitchTargets", "Switches" }, { "Turns", "Turns" },
         { "BeatClocks", "Beat" }, { "Calibrations", "Calibration" }, { "Enemies", "Levels" }, { "Movement", "Movement" },
         { "ItemUses", "Items" }, { "Scripts", "Scripts" }, { "HUD", "HUD" }, { "OtherPlayersTools", "Network" },
-        { "Dragging", "Dragging" }, { "Attacks", "Combat" }, { "IdleGridMovers", "Turns" }, { "Timers", "Timers" },
+        { "Dragging", "Dragging" }, { "Selection", "Selection" }, { "Attacks", "Combat" }, { "IdleGridMovers", "Turns" }, { "Timers", "Timers" },
         { "Coroutines", "Timers" }, { "Tweens", "Timers" }, { "Lifetimes", "Lifetimes" }, { "Spawners", "Lifetimes" },
         { "Shooters", "Levels" }, { "Movers", "Levels" }, { "Animations", "Effects" }, { "AnimatedTiles", "Tilemaps" },
         { "Particles", "Effects" }, { "CameraShake", "Effects" }, { "SpriteEffects", "Effects" }, { "SimulatePrompts", "Panels" },
@@ -98,7 +98,7 @@ public sealed class GameSystemsTests
                 .Select(f => $"{type.Name}.{f.Name}"))
             .ToList();
 
-        Assert.Equal(36, systems.Count);
+        Assert.Equal(37, systems.Count);
         Assert.True(shown.Count == 0, "A system's state is private fields of its own:\n" + string.Join("\n", shown));
     }
 

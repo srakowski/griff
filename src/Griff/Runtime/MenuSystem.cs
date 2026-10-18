@@ -684,12 +684,26 @@ internal sealed class MenuSystem : GameSystem
         GameSetting.Fullscreen => Game.Fullscreen ? 1 : 0,
         GameSetting.VSync => Game.VSync ? 1 : 0,
         GameSetting.UiScale => Game.UiScale,
+        GameSetting.PanSpeed => Game.PanSpeed,
+        GameSetting.EdgeScroll => (Game.EdgeScroll ?? DesignersEdgeScroll()) ? 1 : 0,
         GameSetting.Skip => Game.IsSkipping ? 1 : 0,
         GameSetting.Auto => Game.AutoReading ? 1 : 0,
         GameSetting.AudioOffset => Game.AudioOffset,
         GameSetting.VisualOffset => Game.VisualOffset,
         _ => KeptSettingValue(setting),
     };
+
+    // What a toggle for Edge Scroll shows before the player chooses: whether any camera's controls have it on.
+    private bool DesignersEdgeScroll()
+    {
+        foreach (var controls in Game.Scene.ActiveNow<CameraControls>())
+        {
+            if (controls.EdgeScroll)
+                return true;
+        }
+
+        return false;
+    }
 
     // A setting a system keeps of the player's (a module's, such as a rhythm game's note speed).
     private float? KeptSettingValue(GameSetting setting)
@@ -707,7 +721,7 @@ internal sealed class MenuSystem : GameSystem
     // the rest, from 0 to 1, fill it.
     private bool InOwnUnits(GameSetting setting)
     {
-        if (setting is GameSetting.AudioOffset or GameSetting.VisualOffset or GameSetting.UiScale)
+        if (setting is GameSetting.AudioOffset or GameSetting.VisualOffset or GameSetting.UiScale or GameSetting.PanSpeed)
             return true;
         for (var i = 0; i < Game.Systems.Count; i++)
         {
@@ -742,6 +756,12 @@ internal sealed class MenuSystem : GameSystem
                 break;
             case GameSetting.UiScale:
                 Game.UiScale = value;
+                break;
+            case GameSetting.PanSpeed:
+                Game.PanSpeed = value;
+                break;
+            case GameSetting.EdgeScroll:
+                Game.EdgeScroll = value >= 0.5f;
                 break;
             case GameSetting.Skip:
                 Game.Skipping = value >= 0.5f;

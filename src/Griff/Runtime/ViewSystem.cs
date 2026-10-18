@@ -36,16 +36,24 @@ internal sealed class ViewSystem : GameSystem
         bool? onHud = null;
         foreach (var control in controls)
         {
+            if (control.IsGliding && !blocked && Interrupts(control, Game.Input, onHud ??= MouseOnHud()))
+                control.CancelGlide();
             if (control.IsFocused)
                 control.AdvanceFocus(Game.Time.UnscaledDelta, AspectOf(control.Entity!));
             else if (!blocked)
-                Advance(control, Game.Input, Game.Time.UnscaledDelta, AspectOf(control.Entity!), onHud ??= MouseOnHud());
+                Advance(control, Game.Input, Game.Time.UnscaledDelta, AspectOf(control.Entity!), onHud ??= MouseOnHud(), Game.EdgeScroll, Game.PanSpeed);
         }
     }
 
+    // Whether the player is asking to pan, drag or zoom the camera: what cancels a GlideTo.
+    private static bool Interrupts(CameraControls controls, IInput input, bool mouseOnHud) =>
+        (controls.PanWithKeys && KeyPan(input) != Vector2.Zero)
+        || (input.IsMouseInView && !mouseOnHud
+            && (Dragging(controls.DragButton, input.WasPressed) || (controls.ZoomStep > 0 && input.Scroll != 0)));
+
     // Pans and zooms a camera by what `input` says over `seconds` of real time, on a view `aspect` times as wide as it's
     // high. While `mouseOnHud`, the wheel and a new drag are the HUD's.
-    private static void Advance(CameraControls controls, IInput input, float seconds, float aspect, bool mouseOnHud)
+    private static void Advance(CameraControls controls, IInput input, float seconds, float aspect, bool mouseOnHud, bool? edgeScroll, float panScale)
     {
         if (controls.Entity is not { Scene: not null } entity || entity.GetComponent<Camera>() is not { } camera)
             return;
@@ -64,14 +72,14 @@ internal sealed class ViewSystem : GameSystem
         var mouseFree = input.IsMouseInView && !mouseOnHud;
 
         var pan = controls.PanWithKeys ? KeyPan(input) : Vector2.Zero;
-        if (controls.EdgeScroll && input.IsMouseInView && controls.HeldAt is null)
+        if ((edgeScroll ?? controls.EdgeScroll) && input.IsMouseInView && controls.HeldAt is null)
         {
             // The edge is the view's outer 3%.
             pan += new Vector2(across.X >= 0.97f ? 1 : across.X <= -0.97f ? -1 : 0, across.Y >= 0.97f ? 1 : across.Y <= -0.97f ? -1 : 0);
         }
 
         if (pan != Vector2.Zero && seconds > 0)
-            position += (pan.LengthSquared() > 1 ? Vector2.Normalize(pan) : pan) * controls.PanSpeed * size * 2 * seconds;
+            position += (pan.LengthSquared() > 1 ? Vector2.Normalize(pan) : pan) * controls.PanSpeed * panScale * size * 2 * seconds;
 
         // A drag keeps the point it took hold of under the mouse.
         if (!Dragging(controls.DragButton, input.IsDown))

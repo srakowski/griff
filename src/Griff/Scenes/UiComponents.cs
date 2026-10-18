@@ -405,6 +405,19 @@ public enum GameSetting
     /// to its Max (say 0.75 to 1.5, in steps of 0.05, with a text showing "{0:0%}"); 1 by default.
     /// </summary>
     UiScale,
+
+    /// <summary>
+    /// Whether the screen's edges pan the camera (<c>Game.EdgeScroll</c>), for a toggle: it shows the camera controls' own
+    /// EdgeScroll until the player turns it on or off, and then their choice wins over every camera.
+    /// </summary>
+    EdgeScroll,
+
+    /// <summary>
+    /// How many times as fast the keys and the screen's edges pan the camera (<c>Game.PanSpeed</c>), times each camera
+    /// controls' PanSpeed. A slider bound to it is set in times, its Min to its Max (say 0.5 to 2, in steps of 0.25, with a
+    /// text showing "{0:0.00}x"); 1 by default.
+    /// </summary>
+    PanSpeed,
 }
 
 /// <summary>Which way a <see cref="Bar"/> fills up.</summary>

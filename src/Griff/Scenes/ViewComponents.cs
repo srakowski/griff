@@ -283,6 +283,9 @@ public sealed class CameraControls : Component
     private float _focusZoom;
     private (Vector2 From, float FromSize, float Elapsed, float Seconds)? _glide;
 
+    // Set by GlideTo: the focus ends on arrival, at the Size it has, leaving the camera the player's.
+    private bool _handBack;
+
     // The Size the camera had before it was focused, and once released, the zoom back to it.
     private float _sizeBefore;
     private (float From, float Elapsed, float Seconds)? _zoomBack;
@@ -345,6 +348,9 @@ public sealed class CameraControls : Component
     /// </summary>
     public bool IsFocused => _focused || _zoomBack is not null;
 
+    /// <summary>True while a <see cref="GlideTo(Vector2, float?, float?)"/> is under way: the player's pan, drag or wheel cancels it.</summary>
+    public bool IsGliding => _focused && _handBack;
+
     /// <summary>The entity the camera is following while focused; null when it's on a point, or not focused.</summary>
     public Entity? FocusTarget => _focused ? _focusEntity : null;
 
@@ -375,6 +381,48 @@ public sealed class CameraControls : Component
     }
 
     /// <summary>
+    /// Glides the camera over to <paramref name="target"/> in <paramref name="seconds"/> (or <see cref="FocusSeconds"/>) and
+    /// leaves it the player's there: unlike <see cref="FocusOn(Entity, float?, float?)"/> it keeps no hold on the camera,
+    /// so there is no Release to time. It keeps the camera's Size unless <paramref name="size"/> is given (it zooms to that
+    /// as it goes, and stays). The player's pan keys, a drag or the wheel during the glide cancel it where the camera is.
+    /// </summary>
+    public void GlideTo(Entity target, float? size = null, float? seconds = null)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        Focus(target, Flat(target.Transform.WorldPosition), size ?? 0, seconds);
+        _handBack = true;
+    }
+
+    /// <summary>Glides the camera over to a point in the world and leaves it the player's, as <see cref="GlideTo(Entity, float?, float?)"/> does.</summary>
+    public void GlideTo(Vector2 point, float? size = null, float? seconds = null)
+    {
+        Focus(null, point, size ?? 0, seconds);
+        _handBack = true;
+    }
+
+    /// <summary>
+    /// Glides the camera over to the entity with this name (the nearest, if there are several) over
+    /// <see cref="FocusSeconds"/> at the Size it has, and leaves it the player's there. Nothing happens if there's none.
+    /// </summary>
+    [Action]
+    public void GlideTo(string? name)
+    {
+        if (Entity?.Scene is { } scene && !string.IsNullOrWhiteSpace(name) && EntityNames.Find(scene, name, new NameLookup(Entity)) is { } target)
+            GlideTo(target);
+    }
+
+    /// <summary>Stops a <see cref="GlideTo(Entity, float?, float?)"/> where the camera is, with the camera the player's.</summary>
+    internal void CancelGlide()
+    {
+        if (!IsGliding)
+            return;
+        _focused = false;
+        _handBack = false;
+        _focusEntity = null;
+        _glide = null;
+    }
+
+    /// <summary>
     /// Hands the camera back to the player where it is: it zooms back to the Size it had before it was focused, over
     /// <see cref="FocusSeconds"/>, and then the player's pan, drag and wheel work again.
     /// </summary>
@@ -384,6 +432,7 @@ public sealed class CameraControls : Component
         if (!_focused)
             return;
         _focused = false;
+        _handBack = false;
         _focusEntity = null;
         _glide = null;
         if (Entity?.GetComponent<Camera>() is not { } camera || _sizeBefore <= 0)
@@ -405,6 +454,7 @@ public sealed class CameraControls : Component
         _focusEntity = target;
         _focusPoint = point;
         _focusZoom = MathF.Max(size ?? FocusSize, 0);
+        _handBack = false;
         HeldAt = null;
         var from = Entity is { } entity ? Flat(entity.Transform.WorldPosition) : point;
         _glide = (from, camera?.Size ?? 0, 0, MathF.Max(seconds ?? FocusSeconds, 0));
@@ -454,6 +504,13 @@ public sealed class CameraControls : Component
                 position = Vector2.Lerp(glide.From, goal, t);
                 jumped = glide.Seconds <= 0;
                 _glide = t >= 1 ? null : glide with { Elapsed = elapsed };
+                if (t >= 1 && _handBack)
+                {
+                    // Arrived: the camera is the player's again, at the Size it has.
+                    _focused = false;
+                    _handBack = false;
+                    _focusEntity = null;
+                }
             }
             else
             {

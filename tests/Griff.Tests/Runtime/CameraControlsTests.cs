@@ -320,7 +320,7 @@ public class CameraControlsTests
     public void FocusOn_AndRelease_AreActions_ATriggerOrButtonCanDo_ByName()
     {
         var names = string.Join(", ", ComponentActions.Of(typeof(CameraControls)).Select(a => a.Name));
-        Assert.Equal("FocusOn, Release", names);
+        Assert.Equal("FocusOn, GlideTo, Release", names);
 
         var walker = new Entity("Walker");
         walker.Transform.Position = new Vector3(3, 1, 0);
@@ -356,5 +356,155 @@ public class CameraControlsTests
         Tick(game);
 
         Assert.Equal(Vector2.Zero, At);
+    }
+
+    [Fact]
+    public void PlayerSettings_DefaultToNothingChanged_AndKeepThroughANewGame()
+    {
+        var game = CreateGame();
+        var save = new SaveData();
+        game.SaveData = save;
+        Assert.Null(game.EdgeScroll);
+        Assert.Equal(1, game.PanSpeed);
+
+        // Left alone, the component's own EdgeScroll and PanSpeed hold.
+        _controls.EdgeScroll = true;
+        for (var i = 0; i < 30; i++)
+            Tick(game, new Vector2(0.99f, 0));
+        Near(new Vector2(5, 0), At);
+
+        game.EdgeScroll = false;
+        game.PanSpeed = 2;
+        Tick(game);
+        Assert.False(save.GetBool(Game.EdgeScrollSaveKey, true));
+        Assert.Equal(2, save.GetFloat(Game.PanSpeedSaveKey));
+        save.ClearProgress();
+        Assert.True(save.Has(Game.EdgeScrollSaveKey));
+        Assert.True(save.Has(Game.PanSpeedSaveKey));
+
+        var next = new Game(new Scene(), new InputState()) { SaveData = save };
+        Assert.False(next.EdgeScroll);
+        Assert.Equal(2, next.PanSpeed);
+        next.PanSpeed = 100;
+        Assert.Equal(4, next.PanSpeed);
+        next.EdgeScroll = null;
+        Assert.False(save.Has(Game.EdgeScrollSaveKey));
+    }
+
+    [Fact]
+    public void EdgeScrollSetting_OnceSet_WinsOverTheComponent_BothWays()
+    {
+        var game = CreateGame();
+        _controls.EdgeScroll = true;
+        game.EdgeScroll = false;
+        for (var i = 0; i < 30; i++)
+            Tick(game, new Vector2(0.99f, 0));
+        Near(Vector2.Zero, At);
+
+        _controls.EdgeScroll = false;
+        game.EdgeScroll = true;
+        for (var i = 0; i < 30; i++)
+            Tick(game, new Vector2(0.99f, 0));
+        Near(new Vector2(5, 0), At);
+    }
+
+    [Fact]
+    public void PanSpeedSetting_MultipliesTheKeysAndTheEdges()
+    {
+        var game = CreateGame();
+        game.PanSpeed = 2;
+        _controls.PanSpeed = 0.5f;
+        _controls.EdgeScroll = true;
+        _input.SetKey(Key.D, true);
+        for (var i = 0; i < 30; i++)
+            Tick(game);
+        Near(new Vector2(5, 0), At);
+
+        _input.SetKey(Key.D, false);
+        for (var i = 0; i < 30; i++)
+            Tick(game, new Vector2(0, 0.99f));
+        Near(new Vector2(5, 5), At);
+    }
+
+    [Fact]
+    public void GlideTo_ArrivesKeepingItsSize_ThenTheKeysPanAtOnce_WithNoRelease()
+    {
+        var dock = new Entity("Dock");
+        dock.Transform.Position = new Vector3(8, 4, 0);
+        _scene.Add(dock);
+        var game = CreateGame();
+        _controls.FocusSeconds = 0.5f;
+        _controls.GlideTo(dock);
+        Assert.True(_controls.IsFocused);
+        Assert.True(_controls.IsGliding);
+
+        for (var i = 0; i < 31; i++)
+            Tick(game);
+        Assert.False(_controls.IsFocused);
+        Assert.False(_controls.IsGliding);
+        Near(new Vector2(8, 4), At);
+        Assert.Equal(5, _lens.Size);
+
+        _input.SetKey(Key.D, true);
+        Tick(game);
+        Assert.True(At.X > 8);
+    }
+
+    [Fact]
+    public void GlideTo_APointAtASize_ZoomsThereAndStays()
+    {
+        var game = CreateGame();
+        _controls.GlideTo(new Vector2(-6, 2), 3, 0.25f);
+        for (var i = 0; i < 20; i++)
+            Tick(game);
+        Assert.False(_controls.IsFocused);
+        Near(new Vector2(-6, 2), At);
+        Assert.Equal(3, _lens.Size, 3);
+    }
+
+    [Fact]
+    public void GlideTo_APanKeyOrADragOrTheWheel_CancelsItWhereTheCameraIs()
+    {
+        var game = CreateGame();
+        foreach (var how in new[] { "key", "wheel", "drag" })
+        {
+            _camera.Transform.Position = new Vector3(0, 0, -10);
+            _controls.FocusSeconds = 1;
+            _controls.GlideTo(new Vector2(20, 0));
+            for (var i = 0; i < 15; i++)
+                Tick(game);
+            Assert.True(_controls.IsGliding);
+            var midway = At;
+            Assert.True(midway.X > 1 && midway.X < 19);
+
+            if (how == "key")
+                _input.SetKey(Key.D, true);
+            else if (how == "wheel")
+                _input.AddScroll(1);
+            else
+                _input.SetMouseButton(MouseButton.Middle, true);
+            Tick(game, new Vector2(0.2f, 0.2f));
+            Assert.False(_controls.IsGliding);
+            Assert.False(_controls.IsFocused);
+            Assert.True(At.X < 19);
+            _input.SetKey(Key.D, false);
+            _input.SetMouseButton(MouseButton.Middle, false);
+            Tick(game);
+            _lens.Size = 5;
+        }
+    }
+
+    [Fact]
+    public void GlideTo_IsAnAction_ByName()
+    {
+        var dock = new Entity("Dock");
+        dock.Transform.Position = new Vector3(4, 0, 0);
+        _scene.Add(dock);
+        var game = CreateGame();
+        _controls.FocusSeconds = 0;
+        _controls.GlideTo("Dock");
+        Tick(game);
+        Near(new Vector2(4, 0), At);
+        Assert.False(_controls.IsFocused);
     }
 }

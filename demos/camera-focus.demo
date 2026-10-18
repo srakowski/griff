@@ -44,6 +44,17 @@ pick: Button.Do = Release
 set: Button.Shortcut = R
 add: ScreenAnchor
 set: ScreenAnchor.Offset = 2.5, -3
+deselect
+create: Button
+rename: Glide
+set: Button.Action = Do
+pick: Button.Targets = Main Camera
+pick: Button.Do = Glide To
+set: Button.With = Walker
+set: Button.Shortcut = G
+add: ScreenAnchor
+set: ScreenAnchor.Offset = 2.5, -4.5
+explain: field:Button.Do | Glide To | Glide To is Focus On that hands the camera back by itself: it glides to the walker at the Size it has and stops there, with no Release to time. The player's keys, a drag or the wheel during the glide cancel it.
 
 chapter: Play | It follows, then hands back
 play
@@ -65,4 +76,10 @@ say: R clicks Back. The camera zooms back out to where it was, and hands control
 hold: Right 1
 wheel: game = up 2
 say: The keys pan and the wheel zooms again.
+tap: G
+wait: 1.5
+expectvalue: Main Camera.CameraControls.IsFocused = false
+say: G clicks Glide. The camera glides to the walker at the Size it has and the player has it straight away, nothing to release.
+hold: Left 1
+say: The keys pan the moment it arrives. A key pressed during the glide would have cancelled it.
 stop

@@ -32,6 +32,12 @@ internal sealed class SettingsSystem : GameSystem, IPlayerOffsets
     [NotState("the player's settings, kept with the save data rather than the game")]
     private float _uiScale = 1;
 
+    [NotState("the player's settings, kept with the save data rather than the game")]
+    private bool? _edgeScroll;
+
+    [NotState("the player's settings, kept with the save data rather than the game")]
+    private float _panSpeed = 1;
+
     [NotState("the host's screen")]
     private WindowSize? _displayRoom;
 
@@ -46,7 +52,7 @@ internal sealed class SettingsSystem : GameSystem, IPlayerOffsets
     public override string Name => "Settings";
 
     private readonly record struct Settings(float Volume, float MusicVolume, float SoundVolume, bool Muted, bool Fullscreen, float AudioOffset,
-        float VisualOffset, WindowSize? WindowSize, bool VSync, int FrameCap, float UiScale);
+        float VisualOffset, WindowSize? WindowSize, bool VSync, int FrameCap, float UiScale, bool? EdgeScroll, float PanSpeed);
 
     // The frame caps a choice offers, 0 for none (see Game.FrameCap), and the most one can be.
     internal static readonly int[] FrameCaps = [0, 30, 60, 120, 144, 165, 240];
@@ -54,6 +60,8 @@ internal sealed class SettingsSystem : GameSystem, IPlayerOffsets
     internal const int MaxFrameCap = 1000;
 
     internal const float MinUiScale = 0.25f, MaxUiScale = 4;
+
+    internal const float MinPanSpeed = 0.25f, MaxPanSpeed = 4;
 
     public float AudioOffset
     {
@@ -191,6 +199,31 @@ internal sealed class SettingsSystem : GameSystem, IPlayerOffsets
         }
     }
 
+    public bool? EdgeScroll
+    {
+        get => _edgeScroll;
+        set
+        {
+            if (_edgeScroll == value)
+                return;
+            _edgeScroll = value;
+            SaveSettings();
+        }
+    }
+
+    public float PanSpeed
+    {
+        get => _panSpeed;
+        set
+        {
+            var speed = float.IsFinite(value) ? Math.Clamp(value, MinPanSpeed, MaxPanSpeed) : 1;
+            if (speed == _panSpeed)
+                return;
+            _panSpeed = speed;
+            SaveSettings();
+        }
+    }
+
     private static float Scale(float value) => float.IsFinite(value) ? Math.Clamp(value, MinUiScale, MaxUiScale) : 1;
 
     // What a choice set to `setting` offers, or null if it isn't a setting picked from a list.
@@ -275,6 +308,14 @@ internal sealed class SettingsSystem : GameSystem, IPlayerOffsets
         if (data.Has(Game.UiScaleSaveKey))
             _uiScale = Scale(data.GetFloat(Game.UiScaleSaveKey, _uiScale));
 
+        if (data.Has(Game.EdgeScrollSaveKey))
+            _edgeScroll = data.GetBool(Game.EdgeScrollSaveKey, false);
+        if (data.Has(Game.PanSpeedSaveKey))
+        {
+            var speed = data.GetFloat(Game.PanSpeedSaveKey, 1);
+            _panSpeed = float.IsFinite(speed) ? Math.Clamp(speed, MinPanSpeed, MaxPanSpeed) : 1;
+        }
+
         _savedSettings = CurrentSettings();
         for (var i = 0; i < Game.Systems.Count; i++)
         {
@@ -320,6 +361,16 @@ internal sealed class SettingsSystem : GameSystem, IPlayerOffsets
             Game.SaveData.Set(Game.FrameCapSaveKey, now.FrameCap);
         if (before.UiScale != now.UiScale)
             Game.SaveData.Set(Game.UiScaleSaveKey, now.UiScale);
+        if (before.EdgeScroll != now.EdgeScroll)
+        {
+            if (now.EdgeScroll is { } edge)
+                Game.SaveData.Set(Game.EdgeScrollSaveKey, edge);
+            else
+                Game.SaveData.Set(Game.EdgeScrollSaveKey, (string?)null);
+        }
+
+        if (before.PanSpeed != now.PanSpeed)
+            Game.SaveData.Set(Game.PanSpeedSaveKey, now.PanSpeed);
     }
 
     // What the systems keep of players' own, written as it changes; with now (as the game quits), what they write only now
@@ -335,5 +386,5 @@ internal sealed class SettingsSystem : GameSystem, IPlayerOffsets
 
     private Settings CurrentSettings() =>
         new(Game.Audio.Volume, Game.Audio.MusicVolume, Game.Audio.SoundVolume, Game.Audio.Muted, _fullscreen, _audioOffset, _visualOffset,
-            _windowSize, _vsync, _frameCap, _uiScale);
+            _windowSize, _vsync, _frameCap, _uiScale, _edgeScroll, _panSpeed);
 }

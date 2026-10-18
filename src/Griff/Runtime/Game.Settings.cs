@@ -38,6 +38,12 @@ public sealed partial class Game
     /// <summary>Where <see cref="UiScale"/> is kept in <see cref="SaveData"/>.</summary>
     public const string UiScaleSaveKey = "griff.uiScale";
 
+    /// <summary>Where <see cref="EdgeScroll"/> is kept in <see cref="SaveData"/>.</summary>
+    public const string EdgeScrollSaveKey = "griff.edgeScroll";
+
+    /// <summary>Where <see cref="PanSpeed"/> is kept in <see cref="SaveData"/>.</summary>
+    public const string PanSpeedSaveKey = "griff.panSpeed";
+
     /// <summary>The furthest either offset goes, in milliseconds, early or late.</summary>
     public const float MaxOffset = 1000;
 
@@ -164,5 +170,28 @@ public sealed partial class Game
     {
         get => _settings.UiScale;
         set => _settings.UiScale = value;
+    }
+
+    /// <summary>
+    /// Whether this player has the screen's edges pan the camera, for every <see cref="Scenes.CameraControls"/>: null until
+    /// they choose (each camera then goes by its own EdgeScroll, the designer's), and once set it wins over all of them. A
+    /// <see cref="Scenes.Toggle"/> set to Edge Scroll turns it on and off, showing the designer's choice until then.
+    /// Remembered next time, and kept through a New Game.
+    /// </summary>
+    public bool? EdgeScroll
+    {
+        get => _settings.EdgeScroll;
+        set => _settings.EdgeScroll = value;
+    }
+
+    /// <summary>
+    /// How many times as fast this player has the keys and the screen's edges pan the camera, times each
+    /// <see cref="Scenes.CameraControls.PanSpeed"/>: 2 pans twice as fast. A <see cref="Scenes.Slider"/> set to Pan Speed
+    /// changes it; from 0.25 to 4, 1 by default (which changes nothing), and remembered next time.
+    /// </summary>
+    public float PanSpeed
+    {
+        get => _settings.PanSpeed;
+        set => _settings.PanSpeed = value;
     }
 }

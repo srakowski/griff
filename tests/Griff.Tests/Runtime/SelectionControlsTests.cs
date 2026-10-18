@@ -295,6 +295,49 @@ public class SelectionControlsTests
     }
 
     [Fact]
+    public void ATurnedSelectable_IsPickedAndBoxedAsItLies()
+    {
+        // A truck 4 long and 1 high, turned a quarter: now 1 wide and 4 high.
+        var truck = new Entity("Parked");
+        truck.Transform.Position = new Vector3(-6, -3, 0);
+        truck.Transform.Rotation = new Vector3(0, 0, 90);
+        var selectable = truck.AddComponent<Selectable>();
+        selectable.InBox = false;
+        selectable.Size = new Vector2(4, 1);
+        _scene.Add(truck);
+        var game = CreateGame();
+        Tick(game);
+
+        Assert.False(selectable.Shape().Contains(new Vector2(-4.5f, -3)));
+        Assert.True(selectable.Shape().Contains(new Vector2(-6, -4.5f)));
+        Assert.True(selectable.Shape().Overlaps(new Box(new Vector2(-6, -5), new Vector2(0.2f))));
+        Assert.False(selectable.Shape().Overlaps(new Box(new Vector2(-4, -3), new Vector2(0.2f))));
+
+        Pick(game, new Vector2(-4.5f, -3));
+        Assert.Empty(_controls.Selected);
+        Pick(game, new Vector2(-6, -4.5f));
+        Assert.Equal([truck], _controls.Selected);
+    }
+
+    [Fact]
+    public void AButtonInsideASelectable_StillSelectsIt_AndStillFires()
+    {
+        var pressed = 0;
+        var figure = new Entity("Figure Button");
+        figure.Transform.Position = new Vector3(0, 0.2f, 0);
+        var button = figure.AddComponent<Button>();
+        button.Size = new Vector2(1, 1);
+        button.Clicked += _ => pressed++;
+        _scene.Add(figure, _a);
+        var game = CreateGame();
+        Tick(game);
+
+        Pick(game, new Vector2(-2, 0.2f));
+        Assert.Equal([_a], _controls.Selected);
+        Assert.Equal(1, pressed);
+    }
+
+    [Fact]
     public void AClickOnTheHud_DoesntSelect()
     {
         // A button riding along inside the camera, over a worker.

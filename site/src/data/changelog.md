@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+- A **Selectable**'s area turns with its entity, so a parked truck turned 90 degrees is clicked, boxed and marked as it lies, and a Button on a Selectable or inside one (a worker's own button) no longer stops **Selection Controls** selecting it: the click selects and the button still fires.
+
 ## 0.1.0-alpha.19 - 2026-10-18
 
 - Lines with corners laid by dragging, for belts, pipes and rails: **Line Tiles** on a tilemap (a straight piece and a corner, each drawn once, optional end pieces) are laid turned to follow the line, by the Scene view's new **Line** tool (L; Z turns a single cell or swaps the corner) and in the game by a **Line Tool**: the player presses, drags and lets go, a ghost shows the line green where it fits and red on walls, past **Max Cells** or where a script's `CanLay` says no, and letting go lays belts on its **Conveyor** and tiles on its **Tiles** map and raises `Placed`. The line goes the way the drag started and turns one corner by itself; R (the new **Rotate** action) turns a single cell or swaps the corner.

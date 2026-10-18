@@ -143,7 +143,8 @@ internal sealed partial class SelectionSystem : GameSystem, IClaimsBack
 
     // The mouse is on the HUD, not the world: over what a system shows, a pop-up, a button on the screen or a panel, or a
     // sprite pinned to the screen (a bar's backdrop, an open window). A button in the world is the world's to a command, but a
-    // left click on one is the button's, unless it's on something selectable.
+    // left click on one is the button's, unless it belongs to something selectable (on it or inside it): that click selects
+    // it, and the button's click still fires.
     private bool OnUi(Entity? camera, Vector2 mouse, bool forCommand)
     {
         if (Game.MouseOnHud || Game.PanelSystem.PressedOnPopup)
@@ -153,7 +154,7 @@ internal sealed partial class SelectionSystem : GameSystem, IClaimsBack
             if (!button.IsHovered)
                 continue;
             var entity = button.Entity!;
-            if (!InWorld(entity, camera) || (!forCommand && entity.GetComponent<Selectable>() is null))
+            if (!InWorld(entity, camera) || (!forCommand && !BelongsToSelectable(entity)))
                 return true;
         }
 
@@ -164,6 +165,18 @@ internal sealed partial class SelectionSystem : GameSystem, IClaimsBack
             var entity = sprite.Entity!;
             if (Views.IsOnScreen(entity, main) && Matrix4x4.Invert(entity.Transform.WorldMatrix, out var toSprite) &&
                 Vector2.Transform(screenMouse, toSprite) is var at && MathF.Abs(at.X) <= MathF.Abs(sprite.Size.X) / 2 && MathF.Abs(at.Y) <= MathF.Abs(sprite.Size.Y) / 2)
+                return true;
+        }
+
+        return false;
+    }
+
+    // The entity is a selectable or inside one.
+    private static bool BelongsToSelectable(Entity entity)
+    {
+        for (var e = entity; e is not null; e = e.Parent)
+        {
+            if (e.GetComponent<Selectable>() is not null)
                 return true;
         }
 
@@ -191,7 +204,7 @@ internal sealed partial class SelectionSystem : GameSystem, IClaimsBack
         List<Entity>? several = null;
         foreach (var selectable in Game.Scene.ActiveNow<Selectable>())
         {
-            if (!include(selectable) || !selectable.Area().Contains(point))
+            if (!include(selectable) || !selectable.Shape().Contains(point))
                 continue;
             if (only is null)
                 only = selectable.Entity;
@@ -229,7 +242,7 @@ internal sealed partial class SelectionSystem : GameSystem, IClaimsBack
                 if (!frame.ShowsInWorld(entity) || AreaOf(entity) is not { } area)
                     continue;
                 var size = area.HalfSize * 2 + new Vector2(controls.MarkerPadding * 2);
-                AddFrame(draws, area.Center, size, controls.MarkerImage, controls.MarkerSlice, controls.MarkerSliceSize, controls.MarkerColor, line, fill: false);
+                AddFrame(draws, area.Center, size, controls.MarkerImage, controls.MarkerSlice, controls.MarkerSliceSize, controls.MarkerColor, line, fill: false, area.Angle);
             }
 
             if (controls.State.DragFrom is { } from)
@@ -244,18 +257,27 @@ internal sealed partial class SelectionSystem : GameSystem, IClaimsBack
     }
 
     // Where the marker goes round something selected: its selectable's area, or (selected by a script) its collider's or sprite's.
-    private static Box? AreaOf(Entity entity) => entity.GetComponent<Selectable>()?.Area() ?? Follow.AreaOf(entity);
+    private static TurnedBox? AreaOf(Entity entity) =>
+        entity.GetComponent<Selectable>()?.Shape() ?? (Follow.AreaOf(entity) is { } box ? new TurnedBox(box.Center, box.HalfSize, 0) : null);
 
     // A picture stretched (nine-sliced) over a box, or with none an outline, filled faintly if `fill`.
-    private static void AddFrame(List<SpriteDraw> draws, Vector2 center, Vector2 size, string? image, float slice, float sliceSize, Color color, float line, bool fill)
+    private static void AddFrame(List<SpriteDraw> draws, Vector2 center, Vector2 size, string? image, float slice, float sliceSize, Color color, float line, bool fill, float angle = 0)
     {
         if (size.X <= 0 || size.Y <= 0)
             return;
         if (!string.IsNullOrWhiteSpace(image))
         {
-            var space = Matrix4x4.CreateTranslation(center.X, center.Y, 0);
+            var space = Matrix4x4.CreateRotationZ(angle) * Matrix4x4.CreateTranslation(center.X, center.Y, 0);
             foreach (var (world, source) in Quads.NineSlice(size, slice, sliceSize, new Vector4(0, 0, 1, 1), space))
                 draws.Add(new SpriteDraw(world, image.Trim(), color, Views.ScreenEntity) { Source = source });
+            return;
+        }
+
+        if (angle != 0)
+        {
+            var corners = new TurnedBox(center, size / 2, angle).Corners();
+            for (var i = 0; i < 4; i++)
+                draws.Add(FrameDrawing.Line(corners[i], corners[(i + 1) % 4], line, color));
             return;
         }
 
@@ -270,7 +292,7 @@ internal sealed partial class SelectionSystem : GameSystem, IClaimsBack
         public Entity? PickAt(Vector2 point) => system.TopAt(point, s => s.Clickable);
 
         public IEnumerable<Entity> InBox(Box box) =>
-            system.Game.Scene.ActiveNow<Selectable>().Where(s => s.InBox && s.Clickable && s.Area().Overlaps(box)).Select(s => s.Entity!).ToList();
+            system.Game.Scene.ActiveNow<Selectable>().Where(s => s.InBox && s.Clickable && s.Shape().Overlaps(box)).Select(s => s.Entity!).ToList();
 
         public IEnumerable<Entity>? SameKind(Entity picked)
         {
@@ -278,7 +300,7 @@ internal sealed partial class SelectionSystem : GameSystem, IClaimsBack
                 return null;
             var kind = selectable.KindName;
             return system.Game.Scene.ActiveNow<Selectable>()
-                .Where(s => s.Clickable && string.Equals(s.KindName, kind, StringComparison.OrdinalIgnoreCase) && s.Area().Overlaps(view))
+                .Where(s => s.Clickable && string.Equals(s.KindName, kind, StringComparison.OrdinalIgnoreCase) && s.Shape().Overlaps(view))
                 .Select(s => s.Entity!).ToList();
         }
 

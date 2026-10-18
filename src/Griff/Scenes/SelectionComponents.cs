@@ -37,7 +37,7 @@ public sealed class Selectable : Component
     public bool Clickable { get; set; } = true;
 
     /// <summary>
-    /// The area that picks it, in world units before the transform's scale, centered on the entity plus
+    /// The area that picks it, in world units before the transform's scale (and turned with it), centered on the entity plus
     /// <see cref="Offset"/>. (0, 0) takes its Button's, box collider's or sprite's.
     /// </summary>
     [Resizable(Upright = true)]
@@ -59,17 +59,27 @@ public sealed class Selectable : Component
     /// <summary>Its kind for a double-click: <see cref="Kind"/>, or else the entity's name.</summary>
     public string KindName => string.IsNullOrWhiteSpace(Kind) ? Entity?.Name ?? "" : Kind.Trim();
 
-    /// <summary>The box in the world that picks it, as it is now (see <see cref="Size"/>).</summary>
-    public Box Area()
+    /// <summary>The upright box in the world round <see cref="Shape"/>.</summary>
+    public Box Area() => Shape().Bounds;
+
+    /// <summary>
+    /// The area in the world that picks it as it is now (see <see cref="Size"/>): it turns and scales with the entity, so a
+    /// truck turned a quarter is picked, boxed and marked as it lies.
+    /// </summary>
+    public TurnedBox Shape()
     {
         var entity = Entity!;
         var world = entity.Transform.WorldMatrix;
         var scale = new Vector2(new Vector2(world.M11, world.M12).Length(), new Vector2(world.M21, world.M22).Length());
+        var angle = MathF.Atan2(world.M12, world.M11);
         if (Size != Vector2.Zero)
-            return new Box(Vector2.Transform(Offset, world), Vector2.Abs(Size) * scale / 2);
+            return new TurnedBox(Vector2.Transform(Offset, world), Vector2.Abs(Size) * scale / 2, angle);
         if (entity.GetComponent<Button>() is { } button)
-            return new Box(new Vector2(world.M41, world.M42), Vector2.Abs(button.Size) * scale / 2);
-        return Follow.AreaOf(entity) ?? new Box(new Vector2(world.M41, world.M42), new Vector2(0.25f));
+            return new TurnedBox(new Vector2(world.M41, world.M42), Vector2.Abs(button.Size) * scale / 2, angle);
+        if (entity.GetComponent<Tilemap>() is null && entity.GetComponent<BoxCollider>() is null && entity.GetComponent<Sprite>() is { } sprite)
+            return new TurnedBox(new Vector2(world.M41, world.M42), Vector2.Abs(sprite.Size) * scale / 2, angle);
+        var box = Follow.AreaOf(entity) ?? new Box(new Vector2(world.M41, world.M42), new Vector2(0.25f));
+        return new TurnedBox(box.Center, box.HalfSize, 0);
     }
 
     internal void SetSelected(bool selected)

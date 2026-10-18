@@ -28,8 +28,8 @@ explain: field:TogglesList.Table | Table | A Toggles List makes a switch for eac
 set: TogglesList.Table = Fires
 explain: field:TogglesList.DefaultColumn | Default Column | The yes or no column says whether each row starts on, until the player flips it.
 set: TogglesList.DefaultColumn = On
-explain: field:TogglesList.SaveAs | Save As | Each switch is remembered in the save data under this name, where {row} is the row's name: fire.Rain, fire.Smoke. Scripts read them with GetBool, like any Toggle.
-set: TogglesList.SaveAs = fire.{row}
+explain: field:TogglesList.SaveAs | Save As | Each switch is remembered in the save data under this name, where {row} is the row's name: settings.fire.Rain, settings.fire.Smoke. A name starting settings. is the player's setting, so a New Game keeps it. Scripts read them with GetBool, like any Toggle.
+set: TogglesList.SaveAs = settings.fire.{row}
 
 chapter: Play | Flip Smoke on
 play
@@ -40,5 +40,5 @@ say: Rain starts on and Smoke off, as the table says.
 gameclick: Smoke/Switch
 wait: 0.5
 expectvalue: Smoke/Switch.Toggle.IsOn = true
-say: Flipping Smoke is remembered under fire.Smoke, so next time the game starts it is on.
+say: Flipping Smoke is remembered under settings.fire.Smoke, so next time the game starts it is on, even after a New Game.
 stop

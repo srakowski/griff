@@ -90,6 +90,23 @@ public sealed class SaveDataTests : IDisposable
     }
 
     [Fact]
+    public void ClearProgress_KeepsTheGamesOwnSettings_NamedSettingsDot()
+    {
+        var save = new SaveData(SavePath);
+        save.Set("settings.fire.Rain", false);
+        save.Set("Settings.Difficulty", 2);
+        save.Set("fire.Smoke", true);
+        save.Set("settingsless", 1);
+
+        save.ClearProgress();
+
+        Assert.Equal(["Settings.Difficulty", "settings.fire.Rain"], save.Keys.Order(StringComparer.OrdinalIgnoreCase));
+        Assert.False(save.GetBool("settings.fire.Rain", true));
+        Assert.True(SaveData.IsSetting("griff.volume"));
+        Assert.False(SaveData.IsSetting("run.settings.x"));
+    }
+
+    [Fact]
     public void DamagedFile_StartsEmpty()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(SavePath)!);

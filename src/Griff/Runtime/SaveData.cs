@@ -9,7 +9,8 @@ namespace Griff.Runtime;
 /// the next, so a value set every frame costs a write only as often as the disk keeps up. Stopping the game waits for the
 /// last write (<see cref="Flush"/>). A write that fails (a full disk, a file another program holds) is said once among
 /// the game's problems (<see cref="Game.Problems"/>) rather than stopping the game, and the next change tries again. A
-/// value whose name starts "run." lasts only while the game runs (see <see cref="LastsOneRun"/>).
+/// value whose name starts "run." lasts only while the game runs (see <see cref="LastsOneRun"/>), and one whose name starts
+/// "settings." is the player's setting, which a New Game keeps (see <see cref="IsSetting"/>).
 /// </summary>
 /// <example>
 /// <code>
@@ -154,15 +155,16 @@ public sealed class SaveData
     }
 
     /// <summary>
-    /// Forgets the game's progress, for a "New Game" button: every value but those Griff keeps for the player under names
-    /// starting "griff.": the settings (volumes, fullscreen), rebound keys, network name, saved games and lines read.
+    /// Forgets the game's progress, for a "New Game" button: every value but the player's settings (<see cref="IsSetting"/>):
+    /// those Griff keeps under names starting "griff." (volumes, fullscreen, rebound keys, network name, saved games and
+    /// lines read) and the game's own under names starting "settings.".
     /// </summary>
     public void ClearProgress()
     {
         Crowds.ThrowIfRunning("save");
         lock (_gate)
         {
-            var progress = _values.Select(p => p.Key).Where(k => !k.StartsWith(SettingsPrefix, StringComparison.Ordinal)).ToList();
+            var progress = _values.Select(p => p.Key).Where(k => !IsSetting(k)).ToList();
             if (progress.Count == 0)
                 return;
             foreach (var key in progress)
@@ -172,8 +174,17 @@ public sealed class SaveData
         Write();
     }
 
-    // What the names of the values Griff keeps for the player (settings, controls) start with.
+    /// <summary>
+    /// True for the player's setting, which a New Game keeps (<see cref="ClearProgress"/>): one Griff keeps for the
+    /// player, named "griff." something, or the game's own named "settings." something (capitals don't matter), such as
+    /// a Toggle's Save As "settings.fire.Rain" or a Slider's "settings.difficulty".
+    /// </summary>
+    public static bool IsSetting(string key) =>
+        key.StartsWith(SettingsPrefix, StringComparison.Ordinal) || key.StartsWith(GameSettingsPrefix, StringComparison.OrdinalIgnoreCase);
+
+    // What the names of the values Griff keeps for the player (settings, controls) start with, and the game's own.
     private const string SettingsPrefix = "griff.";
+    private const string GameSettingsPrefix = "settings.";
 
     /// <summary>Forgets every value, the player's settings and controls too (<see cref="ClearProgress"/> keeps those).</summary>
     public void Clear()

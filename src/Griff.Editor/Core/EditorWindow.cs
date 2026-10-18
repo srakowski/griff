@@ -35,9 +35,16 @@ public sealed class EditorWindow
         (_main, DocumentTabs, SceneTab, GameTab, _closeConfirmed) = (main, documentTabs, sceneTab, gameTab, closeConfirmed);
     }
 
+    /// <summary>
+    /// Why the editor is closing ("the Exit command", "restarting into an update", "its window was closed"), written to the
+    /// log as it ends; null until something closes it. An editor that ends with no such line was ended from outside.
+    /// </summary>
+    public string? CloseReason { get; set; }
+
     /// <summary>Closes the editor once its questions are answered (unsaved changes were dealt with): the window closes without asking again.</summary>
-    public void CloseConfirmed()
+    public void CloseConfirmed(string? reason = null)
     {
+        CloseReason ??= reason;
         if (_closeConfirmed is { } close)
             close();
         else

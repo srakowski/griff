@@ -113,6 +113,7 @@ public sealed class EditorUpdates(IUpdater updater, ISettingsStore settings, ISt
     {
         Restarting = true;
         _ = Task.Delay(ExitDeadline).ContinueWith(_ => Environment.Exit(0), TaskScheduler.Default);
+        editorWindow.CloseReason ??= "restarting into an update";
         if (editorWindow.Main is not null)
             editorWindow.CloseConfirmed();
         Application.Current?.Shutdown();

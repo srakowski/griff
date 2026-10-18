@@ -1,5 +1,6 @@
 using Griff.Editor.Core;
 using System.IO;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Threading;
 using Griff.Editor.Core.Commands;
@@ -78,6 +79,9 @@ public partial class App : Application
 
         var builder = Host.CreateApplicationBuilder(e.Args);
         builder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
+        // The editor starting and closing reach the Windows Application log too, so an editor that ended without its
+        // closing line (and why) was ended from outside, or crashed.
+        builder.Logging.AddFilter<Microsoft.Extensions.Logging.EventLog.EventLogLoggerProvider>(typeof(App).FullName, LogLevel.Information);
         ConfigureCoreServices(builder.Services);
         foreach (var module in Modules)
             module.ConfigureServices(builder.Services);
@@ -95,7 +99,11 @@ public partial class App : Application
         MainWindow.Show();
 
         var logger = _host.Services.GetRequiredService<ILogger<App>>();
-        logger.LogInformation("Griff Editor started ({Modules} modules)", Modules.Length);
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            logger.LogCritical(args.ExceptionObject as Exception, "The editor is ending on an error outside the UI: {Message}", (args.ExceptionObject as Exception)?.Message);
+        TaskScheduler.UnobservedTaskException += (_, args) => logger.LogError(args.Exception, "A background task failed unnoticed");
+        var version = typeof(App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0];
+        logger.LogInformation("Griff Editor {Version} started ({Modules} modules)", version, Modules.Length);
         await ReopenLastProjectAsync(logger);
     }
 
@@ -103,6 +111,8 @@ public partial class App : Application
     {
         if (_host is not null)
         {
+            _host.Services.GetService<ILogger<App>>()?.LogInformation("Griff Editor closed: {Reason}",
+                _host.Services.GetService<EditorWindow>()?.CloseReason ?? "the application ended");
             _host.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
             _host.Dispose();
         }

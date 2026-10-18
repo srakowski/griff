@@ -48,6 +48,18 @@ public sealed class SmallFixesTests : IDisposable
         using (AgentDialogs.Answering(JsonDocument.Parse("""{"Save changes": "Cancel"}""").RootElement))
             Wait(exit.ExecuteAsync());
         Assert.True(workspace.Scene.IsDirty);
+        Assert.Null(services.GetRequiredService<Griff.Editor.Core.EditorWindow>().CloseReason);
+    });
+
+    [Fact]
+    public void Exit_SaysWhyTheEditorClosed_ForTheLog() => EditorHost.Run(services =>
+    {
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
+        Wait(services.GetRequiredService<Workspace>().CreateProjectAsync(_root, "Game"));
+
+        Wait(services.GetRequiredService<CommandRegistry>().Get("App.Exit").ExecuteAsync());
+
+        Assert.StartsWith("the Exit command", services.GetRequiredService<Griff.Editor.Core.EditorWindow>().CloseReason);
     });
 
     [Fact]

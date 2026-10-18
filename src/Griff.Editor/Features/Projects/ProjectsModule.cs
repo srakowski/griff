@@ -107,5 +107,5 @@ public sealed class ExitCommand(IProjectSession projectSession, Core.EditorWindo
     }
 
     /// <summary>Closes the editor's window once the questions are answered.</summary>
-    private void CloseWindow() => editorWindow.CloseConfirmed();
+    private void CloseWindow() => editorWindow.CloseConfirmed("the Exit command (File > Exit, or an agent's App.Exit)");
 }

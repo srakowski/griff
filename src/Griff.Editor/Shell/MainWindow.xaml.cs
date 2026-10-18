@@ -13,6 +13,7 @@ namespace Griff.Editor.Shell;
 public partial class MainWindow : ChromeWindow
 {
     private readonly IProjectSession _projectSession;
+    private readonly Core.EditorWindow _editorWindow;
     private bool _closeConfirmed;
 
     public MainWindow(
@@ -38,6 +39,7 @@ public partial class MainWindow : ChromeWindow
         editorWindow.Attach(this, DocumentTabs, SceneTab, GameTab, CloseConfirmed);
         DataContext = viewModel;
         _projectSession = projectSession;
+        _editorWindow = editorWindow;
         SceneTab.Content = sceneView;
         var gameView = new DockPanel();
         DockPanel.SetDock(timeline, Dock.Top);
@@ -120,6 +122,7 @@ public partial class MainWindow : ChromeWindow
         e.Cancel = true;
         if (await _projectSession.ConfirmCloseProjectAsync())
         {
+            _editorWindow.CloseReason ??= "its window was closed (its close button, Alt+F4 or Windows)";
             _closeConfirmed = true;
             _ = Dispatcher.InvokeAsync(Close);
         }

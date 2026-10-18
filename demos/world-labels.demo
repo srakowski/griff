@@ -17,8 +17,8 @@ explain: field:Text.Background | Background | Background is the color of a box f
 explain: field:Text.Padding | Padding | Padding is how far the box reaches past the letters on every side, in world units.
 set: Text.Value = UNLOADING C05-1 3/4
 explain: scene | Scene view | The box grows with the words, and shrinks again with a shorter label.
-set: Text.Value = FEEDING C03\n2/4
-say: It is fitted to every line, and follows Align and Vertical Align too.
+set: Text.Value = FEEDING C03
+say: It is fitted to the words, every line of them, and follows Align and Vertical Align too.
 
 chapter: Only when zoomed in | Show When > Zoom Below
 create: Sprite

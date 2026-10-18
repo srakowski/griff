@@ -12,8 +12,7 @@ scene: Shop
 chapter: A game, not a fight | Data > Simulations
 explain: entity:Shop | The game | A small shop: each game hour of ten seconds it takes money for every worker hired and pays a rent from the Economy table. An opening letter pauses it until it's read.
 say: A balance simulation can play the whole game now, rather than a fight in an arena: the real scene, headless, as fast as the computer goes.
-menu: Data > Open Simulation
-prompt: Economy
+menu: Data > Open Simulation > Economy
 expectsim: playsscene = true
 expectsim: scene = Shop
 explain: sims:settings | A scene run | It plays the Shop scene from its start for thirty game days. The letter is closed as it opens, and twenty steps a second play it in coarser steps, three times as fast as the game's sixty.

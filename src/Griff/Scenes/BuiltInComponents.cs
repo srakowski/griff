@@ -819,7 +819,7 @@ public sealed class Animation : Component
     }
 
     // "4" is one frame; "4-9" is six, and so is "9-4", played from 9 down to 4.
-    private static bool TryParseRange(string text, out int first, out int count, out bool backward)
+    internal static bool TryParseRange(string text, out int first, out int count, out bool backward)
     {
         var dash = text.IndexOf('-', 1);
         var (from, to) = dash < 0 ? (text, text) : (text[..dash], text[(dash + 1)..]);

@@ -1,0 +1,14 @@
+title: Particles from a sprite sheet
+intro: A ParticleEmitter can draw a frame, or a random frame from a set, of a sprite sheet instead of squeezing the whole image into each particle.
+
+project: Empty | Sheets
+
+chapter: Frames | A sheet of shapes
+create: Empty
+rename: Chaff
+add: ParticleEmitter
+explain: component:ParticleEmitter | Particle Emitter | An emitter sprays small quads. With an image that is a sheet of several frames, each particle used to show the whole sheet squeezed in.
+set: ParticleEmitter.Columns = 8
+explain: field:ParticleEmitter.Columns | Columns | Columns and Rows cut the image into frames, as a Sprite's do.
+set: ParticleEmitter.Frames = 0-1
+explain: field:ParticleEmitter.Frames | Frames | Each particle picks one of these frames at random as it is born, using the game's random, so a rewound or networked game repeats exactly. Ticking Animate Frames steps through them over its life instead. Left empty, the Frame field shows one frame and everything draws as before.

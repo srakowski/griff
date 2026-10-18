@@ -172,4 +172,72 @@ public class ParticleTests
         Assert.Equal(Color.FromBytes(0xFF, 0x80, 0x00, 0x00), copy.EndColor);
         Assert.True(copy.DestroyWhenFinished);
     }
+
+    [Fact]
+    public void Frames_EachParticleIsOneFrameOfTheSheet_AndBothAppear()
+    {
+        Rand.Seed(7);
+        var emitter = AddEmitter(e =>
+        {
+            e.Image = "particles.png";
+            e.Columns = 8;
+            e.Frames = "0-1";
+            e.Emitting = false;
+            e.Lifetime = 5;
+        });
+        emitter.Burst(40);
+
+        var draws = emitter.ParticleDraws().ToList();
+        Assert.Equal(40, draws.Count);
+        Assert.All(draws, d => Assert.Equal(1f / 8, d.Source.Z));
+        Assert.All(draws, d => Assert.Contains(d.Source.X, new[] { 0f, 1f / 8 }));
+        Assert.Contains(draws, d => d.Source.X == 0);
+        Assert.Contains(draws, d => d.Source.X > 0);
+    }
+
+    [Fact]
+    public void Frames_RepeatWithTheSameSeed()
+    {
+        List<int> Born()
+        {
+            Rand.Seed(3);
+            var emitter = AddEmitter(e => { e.Columns = 8; e.Frames = "3-4, 7"; e.Emitting = false; });
+            emitter.Burst(30);
+            return [.. emitter.Particles.Select(p => p.Frame)];
+        }
+
+        var first = Born();
+        Assert.Equal(first, Born());
+        Assert.All(first, f => Assert.True(f is 3 or 4 or 7, $"frame {f}"));
+    }
+
+    [Fact]
+    public void Frames_AnimateStepsThroughThemOverALife()
+    {
+        var emitter = AddEmitter(e => { e.Columns = 4; e.Frames = "0-3"; e.AnimateFrames = true; });
+        var particle = new Particle(Vector2.Zero, Vector2.Zero, 0, 1);
+        Assert.Equal(0, emitter.FrameOf(particle, 0));
+        Assert.Equal(2, emitter.FrameOf(particle, 0.6f));
+        Assert.Equal(3, emitter.FrameOf(particle, 1));
+    }
+
+    [Fact]
+    public void Frames_DefaultEmitterDrawsTheWholeImage_AndFrameShowsOne()
+    {
+        var plain = AddEmitter(e => e.Emitting = false);
+        plain.Burst(1);
+        Assert.Equal(new Vector4(0, 0, 1, 1), plain.ParticleDraws().Single().Source);
+
+        var single = AddEmitter(e => { e.Emitting = false; e.Columns = 4; e.Rows = 2; e.Frame = 5; });
+        single.Burst(1);
+        Assert.Equal(new Vector4(0.25f, 0.5f, 0.25f, 0.5f), single.ParticleDraws().Single().Source);
+    }
+
+    [Fact]
+    public void ParseFrames_ReadsRangesAndSkipsJunk()
+    {
+        Assert.Equal([0, 1], ParticleEmitter.ParseFrames("0-1"));
+        Assert.Equal([3, 4, 7, 2, 1], ParticleEmitter.ParseFrames("3-4, 7; 2-1 x"));
+        Assert.Empty(ParticleEmitter.ParseFrames(null));
+    }
 }

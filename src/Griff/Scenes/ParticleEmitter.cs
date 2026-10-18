@@ -13,6 +13,9 @@ public readonly record struct Particle(Vector2 Position, Vector2 Velocity, float
 
     /// <summary>Its age before it last moved, for drawing it between steps.</summary>
     public float AgeFrom { get; init; } = Age;
+
+    /// <summary>The frame of the emitter's sprite sheet it was born with, when the emitter picks one at random.</summary>
+    public int Frame { get; init; }
 }
 
 /// <summary>
@@ -49,6 +52,7 @@ public sealed class ParticleEmitter : Component, IDrawable
         var entity = Entity!;
         var z = entity.Transform.WorldPosition.Z;
         var image = string.IsNullOrEmpty(Image) ? null : Image;
+        var sheet = Columns > 1 || Rows > 1;
         foreach (var particle in _particles)
         {
             var progress = particle.Lifetime > 0 ? Math.Clamp(blend.Between(particle.AgeFrom, particle.Age) / particle.Lifetime, 0, 1) : 1;
@@ -57,7 +61,9 @@ public sealed class ParticleEmitter : Component, IDrawable
                 continue;
             var at = blend.Between(particle.From, particle.Position);
             var world = Matrix4x4.CreateScale(size, size, 1) * Matrix4x4.CreateTranslation(at.X, at.Y, z);
-            yield return new SpriteDraw(world, image, ColorAt(progress), entity);
+            yield return sheet
+                ? new SpriteDraw(world, image, ColorAt(progress), entity) { Source = FrameRect(FrameOf(particle, progress)) }
+                : new SpriteDraw(world, image, ColorAt(progress), entity);
         }
     }
 
@@ -70,6 +76,75 @@ public sealed class ParticleEmitter : Component, IDrawable
 
     /// <summary>Image for each particle, relative to Assets. Without one, particles are solid squares.</summary>
     public string? Image { get; set; }
+
+    /// <summary>For sprite sheets: frames across the image, as on a <see cref="Sprite"/>. 1 for a single image.</summary>
+    [Group("Sprite Sheet")]
+    public int Columns { get; set; } = 1;
+
+    /// <summary>For sprite sheets: frames down the image.</summary>
+    public int Rows { get; set; } = 1;
+
+    /// <summary>Which frame of the sheet each particle shows, counting left to right, top to bottom from 0. <see cref="Frames"/> takes over when it's set.</summary>
+    public int Frame { get; set; }
+
+    /// <summary>
+    /// Frames to use instead of <see cref="Frame"/>, written like an <see cref="Animation"/> clip's: <c>0-1</c> is frames 0 and 1,
+    /// <c>3-4, 7</c> is 3, 4 and 7, and <c>3-0</c> runs backward. Each particle picks one at random as it's born (from the
+    /// game's random, so a rewound or networked game repeats), or with <see cref="AnimateFrames"/> steps through them.
+    /// </summary>
+    public string? Frames
+    {
+        get => _frames;
+        set
+        {
+            _frames = value;
+            _frameList = ParseFrames(value);
+        }
+    }
+
+    private string? _frames;
+    private int[] _frameList = [];
+
+    /// <summary>With <see cref="Frames"/>: each particle shows them in order, one after another across its life, instead of one picked at birth.</summary>
+    [ShownWhen(nameof(Frames))]
+    public bool AnimateFrames { get; set; }
+
+    /// <summary>The frames <see cref="Frames"/> names, in order; empty when it names none.</summary>
+    public IReadOnlyList<int> FrameList => _frameList;
+
+    /// <summary>Reads frames written like <see cref="Frames"/>; entries that don't make sense are skipped.</summary>
+    public static int[] ParseFrames(string? text)
+    {
+        var frames = new List<int>();
+        foreach (var entry in (text ?? "").Split([',', ';', ' ', '\t', '\n'],StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!Animation.TryParseRange(entry, out var first, out var count, out var backward) || count > 4096)
+                continue;
+            for (var i = 0; i < count; i++)
+                frames.Add(backward ? first + count - 1 - i : first + i);
+        }
+
+        return [.. frames];
+    }
+
+    /// <summary>The frame a particle shows at <paramref name="progress"/> through its life.</summary>
+    public int FrameOf(Particle particle, float progress)
+    {
+        if (_frameList.Length == 0)
+            return Frame;
+        return AnimateFrames ? _frameList[Math.Min(_frameList.Length - 1, (int)(progress * _frameList.Length))] : particle.Frame;
+    }
+
+    /// <summary>The part of the image to show for <paramref name="frame"/>: (u, v, width, height) in 0–1 image space, as <see cref="Sprite.FrameRect"/>.</summary>
+    public Vector4 FrameRect(int frame)
+    {
+        var columns = Math.Max(1, Columns);
+        var rows = Math.Max(1, Rows);
+        if (columns == 1 && rows == 1)
+            return new Vector4(0, 0, 1, 1);
+        frame = ((frame % (columns * rows)) + columns * rows) % (columns * rows);
+        return new Vector4((float)(frame % columns) / columns, (float)(frame / columns) / rows, 1f / columns, 1f / rows);
+    }
 
     /// <summary>While set, emits <see cref="Rate"/> particles per second.</summary>
     [Powered]
@@ -203,6 +278,8 @@ public sealed class ParticleEmitter : Component, IDrawable
         var angle = Direction * (MathF.PI / 180) + spin + (Rand.Value - 0.5f) * Spread * (MathF.PI / 180);
         var speed = Speed * (1 + (Rand.Value * 2 - 1) * Math.Clamp(SpeedVariation, 0, 1));
         var velocity = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * speed;
-        _particles.Add(new Particle(new Vector2(world.M41, world.M42), velocity, 0, Lifetime));
+        // Only an emitter with several frames to pick from asks the random, so the others draw what they always did.
+        var frame = _frameList.Length > 1 && !AnimateFrames ? _frameList[Rand.Range(0, _frameList.Length)] : _frameList.Length == 1 ? _frameList[0] : 0;
+        _particles.Add(new Particle(new Vector2(world.M41, world.M42), velocity, 0, Lifetime) { Frame = frame });
     }
 }

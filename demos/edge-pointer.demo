@@ -14,7 +14,7 @@ set: Transform.Position = 2, -9, 0
 say: The worker stands at the far left of the floor.
 deselect
 select: Main Camera
-set: Transform.Position = 30, -9, -10
+set: Transform.Position = 30, -9, 0
 set: Camera.Size = 6
 set: Camera.HudSize = 6
 add: CameraControls

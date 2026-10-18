@@ -19,24 +19,24 @@ public sealed class PlayShortcutsTests
 
     [Fact]
     public void StepFrame_IsTheGames_WhilePlaying_EvenWithNothingBound() =>
-        Assert.True(PlayShortcuts.GameKeeps("Game.Step", new KeyGesture(Key.F10), new InputState()));
+        Assert.True(PlayShortcuts.GameKeeps(typeof(StepCommand), new KeyGesture(Key.F10), new InputState()));
 
     [Fact]
     public void AKeyTheGameBinds_IsTheGames_ForAnyOtherCommand()
     {
         var input = InputWith("Menu", Griff.Input.Key.F9);
-        Assert.True(PlayShortcuts.GameKeeps("Game.Other", new KeyGesture(Key.F9), input));
-        Assert.False(PlayShortcuts.GameKeeps("Game.Other", new KeyGesture(Key.F8), input));
+        Assert.True(PlayShortcuts.GameKeeps(typeof(Griff.Editor.Features.Audio.MuteCommand), new KeyGesture(Key.F9), input));
+        Assert.False(PlayShortcuts.GameKeeps(typeof(Griff.Editor.Features.Audio.MuteCommand), new KeyGesture(Key.F8), input));
     }
 
     [Theory]
-    [InlineData("Game.Pause", Key.F6, ModifierKeys.None, Griff.Input.Key.F6)]
-    [InlineData("Game.Stop", Key.F5, ModifierKeys.Shift, Griff.Input.Key.F5)]
-    [InlineData("Game.Fullscreen", Key.Enter, ModifierKeys.Alt, Griff.Input.Key.Enter)]
-    public void PauseStopAndFullscreen_AlwaysWin_EvenWhenTheGameBindsTheKey(string id, Key key, ModifierKeys modifiers, Griff.Input.Key bound) =>
-        Assert.False(PlayShortcuts.GameKeeps(id, new KeyGesture(key, modifiers), InputWith("Menu", bound)));
+    [InlineData(typeof(PauseCommand), Key.F6, ModifierKeys.None, Griff.Input.Key.F6)]
+    [InlineData(typeof(StopCommand), Key.F5, ModifierKeys.Shift, Griff.Input.Key.F5)]
+    [InlineData(typeof(PlayFullscreenCommand), Key.Enter, ModifierKeys.Alt, Griff.Input.Key.Enter)]
+    public void PauseStopAndFullscreen_AlwaysWin_EvenWhenTheGameBindsTheKey(Type command, Key key, ModifierKeys modifiers, Griff.Input.Key bound) =>
+        Assert.False(PlayShortcuts.GameKeeps(command, new KeyGesture(key, modifiers), InputWith("Menu", bound)));
 
     [Fact]
     public void AShortcutWithModifiers_IsNotTakenByAPlainKeyBinding() =>
-        Assert.False(PlayShortcuts.GameKeeps("Game.KeepChanges", new KeyGesture(Key.K, ModifierKeys.Control), InputWith("Menu", Griff.Input.Key.K)));
+        Assert.False(PlayShortcuts.GameKeeps(typeof(KeepPlayChangesCommand), new KeyGesture(Key.K, ModifierKeys.Control), InputWith("Menu", Griff.Input.Key.K)));
 }

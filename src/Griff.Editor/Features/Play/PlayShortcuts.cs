@@ -17,10 +17,10 @@ namespace Griff.Editor.Features.Play;
 public sealed class PlayShortcuts(CommandRegistry commands, PlayMode play)
 {
     /// <summary>The commands that keep their shortcut over a running game whatever it binds: the way out of it.</summary>
-    private static readonly string[] AlwaysWin = ["Game.Pause", "Game.Stop", "Game.Fullscreen"];
+    private static readonly Type[] AlwaysWin = [typeof(PauseCommand), typeof(StopCommand), typeof(PlayFullscreenCommand)];
 
     /// <summary>The commands for a paused game only: their shortcut is the game's while it plays.</summary>
-    private static readonly string[] PausedOnly = ["Game.Step"];
+    private static readonly Type[] PausedOnly = [typeof(StepCommand)];
 
     private (KeyGesture Gesture, ICommand Command)[]? _shortcuts;
 
@@ -38,7 +38,7 @@ public sealed class PlayShortcuts(CommandRegistry commands, PlayMode play)
         foreach (var (gesture, command) in _shortcuts)
         {
             if (!gesture.Matches(window, e) || !command.CanExecute(null) ||
-                (command is EditorCommand c && GameKeeps(c.Id, gesture, play.Game?.Input)))
+                (command is EditorCommand c && GameKeeps(c.GetType(), gesture, play.Game?.Input)))
                 continue;
             e.Handled = true;
             command.Execute(null);
@@ -47,15 +47,15 @@ public sealed class PlayShortcuts(CommandRegistry commands, PlayMode play)
     }
 
     /// <summary>
-    /// Whether <paramref name="gesture"/>, the shortcut of the command <paramref name="commandId"/>, is the running game's
+    /// Whether <paramref name="gesture"/>, the shortcut of the command of type <paramref name="command"/>, is the running game's
     /// rather than the editor's: the command is for a paused game, or the key has no modifiers and one of the
     /// <paramref name="input"/>'s actions is bound to it. Never for Pause, Stop and Play Fullscreen.
     /// </summary>
-    internal static bool GameKeeps(string commandId, KeyGesture gesture, IInput? input)
+    internal static bool GameKeeps(Type command, KeyGesture gesture, IInput? input)
     {
-        if (AlwaysWin.Contains(commandId))
+        if (AlwaysWin.Contains(command))
             return false;
-        if (PausedOnly.Contains(commandId))
+        if (PausedOnly.Contains(command))
             return true;
         if (input is null || gesture.Modifiers != ModifierKeys.None)
             return false;

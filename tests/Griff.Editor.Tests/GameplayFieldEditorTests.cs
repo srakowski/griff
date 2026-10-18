@@ -340,6 +340,23 @@ public sealed class GameplayFieldEditorTests : IDisposable
     });
 
     [Fact]
+    public void AListFieldATableSets_IsMarkedLikeTheOthers_AndItsLineIsntFlagged() => EditorHost.Run(services =>
+    {
+        var (document, selection, inspector) = Open(services);
+        var clock = new Entity("Clock");
+        clock.AddComponent(new GameSpeed());
+        clock.AddComponent(new TableValues { Table = "Enemies", Row = "Slime", Sets = ["GameSpeed.Speeds = Steps"] });
+        document.Scene.Add(clock);
+        selection.Select(clock);
+
+        var speeds = Field(inspector, "Game Speed", "Speeds");
+        Assert.True(speeds.IsFromTable);
+        Assert.StartsWith("Set from the Enemies table (Slime's Steps)", speeds.TableSource);
+        Assert.Empty(clock.GetComponent<TableValues>()!.LineProblems());
+        Assert.Contains("GameSpeed.Speeds", clock.GetComponent<TableValues>()!.Settable());
+    });
+
+    [Fact]
     public void AWiresInput_IsPickedFromItsEntitysInputs() => EditorHost.Run(services =>
     {
         var (document, selection, inspector) = Open(services);

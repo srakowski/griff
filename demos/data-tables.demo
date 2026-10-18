@@ -68,3 +68,13 @@ expectvalue: Slime.Health.Max = 12
 explain: panel:Tables | While it plays | A change made while the game runs reaches it as its next step begins, so balancing is quick to try. Renaming a row keeps its old name working.
 stop
 say: Scripts read the same tables, by row and column or into a class of their own, and agents edit them through the same panel and files.
+
+chapter: A list from one cell | Table Values
+click: tables:addcolumn
+prompt: Waves
+columntype: Waves = text
+cell: Slime > Waves = Bats, Slimes, Ogre
+select: Slime
+add: GameSpeed
+set: TableValues.Sets = Health.Max = Health\nDamageOnTouch.Amount = Damage\nGameSpeed.Speeds = Waves
+explain: field:GameSpeed.Speeds | A list from a cell | A property holding a list of names takes a text cell split on commas and line breaks, trimmed, with empty pieces dropped. The field carries the table mark like the others, and a script's list of names works the same.

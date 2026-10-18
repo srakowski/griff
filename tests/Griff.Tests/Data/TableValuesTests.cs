@@ -93,6 +93,41 @@ public sealed class TableValuesTests : IDisposable
         Assert.Null(tables.Linked(tables.Get("Classes", "Fighter"), "Spell"));
     }
 
+    public sealed class Staff : Component
+    {
+        public IReadOnlyList<string> Priorities { get; set; } = ["Old"];
+    }
+
+    private static Table Jobs(string priorities) => new("Jobs",
+        [new TableColumn("Priorities", ColumnType.Text)],
+        [("Staff", [TableValue.Of(priorities)])]);
+
+    [Fact]
+    public void ATextCell_SetsAListProperty_SplitOnCommasAndLineBreaks()
+    {
+        var entity = new Entity("Staff");
+        var staff = entity.AddComponent<Staff>();
+        var values = entity.AddComponent<TableValues>();
+        values.Table = "Jobs";
+        values.Sets = ["Staff.Priorities = Priorities"];
+        _scene.Add(entity);
+        var game = new Game(_scene, new InputState()) { Tables = new TableSet([Jobs("Console=1, Unload=2")]) };
+
+        Step(game);
+
+        Assert.Empty(values.LineProblems());
+        Assert.Equal(["Console=1", "Unload=2"], staff.Priorities);
+    }
+
+    [Fact]
+    public void AListProperty_IsSettable_ElementsTrimmed_EmptyOnesDropped()
+    {
+        Assert.Contains(ComponentModel.Of(typeof(Staff)).Settable, p => p.Name == "Priorities");
+        Assert.Contains(ComponentModel.Of(typeof(GameSpeed)).Settable, p => p.Name == "Speeds");
+        Assert.False(ComponentModel.Takes(typeof(IReadOnlyList<System.Numerics.Vector2>)));
+        Assert.Equal(["a", "b c", "d"], (IEnumerable<string>)TableValues.Convert(TableValue.Of("a\r\n b c ,, d,"), typeof(IReadOnlyList<string>))!);
+        Assert.Empty((IEnumerable<string>)TableValues.Convert(TableValue.Empty, typeof(IReadOnlyList<string>))!);
+    }
     [Fact]
     public void TableValues_SetTheirProperties_AsTheGameStarts()
     {

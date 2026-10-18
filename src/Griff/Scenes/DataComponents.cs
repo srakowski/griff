@@ -78,7 +78,7 @@ public sealed class TableValues : Component
 
     /// <summary>
     /// What a line of <see cref="Sets"/> can set on its entity: each property of its other components that takes a value
-    /// from a table (a number, whole number, true or false, name, choice or color), as "Health.Max".
+    /// from a table (a number, whole number, true or false, name, choice, color or list of names), as "Health.Max".
     /// </summary>
     public IReadOnlyList<string> Settable() =>
         Entity is not { } entity ? [] :
@@ -275,7 +275,7 @@ public sealed class TableValues : Component
     /// <summary>
     /// <paramref name="value"/> as a property of <paramref name="type"/> takes it: a number, whole number (rounded) or yes/no
     /// as they are; dice rolled for a number, written out for text; a choice for an enum by its name; text that reads as a
-    /// color ("#FF004D") for a color.
+    /// color ("#FF004D") for a color; for a list, the text split on commas and line breaks, trimmed, with empty pieces dropped.
     /// </summary>
     public static object? Convert(TableValue value, Type type)
     {
@@ -285,6 +285,8 @@ public sealed class TableValues : Component
             return type == typeof(float) ? (object)(float)rolled : type == typeof(double) ? (object)(double)rolled : rolled;
         }
 
+        if (type == typeof(IReadOnlyList<string>))
+            return value.ToString().Split([',', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (type == typeof(Color))
             return Color.TryParse(value.ToString(), out var color) ? color : throw new FormatException($"\"{value}\" isn't a color, like #FF004D");
         if (type.IsEnum && value.Kind == TableValueKind.WholeNumber)

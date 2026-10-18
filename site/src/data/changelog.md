@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+- A Table Values line can set a list of names: a property that is an `IReadOnlyList<string>` (a script's `Priorities`, a Game Speed's `Speeds`) takes a text cell split on commas and line breaks, each name trimmed and empty ones dropped, and the Inspector marks it as set from the table like any other field. The data tables guide and its demo say so.
+
 ## 0.1.0-alpha.15 - 2026-10-17
 
 - A value saved under a name starting `settings.` (a Toggle's or Slider's **Save As** `settings.difficulty`, a Toggles List's `settings.fire.{row}`) is the player's setting: a **New Game** keeps it, as it keeps volumes and controls.

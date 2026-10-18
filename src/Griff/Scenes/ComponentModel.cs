@@ -180,7 +180,8 @@ public sealed class ComponentModel
 
     /// <summary>
     /// What a table's row (a <see cref="TableValues"/>) and a card's effect may set: its saved properties that take a value
-    /// from a table, a number, whole number, true or false, name, choice or color.
+    /// from a table, a number, whole number, true or false, name, choice or color, or a list of those (a text cell split on
+    /// commas and line breaks).
     /// </summary>
     public IReadOnlyList<PropertyDescriptor> Settable => _settable.Value;
 
@@ -196,7 +197,8 @@ public sealed class ComponentModel
 
     /// <summary>True if a table's cell can set a property of <paramref name="type"/> (see <see cref="Settable"/>).</summary>
     public static bool Takes(Type type) =>
-        type == typeof(float) || type == typeof(double) || type == typeof(int) || type == typeof(bool) || type == typeof(string) || type.IsEnum || type == typeof(Color);
+        type == typeof(float) || type == typeof(double) || type == typeof(int) || type == typeof(bool) || type == typeof(string) || type.IsEnum || type == typeof(Color)
+        || type == typeof(IReadOnlyList<string>);
 
     // The one rule for what's open to set (see DoNotSerializeAttribute.Writable).
     internal static IEnumerable<PropertyInfo> Writable(Type type) => DoNotSerializeAttribute.Writable(type);

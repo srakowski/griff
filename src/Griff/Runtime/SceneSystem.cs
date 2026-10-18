@@ -485,8 +485,9 @@ internal sealed class SceneSystem : GameSystem, ISceneTravel, ICarryStore
         Game.SaveData.Set(Game.SavedScenesKey + slot, scenes.ToJsonString());
     }
 
-    // Puts back what a saved game kept besides its scene, as it's loaded.
-    internal void LoadFlow(string slot, JsonObject? header)
+    // Puts back what a saved game kept besides its scene, as it's loaded: `scenes` is the scenes it remembers, as the save
+    // data keeps them (brought up to date if it was saved by an earlier version of the game).
+    internal void LoadFlow(string slot, JsonObject? header, string? scenes)
     {
         if (header?["carried"] is JsonObject carried)
         {
@@ -502,13 +503,13 @@ internal sealed class SceneSystem : GameSystem, ISceneTravel, ICarryStore
         }
 
         _remembered.Clear();
-        if (Game.SaveData.GetText(Game.SavedScenesKey + slot) is not { } text2)
+        if (scenes is null)
             return;
         try
         {
-            if (JsonNode.Parse(text2) is not JsonObject scenes)
+            if (JsonNode.Parse(scenes) is not JsonObject all)
                 return;
-            foreach (var (name, value) in scenes)
+            foreach (var (name, value) in all)
             {
                 if (value is JsonValue v && v.TryGetValue<string>(out var packed))
                     _remembered[name] = Convert.FromBase64String(packed);

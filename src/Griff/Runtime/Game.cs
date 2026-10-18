@@ -289,6 +289,8 @@ public sealed partial class Game
             return;
         _stopped = true;
 
+        // An Autosave saves the game as it closes, before anything in it is stopped.
+        _saves.AutosaveOnQuit();
         foreach (var behavior in Scene.AllNow<Behavior>())
             behavior.RunDestroy();
         _network.Leave("The game closed.");

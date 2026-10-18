@@ -70,9 +70,42 @@ A **Backlog** keeps the lines said so far, each with who said it (a narrator's a
 
 ## Saving and loading
 
-A game is saved in a slot of its own name ("1", "2"... "Quick" for quick saves) with everything a rewind keeps: the scene as it is, so the stage (the background, who's on, where and how they look), where the talk has got to and the log come back exactly, and the flags set then, which loading puts back as they were (clearing those set since). The panels open over the game (the save screen it's saved from) are closed in it. A screenshot of the game without them is taken as it's next drawn, and kept with it, with when it was saved and the line being said. Saved games are kept in the save data, so they're there the next time the game runs, on the desktop and in a browser alike.
+A game is saved in a slot of its own name ("1", "2"... "Quick" for quick saves) with the scene as it is (every component's properties, a script's public ones too, as a scene file keeps them), so the stage (the background, who's on, where and how they look), where the talk has got to and the log come back exactly, and the flags set then, which loading puts back as they were (clearing those set since). The panels open over the game (the save screen it's saved from) are closed in it. A screenshot of the game without them is taken as it's next drawn, and kept with it, with when it was saved and the line being said. Saved games are kept in the save data, so they're there the next time the game runs, on the desktop and in a browser alike.
 
-A **Save Slot** shows a slot on a save or load screen: its screenshot, and what its **Format** says (`{date}  {time}` and `{line}` to begin with; `{slot}` and `{scene}` too), or its **Empty Text**. Put it on a **Button** whose **Action** is **Save Game**, **Load Game** or **Delete Save**: such a button with no **Slot** of its own uses the save slot it's on or inside, so a delete X inside a card deletes the card's. **Quick Save** and **Quick Load** buttons use the Quick slot, and a **Continue** button (a title screen's) loads the game saved last, in any slot. Load Game, Delete Save, Quick Load and Continue buttons are faded while there's nothing to load; a Load Game, Quick Load or Continue button's **Fade** fades out and back in around it. Scripts call `Game.SaveGame(slot)`, `LoadGame(slot)`, `DeleteSave(slot)`, `QuickSave()`, `QuickLoad()` and `ContinueGame()`, and read `SavedGames`, `SavedGameIn(slot)` and `LatestSave` (each with its `Saved` time, `SceneName`, `Line` and `Describe(format)`), with `GameSaved` and `GameLoaded` events. A network game can't be saved or loaded: it isn't one machine's alone.
+A **Save Slot** shows a slot on a save or load screen: its screenshot, and what its **Format** says (`{date}  {time}` and `{line}` to begin with; `{slot}` and `{scene}` too), or its **Empty Text**. Put it on a **Button** whose **Action** is **Save Game**, **Load Game** or **Delete Save**: such a button with no **Slot** of its own uses the save slot it's on or inside, so a delete X inside a card deletes the card's. **Quick Save** and **Quick Load** buttons use the Quick slot, and a **Continue** button (a title screen's) loads the game saved last, in any slot. Load Game, Delete Save, Quick Load and Continue buttons are faded while there's nothing to load; a Load Game, Quick Load or Continue button's **Fade** fades out and back in around it. Scripts call `Game.SaveGame(slot)`, `LoadGame(slot)`, `DeleteSave(slot)`, `QuickSave()`, `QuickLoad()` and `ContinueGame()`, and read `SavedGames`, `SavedGameIn(slot)` and `LatestSave` (each with its `Saved` time, `SceneName`, `Line`, `Version` and `Describe(format)`), with `GameSaved` and `GameLoaded` events. A network game can't be saved or loaded: it isn't one machine's alone.
+
+### Saves that outlast updates
+
+A saved game is read back by name: its entities, their components by type and their values by property. So the next version of the game loads it even though its scripts changed: a property added keeps its default, one removed is ignored, one that's now another kind (a name become a number) keeps its default, and a script class renamed with `[FormerName("Belt")]` on it carries on as itself. A component whose type is gone altogether is kept as it was saved, and the game's problems say so (`Loading the game saved in "1": "Rig" uses unknown component "Drill"`); nothing breaks. A component's own `[ComponentVersion]` and `[UpgradeFrom]` steps bring its older values up to date as they do in a scene file.
+
+For bigger changes, give the game's saves a version: **Game → Save Version** sets it for the project (0 to begin with), and each saved game keeps the one it was saved by (`SavedGame.Version`; `Game.SaveVersion` is the game's now). Raise it with an update that needs older saves changed, and add a system that changes them: every `GameSystem` that is an `ISaveUpgrader` is handed each saved game of a lower version as it's loaded, before it's read, with the version it was saved by, the version now, its scene and the scenes it remembers as JSON, and its flags.
+
+```csharp
+public class SaveUpgrades : GameSystem, ISaveUpgrader
+{
+    public void UpgradeSave(SaveUpgrade save)
+    {
+        if (save.Version < 2)
+            save.RenameComponent("Drill", "Borer");
+        if (save.Version < 3)
+        {
+            foreach (var belt in save.Components("Belt"))
+                belt.Rename("Speed", "ItemsPerSecond");
+            save.RenameEntity("Old Mine", "Mine");
+            if (save.Flags.Remove("MetMiner"))
+                save.Flags.Add("MetDigger");
+        }
+    }
+}
+
+// In the title screen's script (or wherever games are loaded): Game.AddSystem(new SaveUpgrades());
+```
+
+`Components(type)` gives each saved component of a type to read and change (`Get`, `Set`, `Rename`, `Remove`), and `RemoveComponent`, `Scene` and `RememberedScenes` cover the rest. If an upgrader throws, the save is loaded as it was saved and the problems say why. A save from a later version of the game loads as it is, saying so. One that's damaged, or saved by a newer Griff, isn't loaded: the problems say which (`The game saved in "1" can't be loaded: it's damaged`), and the game goes on.
+
+### Autosave
+
+An **Autosave** (Add Component → Level) saves the game by itself in its own slot, **Auto**, while its scene is played: as the scene starts (a checkpoint as the player arrives; not as a saved game is loaded), every **Every Minutes** of play (5; game time, so not while paused; 0 for none) and, with **On Quit**, as the game closes (or Play stops in the editor). Its **Slot** can be another, and its **Setting** names a true-or-false in the save data that turns it off while false: a Toggle on the options screen whose **Save As** is `settings.autosave` is the player's switch. One anywhere in a scene is enough: put it in the scenes that are played (a prefab does) and not on the title screen, so a **Continue** button, which loads the game saved last, picks up the autosave.
 
 ## The reading menus
 

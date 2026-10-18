@@ -103,6 +103,8 @@ public sealed partial class FieldEditorAuditTests
         Shooter.Sound: Sound
         Shooter.Action: Names:Action
         Shooter.Clock: Entity
+        Autosave.Slot: Names:Kind
+        Autosave.Setting: Names:Saved
         Bouncer.Direction: Direction
         Bouncer.Layers: Names:Layer*
         Bouncer.Sound: Sound

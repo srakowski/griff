@@ -1,0 +1,32 @@
+title: Autosave and lasting saves
+intro: An Autosave saves the game by itself, a Continue button picks it up, and saved games load in the next version of the game.
+
+project: Empty | Autosave
+
+chapter: Saving by itself | Autosave
+create: Empty
+rename: Autosave
+add: Autosave
+explain: field:Autosave.OnArrive | On Arrive | An Autosave saves the game in its own slot as its scene starts: a checkpoint as the player arrives, though not as a saved game is loaded.
+set: Autosave.EveryMinutes = 1
+explain: field:Autosave.EveryMinutes | Every Minutes | Then every so many minutes of play. They're game time, so they don't pass while the game is paused.
+explain: field:Autosave.OnQuit | On Quit | And as the game closes, or as Play stops here.
+explain: field:Autosave.Setting | Setting | Setting names a switch in the save data, a toggle on the options screen, that turns it off for players who'd rather it didn't.
+say: Put one in each scene that's played, and none on the title screen.
+
+chapter: The Auto slot | Continue picks it up
+create: Empty
+rename: Auto Slot
+add: SaveSlot
+set: SaveSlot.Slot = Auto
+explain: field:SaveSlot.Slot | Slot | A Save Slot shows what's saved in the Auto slot.
+play
+wait: 2
+say: As the scene started it saved, so the slot shows the game's picture and the time. A Continue button loads the game saved last, so it picks the autosave up.
+stop
+
+chapter: Saves that outlast updates | Save Version
+say: Saved games are read back by name: entities, their components and their properties. So the next version of the game loads them even though its scripts changed. A property added keeps its default, one removed is ignored, and a component that's gone is kept as saved, with a warning.
+menu: Game > Save Version
+prompt: 2
+say: For bigger changes, Save Version numbers the game's saves. Each saved game keeps the version it was saved by, and a system of the game's own, a Save Upgrader, brings older ones up to date as they load.

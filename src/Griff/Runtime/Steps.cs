@@ -233,6 +233,9 @@ public static class Steps
     /// <summary>The "Wall Rooms" step of the Resolve phase.</summary>
     public static readonly StepId WallRooms = new(FramePhase.Resolve, "Wall Rooms");
 
+    /// <summary>The "Autosaves" step of the Resolve phase.</summary>
+    public static readonly StepId Autosaves = new(FramePhase.Resolve, "Autosaves");
+
     /// <summary>The "Scene Change" step of the Resolve phase.</summary>
     public static readonly StepId SceneChange = new(FramePhase.Resolve, "Scene Change");
 

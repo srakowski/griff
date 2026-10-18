@@ -181,7 +181,7 @@ public static class GameLoader
 {
     /// <summary>
     /// Sets <paramref name="game"/> up as <paramref name="project"/> says, before it starts: its controls (the game's own
-    /// input actions), its step rate, its tables (every <c>.table</c> file in Assets, see <see cref="Game.Tables"/>) and its
+    /// input actions), its step rate, its save version, its tables (every <c>.table</c> file in Assets, see <see cref="Game.Tables"/>) and its
     /// balance simulations (every <c>.sim</c> file, see <c>Game.Simulate</c>).
     /// Every host does this, so a game plays the same in the editor, exported and in a browser.
     /// </summary>
@@ -192,6 +192,7 @@ public static class GameLoader
     {
         game.HostInput.UseControls(project.Controls);
         game.Time.StepRate = project.StepRate;
+        game.SaveVersion = project.SaveVersion;
         // Opt-in: otherwise every game starts from the numbers its thread had (see Game.Random), the same each time.
         if (project.NewRandomEachGame)
             game.Random.Reseed(System.Random.Shared.Next());

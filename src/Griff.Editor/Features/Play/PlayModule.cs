@@ -33,7 +33,8 @@ public sealed class PlayModule : IEditorModule
             .AddCommand<PlayWithFourCommand>()
             .AddCommand<SlowConnectionCommand>()
             .AddCommand<StepRateCommand>()
-            .AddCommand<NewRandomEachGameCommand>();
+            .AddCommand<NewRandomEachGameCommand>()
+            .AddCommand<SaveVersionCommand>();
     }
 }
 

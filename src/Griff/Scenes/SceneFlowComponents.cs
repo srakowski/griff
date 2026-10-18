@@ -262,6 +262,67 @@ public sealed class RememberScene : Component
 }
 
 /// <summary>
+/// Saves the game by itself while its scene is played, in a slot of its own ("Auto") that a Continue button loads like
+/// any other saved game, it being the latest: as the scene starts (a checkpoint as the player arrives), every few
+/// minutes of play, and as the game is closed. One anywhere in the scene is enough; put one in each scene that's played
+/// (a prefab does), and none on the title screen or in menus, so Continue never goes back to them.
+/// </summary>
+/// <remarks>
+/// It saves as <c>Game.SaveGame</c> does, so the game saved is the same, and loading it doesn't save it again as it starts.
+/// Minutes are of game time, so they don't pass while the game is paused. Not in a network game.
+/// </remarks>
+[Category("Level")]
+[ComponentName("Griff.Autosave")]
+public sealed class Autosave : Component
+{
+    // Whether it has seen its scene start, and the game time played since it last saved.
+    private bool _arrived;
+    private float _played;
+
+    /// <summary>Minutes of play between saves (game time: not while paused). 0 saves only as the scene starts and as the game closes.</summary>
+    public float EveryMinutes { get; set; } = 5;
+
+    /// <summary>Saves as its scene starts, once its scripts have: a checkpoint as the player arrives (not when a saved game is loaded).</summary>
+    public bool OnArrive { get; set; } = true;
+
+    /// <summary>Saves as the game is closed (or, in the editor, as Play is stopped).</summary>
+    public bool OnQuit { get; set; } = true;
+
+    /// <summary>The slot it saves in: "Auto" unless you name another.</summary>
+    [Names(NameKind.Kind, Scope = "Save Slot", Defines = true, From = "the save slots and buttons")]
+    public string? Slot { get; set; } = "Auto";
+
+    /// <summary>
+    /// A name in <c>Game.SaveData</c> that turns it off while it's false: the player's own switch, a Toggle with this Save As
+    /// on the options screen ("settings.autosave", kept by New Game). Empty is always on.
+    /// </summary>
+    [Names(NameKind.Saved)]
+    public string? Setting { get; set; }
+
+    /// <summary>
+    /// Takes a step of <paramref name="delta"/> seconds of game time; true when it's time to save: its first step, if it
+    /// saves on arriving, and each time <see cref="EveryMinutes"/> have been played since it last did.
+    /// </summary>
+    internal bool Tick(float delta)
+    {
+        if (!_arrived)
+        {
+            _arrived = true;
+            return OnArrive;
+        }
+
+        _played += delta;
+        if (EveryMinutes <= 0 || _played < EveryMinutes * 60)
+            return false;
+        _played = 0;
+        return true;
+    }
+
+    /// <summary>Its scene has started without it saving: a saved game was loaded into it.</summary>
+    internal void Arrive() => _arrived = true;
+}
+
+/// <summary>
 /// A component that carries a value between scenes and runs through the save data under its <see cref="SaveAs"/> (an
 /// inventory's items, a health's hit points, a counter's count): it starts with what's saved there, once, and saves what it
 /// has whenever that changes.

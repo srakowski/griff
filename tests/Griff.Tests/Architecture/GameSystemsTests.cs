@@ -36,7 +36,7 @@ public sealed class GameSystemsTests
         { "Dialogues", "Levels" }, { "Switches", "Switches" }, { "Bouncers", "Movement" }, { "Crumbles", "Movement" },
         { "TouchDamage", "Combat" }, { "Health", "Combat" }, { "Respawns", "Levels" }, { "Bars", "HUD" }, { "Charts", "HUD" }, { "Stars", "HUD" },
         { "Counters", "HUD" }, { "Tooltips", "HUD" }, { "TextOutputs", "HUD" }, { "Fade", "Scenes" }, { "ScreenFlash", "Effects" },
-        { "Destroys", "Lifetimes" }, { "WallRooms", "Tilemaps" }, { "SceneChange", "Scenes" }, { "Rooms", "Atmosphere" }, { "CameraControls", "Views" }, { "Followers", "Effects" },
+        { "Destroys", "Lifetimes" }, { "WallRooms", "Tilemaps" }, { "Autosaves", "Saves" }, { "SceneChange", "Scenes" }, { "Rooms", "Atmosphere" }, { "CameraControls", "Views" }, { "Followers", "Effects" },
         { "LateScripts", "Scripts" }, { "Layouts", "HUD" }, { "ScreenAnchors", "HUD" }, { "EdgePointers", "HUD" }, { "Trails", "Effects" }, { "Lights", "Atmosphere" },
         { "Weather", "Weather" }, { "PresentPrompts", "Panels" }, { "SoundSources", "Atmosphere" },
         { "SoundPlayers", "Atmosphere" }, { "PatrolWalks", "Levels" }, { "Audio", "Atmosphere" }, { "Settings", "Settings" },

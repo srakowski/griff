@@ -109,6 +109,20 @@ public sealed class Project
         JsonSerializer.Serialize(stream, Manifest, JsonOptions);
     }
 
+    /// <summary>
+    /// The version of the game's saved games (<c>Game.SaveVersion</c>), set in the editor with Game &gt; Save Version: each saved
+    /// game keeps the version it was saved by, so a later version of the game knows to bring it up to date. 0 unless it's set.
+    /// </summary>
+    public int SaveVersion => Math.Max(0, Manifest.SaveVersion ?? 0);
+
+    /// <summary>Sets <see cref="SaveVersion"/> (0 or more) and saves the manifest straight away. 0 isn't written.</summary>
+    public void SetSaveVersion(int version)
+    {
+        Manifest = Manifest with { SaveVersion = version > 0 ? version : null };
+        using var stream = File.Create(ManifestPath);
+        JsonSerializer.Serialize(stream, Manifest, JsonOptions);
+    }
+
     // While it's being written, the file isn't read back (see ReloadManifest): it says neither what it did nor what it will.
     private int _saving;
 

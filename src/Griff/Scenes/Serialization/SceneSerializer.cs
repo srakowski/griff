@@ -456,6 +456,11 @@ public sealed class SceneSerializer(ComponentRegistry registry)
             {
                 context.Warn($"{label}.{property.Name}: {ex.Message} Kept the default.", entityName, descriptor.Type.Name);
             }
+            catch (System.Reflection.TargetInvocationException ex) when (ex.InnerException is { } refused)
+            {
+                // Its setter wouldn't take the value (a script's own check, say, after its rules changed).
+                context.Warn($"{label}.{property.Name}: {refused.Message} Kept the default.", entityName, descriptor.Type.Name);
+            }
         }
 
         var kept = data.EnumerateObject().Where(p => !used.Contains(p.Name)).Select(p => KeyValuePair.Create(p.Name, p.Value.Clone())).ToList();

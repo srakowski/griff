@@ -18,6 +18,12 @@ public sealed record SavedGame(string Slot, DateTimeOffset Saved, string? SceneN
     public float PictureAspect { get; init; }
 
     /// <summary>
+    /// The game's <see cref="Game.SaveVersion"/> when it was saved: 0 for one saved before the game had one. Loading one
+    /// lower than the game's now brings it up to date first (see <see cref="ISaveUpgrader"/>).
+    /// </summary>
+    public int Version { get; init; }
+
+    /// <summary>
     /// <paramref name="format"/> filled in: "{slot}" is the slot's name, "{date}" the day it was saved ("15 Oct 2026"),
     /// "{time}" the time ("14:03"), "{scene}" the scene's name and "{line}" the line being said (or the scene's name when
     /// nobody was talking).
@@ -26,11 +32,34 @@ public sealed record SavedGame(string Slot, DateTimeOffset Saved, string? SceneN
 }
 
 // Saved games: the scene as it is (the stage, where a talk has got to, everything), the flags and a screenshot, kept in a
-// slot of the save data, to load again later exactly as it was.
+// slot of the save data, to load again later exactly as it was, by a later version of the game too.
 public sealed partial class Game
 {
     /// <summary>The slot <see cref="QuickSave"/> and <see cref="QuickLoad"/> use.</summary>
     public const string QuickSlot = "Quick";
+
+    /// <summary>The slot an <see cref="Autosave"/> saves in unless it says otherwise.</summary>
+    public const string AutoSlot = "Auto";
+
+    /// <summary>
+    /// The way Griff writes saved games (2: each says the version of the game it was saved by). A game saved by a newer Griff,
+    /// in a later way, isn't loaded: it says so instead.
+    /// </summary>
+    public const int SaveFormat = 2;
+
+    /// <summary>
+    /// The version of the game's saves: the project's Save Version (Game &gt; Save Version in the editor), 0 unless it's set.
+    /// Each saved game keeps the version it was saved by (<see cref="SavedGame.Version"/>). Raise it when a new version of
+    /// the game changes its scripts or scenes so an older save needs bringing up to date, and add an
+    /// <see cref="ISaveUpgrader"/> that does it. A saved game is read back by name whatever its version (entities, their
+    /// components by type and their properties), so a property added keeps its default, one removed is ignored and a
+    /// component whose type is gone is kept as saved, with a warning.
+    /// </summary>
+    public int SaveVersion
+    {
+        get => _saves.Version;
+        set => _saves.Version = value;
+    }
 
     /// <summary>
     /// Where each saved game is kept in <see cref="SaveData"/>: this, then the slot's name ("griff.save.1"), holds when it was
@@ -96,8 +125,8 @@ public sealed partial class Game
 
     /// <summary>
     /// Saves the game in <paramref name="slot"/> (a name of your own: "1", "Quick", "Chapter 2"), replacing what was
-    /// there: the scene as it is now (the stage, where a talk has got to, everything a rewind keeps), with the panels open
-    /// over it closed, and the flags set now. Loading it (<see cref="LoadGame"/>) puts all of it back. Kept in
+    /// there: the scene as it is now (the stage, where a talk has got to, every component's properties, scripts' too, as a
+    /// scene file keeps them), with the panels open over it closed, and the flags set now. Loading it (<see cref="LoadGame"/>) puts all of it back. Kept in
     /// <see cref="SaveData"/>, so it's there next time (in a browser, in its storage), with a screenshot taken as the game
     /// is next drawn. Not in a network game, which isn't this machine's alone. True if it was saved.
     /// </summary>
@@ -107,8 +136,9 @@ public sealed partial class Game
     /// <summary>
     /// Loads the game saved in <paramref name="slot"/> at the end of this frame (after fading out over
     /// <paramref name="fade"/> seconds, if more than 0, and back in as long): its scene as it was saved, the stage, the talk
-    /// going on from the line it was on, and the flags as they were. Nothing happens if the slot is empty. Not in a network
-    /// game. True if it's on its way.
+    /// going on from the line it was on, and the flags as they were. One saved by an earlier <see cref="SaveVersion"/> is
+    /// brought up to date first (see <see cref="ISaveUpgrader"/>). Nothing happens if the slot is empty, and a damaged save
+    /// or one from a newer Griff says why in the game's problems instead. Not in a network game. True if it's on its way.
     /// </summary>
     public bool LoadGame(string slot, float fade = 0) =>
         _saves.LoadGame(slot, fade);

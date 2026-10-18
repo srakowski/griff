@@ -16,6 +16,10 @@ namespace Griff.Projects;
 /// Whether each new game's random numbers (<see cref="Rand"/>) start from a seed taken from the clock, set with Game &gt; New
 /// Random Numbers Each Game; null for the usual, where every game played by one running editor or player starts from the same.
 /// </param>
+/// <param name="SaveVersion">
+/// The version of the game's saved games (see <see cref="Runtime.Game.SaveVersion"/>), set with Game &gt; Save Version;
+/// null for 0, as a game starts.
+/// </param>
 public sealed record ProjectManifest(
     string Name,
     int FormatVersion,
@@ -23,7 +27,8 @@ public sealed record ProjectManifest(
     string? StartScene = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, string[]>? Controls = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? StepRate = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? NewRandomEachGame = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? NewRandomEachGame = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? SaveVersion = null)
 {
     public const int CurrentFormatVersion = 1;
 }

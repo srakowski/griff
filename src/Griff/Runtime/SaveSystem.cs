@@ -25,9 +25,14 @@ internal sealed class SaveSystem : GameSystem
     // A saved game waiting to be switched to at the end of the frame (after a fade, if any).
     private PendingLoad? _pendingLoad;
 
-    // A saved game read back, waiting to be switched to. Never changed once made, so a snapshot keeps the same one.
+    // A saved game read back, waiting to be switched to, with the scenes it remembers (as the save data keeps them). Never
+    // changed once made, so a snapshot keeps the same one.
     [NotState("read back from a save, and never changed")]
-    private sealed record PendingLoad(Scene Scene, string? Name, IReadOnlyList<string> Flags, string Slot, JsonObject? Header);
+    private sealed record PendingLoad(Scene Scene, string? Name, IReadOnlyList<string> Flags, string Slot, JsonObject? Header, string? Scenes);
+
+    // The game's own version of its saves (see Game.SaveVersion).
+    [NotState("the game's, set as it starts")]
+    private int _version;
 
     // The saved games as last read, by slot, with their screenshots' text (to notice one change), and the save data and
     // version they were read from.
@@ -65,6 +70,12 @@ internal sealed class SaveSystem : GameSystem
 
     [field: NotState("the host's")]
     internal event Action<string>? GameLoaded;
+
+    public int Version
+    {
+        get => _version;
+        set => _version = Math.Max(0, value);
+    }
 
     public IReadOnlyList<SavedGame> SavedGames
     {
@@ -113,6 +124,8 @@ internal sealed class SaveSystem : GameSystem
         var scene = ClosingPanels(serializer, serializer.SaveToString(Game.Scene));
         var header = new JsonObject
         {
+            ["format"] = Game.SaveFormat,
+            ["version"] = _version,
             ["scene"] = Game.SceneName,
             ["saved"] = Clock().ToString("O", CultureInfo.InvariantCulture),
             ["line"] = TalkingLine(),
@@ -131,25 +144,10 @@ internal sealed class SaveSystem : GameSystem
         ArgumentException.ThrowIfNullOrWhiteSpace(slot);
         Crowds.ThrowIfRunning("load games");
         slot = slot.Trim();
-        if (!CanSave() || Game.SaveData.GetText(Game.SavedGameKey + slot) is not { } text || Game.SaveData.GetText(Game.SavedSceneKey + slot) is not { } packed)
+        if (!CanSave() || Game.SaveData.GetText(Game.SavedGameKey + slot) is not { } text || Game.SaveData.GetText(Game.SavedSceneKey + slot) is not { } packed ||
+            Read(slot, text, packed) is not { } load)
             return false;
 
-        Scene scene;
-        var warnings = new ProblemLog();
-        try
-        {
-            scene = new SceneSerializer(Game.Components ?? ComponentRegistry.CreateDefault()).LoadFromString(Unpack(packed), warnings);
-        }
-        catch (Exception ex) when (ex is FormatException or InvalidDataException or System.Text.Json.JsonException or InvalidOperationException)
-        {
-            Game.Warn($"The game saved in \"{slot}\" can't be loaded: {ex.Message}");
-            return false;
-        }
-
-        foreach (var problem in warnings.Problems)
-            Game.Problems.Report(problem with { Message = $"Loading the game saved in \"{slot}\": {problem.Message}" });
-        var header = ParseHeader(text);
-        var load = new PendingLoad(scene, header?["scene"]?.GetValue<string>() ?? Game.SceneName, FlagsIn(header), slot, header);
         if (fade > 0)
         {
             Game.FadeThrough(fade, () => _pendingLoad = load);
@@ -162,6 +160,129 @@ internal sealed class SaveSystem : GameSystem
 
         return true;
     }
+
+    // The game saved in `slot` read back by name (entities, components, properties), brought up to this version of the game,
+    // or null, said why, when it can't be: damaged, or saved by a newer Griff. A save of another version of the game loads.
+    private PendingLoad? Read(string slot, string text, string packed)
+    {
+        if (ParseHeader(text) is not { } header)
+        {
+            Game.Warn($"The game saved in \"{slot}\" can't be loaded: it's damaged (what it says about itself can't be read).");
+            return null;
+        }
+
+        if (NumberIn(header, "format") is > Game.SaveFormat and var format)
+        {
+            Game.Warn($"The game saved in \"{slot}\" can't be loaded: it was saved by a newer version of Griff (save format {format}; this one reads up to {Game.SaveFormat}).");
+            return null;
+        }
+
+        var version = NumberIn(header, "version") ?? 0;
+        if (version > _version)
+            Game.Warn($"The game saved in \"{slot}\" was saved by a later version of the game (save version {version}; this is {_version}): it's loaded as it is.");
+
+        string json;
+        try
+        {
+            json = Unpack(packed);
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidDataException)
+        {
+            Game.Warn($"The game saved in \"{slot}\" can't be loaded: it's damaged (its scene can't be read).");
+            return null;
+        }
+
+        var flags = FlagsIn(header);
+        var scenes = Game.SaveData.GetText(Game.SavedScenesKey + slot);
+        if (version < _version)
+            (json, scenes) = Upgrade(slot, version, json, scenes, flags);
+
+        Scene scene;
+        var warnings = new ProblemLog();
+        try
+        {
+            scene = new SceneSerializer(Game.Components ?? ComponentRegistry.CreateDefault()).LoadFromString(json, warnings);
+        }
+        catch (Exception ex)
+        {
+            Game.Warn($"The game saved in \"{slot}\" can't be loaded: {ex.Message}");
+            return null;
+        }
+
+        foreach (var problem in warnings.Problems)
+            Game.Problems.Report(problem with { Message = $"Loading the game saved in \"{slot}\": {problem.Message}" });
+        return new PendingLoad(scene, TextIn(header, "scene") ?? Game.SceneName, flags, slot, header, scenes);
+    }
+
+    // The scene and the scenes it remembers, as each system that upgrades saves (ISaveUpgrader) changes them. If one fails,
+    // they're read as saved.
+    private (string Json, string? Scenes) Upgrade(string slot, int version, string json, string? scenes, List<string> flags)
+    {
+        var upgraders = Game.Systems.OfType<ISaveUpgrader>().ToList();
+        if (upgraders.Count == 0)
+            return (json, scenes);
+        var kept = flags.ToList();
+        try
+        {
+            var scene = JsonNode.Parse(json) as JsonObject ?? throw new InvalidDataException("Its scene isn't a scene.");
+            var remembered = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
+            if (scenes is not null && JsonNode.Parse(scenes) is JsonObject all)
+            {
+                foreach (var (name, value) in all)
+                {
+                    if (value is JsonValue v && v.TryGetValue<string>(out var squeezed) && JsonNode.Parse(Unpack(squeezed)) is JsonObject one)
+                        remembered[name] = one;
+                }
+            }
+
+            var upgrade = new SaveUpgrade(slot, version, _version, scene, remembered, flags);
+            foreach (var upgrader in upgraders)
+                upgrader.UpgradeSave(upgrade);
+            if (remembered.Count == 0)
+                return (scene.ToJsonString(), scenes);
+            var packed = new JsonObject();
+            foreach (var (name, one) in remembered)
+                packed[name] = Pack(one.ToJsonString());
+            return (scene.ToJsonString(), packed.ToJsonString());
+        }
+        catch (Exception ex)
+        {
+            Game.Warn($"The game saved in \"{slot}\" couldn't be brought up from save version {version}, so it's loaded as it was saved: {ex.Message}");
+            flags.Clear();
+            flags.AddRange(kept);
+            return (json, scenes);
+        }
+    }
+
+    // Each Autosave in the scene saves its slot as the scene starts and every so many minutes of play after (game time, so
+    // not while paused), unless its setting is off. Not in a network game, nor while the scene is on its way out.
+    internal void RunAutosaves()
+    {
+        if (Game.Network.IsOnline || _pendingLoad is not null || Game.IsChangingScene)
+            return;
+        foreach (var autosave in Game.Scene.ActiveNow<Autosave>())
+        {
+            var due = autosave.Tick(Time.Delta);
+            if (due && IsOn(autosave) && !string.IsNullOrWhiteSpace(autosave.Slot))
+                SaveGame(autosave.Slot);
+        }
+    }
+
+    // As the game closes, each Autosave set to saves its slot.
+    internal void AutosaveOnQuit()
+    {
+        if (Game.Network.IsOnline)
+            return;
+        foreach (var autosave in Game.Scene.ActiveNow<Autosave>())
+        {
+            if (autosave.OnQuit && IsOn(autosave) && !string.IsNullOrWhiteSpace(autosave.Slot))
+                SaveGame(autosave.Slot);
+        }
+    }
+
+    // Its setting (the player's switch) isn't false.
+    private bool IsOn(Autosave autosave) =>
+        string.IsNullOrWhiteSpace(autosave.Setting) || Game.SaveData.GetBool(autosave.Setting.Trim(), true);
 
     public bool DeleteSave(string slot)
     {
@@ -214,14 +335,15 @@ internal sealed class SaveSystem : GameSystem
                 continue;
             var slot = key[Game.SavedGameKey.Length..];
             seen.Add(slot);
-            var picture = header["picture"]?.GetValue<string>();
+            var picture = TextIn(header, "picture");
             var name = $"{GamePictures.Mark}save/{slot}";
-            var saved = DateTimeOffset.TryParse(header["saved"]?.GetValue<string>(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var when)
+            var saved = DateTimeOffset.TryParse(TextIn(header, "saved"), CultureInfo.InvariantCulture, DateTimeStyles.None, out var when)
                 ? when
                 : DateTimeOffset.MinValue;
-            var game = new SavedGame(slot, saved, header["scene"]?.GetValue<string>(), header["line"]?.GetValue<string>() ?? "")
+            var game = new SavedGame(slot, saved, TextIn(header, "scene"), TextIn(header, "line") ?? "")
             {
                 Picture = picture is null ? null : name,
+                Version = NumberIn(header, "version") ?? 0,
             };
             var bytes = _slots.TryGetValue(slot, out var before) && before.Picture == picture ? Pictures.Get(name).Png : Picture(picture);
             if (before.Picture != picture)
@@ -291,8 +413,15 @@ internal sealed class SaveSystem : GameSystem
         }
     }
 
-    private static List<string> FlagsIn(JsonObject? header) =>
-        header?["flags"] is JsonArray flags ? [.. flags.Select(f => f?.GetValue<string>()).OfType<string>()] : [];
+    private static List<string> FlagsIn(JsonObject header) =>
+        header["flags"] is JsonArray flags ? [.. flags.Select(f => f is JsonValue v && v.TryGetValue<string>(out var flag) ? flag : null).OfType<string>()] : [];
+
+    // A header's text or whole number, or null when it has none (or something else there, in a damaged one).
+    private static string? TextIn(JsonObject header, string key) =>
+        header[key] is JsonValue v && v.TryGetValue<string>(out var text) ? text : null;
+
+    private static int? NumberIn(JsonObject header, string key) =>
+        header[key] is JsonValue v && v.TryGetValue<int>(out var number) ? number : null;
 
     // The flags a saved game had set, set again, and every other flag the game knows of cleared.
     private void PutFlagsBack(IReadOnlyList<string> flags)
@@ -325,7 +454,10 @@ internal sealed class SaveSystem : GameSystem
         Game.SceneSystem.CancelSceneChange();
         PutFlagsBack(load.Flags);
         Game.SceneSystem.SwitchScene(load.Name ?? Game.SceneName ?? "", load.Scene);
-        Game.SceneSystem.LoadFlow(load.Slot, load.Header);
+        Game.SceneSystem.LoadFlow(load.Slot, load.Header, load.Scenes);
+        // A game just loaded is as saved: its autosaves wait for their time rather than saving it again as it starts.
+        foreach (var autosave in Game.Scene.AllNow<Autosave>())
+            autosave.Arrive();
         GameLoaded?.Invoke(load.Slot);
         return true;
     }

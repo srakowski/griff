@@ -214,6 +214,7 @@ public sealed partial class FieldEditorAuditTests
         ControlsList.Labels: Text
         ControlsList.Template: Entity
         ControlsList.Font: Names:Font
+        EdgePointer.Target: Entity
         Layout.Size: Resizable
         Layout.GrabAction: Names:Action
         Layout.SaveOrderAs: Names:Saved

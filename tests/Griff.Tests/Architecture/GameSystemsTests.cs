@@ -34,7 +34,7 @@ public sealed class GameSystemsTests
         { "Typewriters", "HUD" }, { "PickupSpin", "Items" }, { "FixedScripts", "Scripts" }, { "BodyRoles", "Movement" }, { "Physics", "Physics" },
         { "Carrying", "Dragging" }, { "Pickups", "Items" }, { "Checkpoints", "Levels" }, { "Doors", "Levels" },
         { "Dialogues", "Levels" }, { "Switches", "Switches" }, { "Bouncers", "Movement" }, { "Crumbles", "Movement" },
-        { "TouchDamage", "Combat" }, { "Health", "Combat" }, { "Respawns", "Levels" }, { "Bars", "HUD" }, { "Stars", "HUD" },
+        { "TouchDamage", "Combat" }, { "Health", "Combat" }, { "Respawns", "Levels" }, { "Bars", "HUD" }, { "Charts", "HUD" }, { "Stars", "HUD" },
         { "Counters", "HUD" }, { "Tooltips", "HUD" }, { "TextOutputs", "HUD" }, { "Fade", "Scenes" }, { "ScreenFlash", "Effects" },
         { "Destroys", "Lifetimes" }, { "WallRooms", "Tilemaps" }, { "SceneChange", "Scenes" }, { "Rooms", "Atmosphere" }, { "CameraControls", "Views" }, { "Followers", "Effects" },
         { "LateScripts", "Scripts" }, { "Layouts", "HUD" }, { "ScreenAnchors", "HUD" }, { "Trails", "Effects" }, { "Lights", "Atmosphere" },

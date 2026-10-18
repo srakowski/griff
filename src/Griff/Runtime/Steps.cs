@@ -200,6 +200,9 @@ public static class Steps
     /// <summary>The "Bars" step of the Resolve phase.</summary>
     public static readonly StepId Bars = new(FramePhase.Resolve, "Bars");
 
+    /// <summary>The "Charts" step of the Resolve phase.</summary>
+    public static readonly StepId Charts = new(FramePhase.Resolve, "Charts");
+
     /// <summary>The "Stars" step of the Resolve phase.</summary>
     public static readonly StepId Stars = new(FramePhase.Resolve, "Stars");
 

@@ -1,0 +1,56 @@
+title: Charts in the game
+intro: A Chart draws a line or bar graph for the HUD or the world. It samples an output with no code, or a script feeds it.
+project: Empty | Factory Chart
+write: Scripts/Factory.cs | runtime-chart/Factory.cs
+write: Scripts/Backlog.cs | runtime-chart/Backlog.cs
+
+chapter: A chart that samples an output | Entity > UI > Chart
+create: Empty
+rename: Factory
+add: Factory
+say: This factory is a stand-in script. Its Cards An Hour output rises and falls as the shifts come and go.
+create: Chart
+rename: Throughput
+set: Transform.Position = 0, 0, 0
+look: 0, 0, 3
+explain: scene | A chart | Entity, UI, Chart makes a line graph, sized like a bar, with lines across for the values, their numbers, and a legend.
+editorset: Chart.Series:name:1 = Cards
+editorset: Chart.Series:output:1 = CardsAnHour
+set: Chart.Track = Factory
+expectvalue: Throughput.Chart.Track = Factory
+explain: field:Chart.Series | Series | Each series is a name and a color. Give it an output after the equals sign, and the chart samples it with no code.
+explain: field:Chart.Track | Track | Track names the entity whose outputs it samples.
+set: Chart.SampleEvery = 0.25
+set: Chart.Keep = 40
+expectvalue: Throughput.Chart.Keep = 40
+explain: field:Chart.SampleEvery | Sample Every | It takes a point every quarter of a second of game time, so a sped up game fills it faster, and keeps the last forty, so the line scrolls.
+play
+wait: 6
+say: The line follows the factory. Its range fits the highest point, rounded up to a round number, and the numbers are written short.
+stop
+
+chapter: Fed by a script | chart.Add
+select: Throughput
+add: Backlog
+code: Assets/Scripts/Backlog.cs | Backlog.cs
+say: A script adds points itself, with Add and a series' name. A name no row has gets a series of its own, in the next color.
+click: editor:Chart.XLabels:add
+editorset: Chart.XLabels:item:1 = 10 seconds ago
+click: editor:Chart.XLabels:add
+editorset: Chart.XLabels:item:2 = Now
+explain: field:Chart.XLabels | X Labels | X Labels are words spread along the bottom, from the left end to the right.
+play
+wait: 6
+say: Two series now, each in its own color and named in the legend.
+stop
+
+chapter: Bars | Kind
+set: Chart.Kind = Bars
+set: Chart.Keep = 12
+set: Chart.SampleEvery = 1
+expectvalue: Throughput.Chart.Kind = Bars
+explain: field:Chart.Kind | Kind | Kind Bars draws a bar for each point instead, the series side by side.
+play
+wait: 6
+say: Set Max to fix the range, and Format to write the numbers your way. A rewind puts the points back, and in a network game the host's points are sent to everyone.
+stop

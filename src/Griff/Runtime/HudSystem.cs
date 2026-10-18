@@ -4,7 +4,7 @@ using Griff.Scenes;
 namespace Griff.Runtime;
 
 /// <summary>
-/// Lays out what's on the screen: each system's HUD, bars, stars, counters and text outputs showing what they read,
+/// Lays out what's on the screen: each system's HUD, bars, charts, stars, counters and text outputs showing what they read,
 /// typewriters typing, and what's anchored to the screen.
 /// </summary>
 internal sealed partial class HudSystem : GameSystem
@@ -50,6 +50,13 @@ internal sealed partial class HudSystem : GameSystem
     {
         foreach (var bar in Game.Present<Bar>())
             bar.Advance(Game.Time.Delta, Game.Scene);
+    }
+
+    // Charts take their points in game time (none while it's paused), but go on showing them under a pause.
+    internal void RunCharts()
+    {
+        foreach (var chart in Game.Present<Chart>())
+            chart.Advance(Game.Time.Delta);
     }
 
     // Stars show how a level went on every machine, filling one after another in real time, so they go on under a panel

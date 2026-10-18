@@ -104,6 +104,21 @@ public sealed class BarPreset : EntityPreset
 }
 
 /// <summary>
+/// Creates a chart for a HUD or a panel: a line graph of a series a script feeds, or that samples an output of its Track
+/// entity with no code.
+/// </summary>
+[Category("UI")]
+public sealed class ChartPreset : EntityPreset
+{
+    public override string Id => "Entity.CreateChart";
+    public override string Text => "Create Char_t";
+    public override int Order => 4;
+    public override string? Icon => "Chart";
+    public override string EntityName(Scene scene) => "Chart";
+    public override void Configure(Entity entity, Scene scene) => entity.AddComponent<Chart>();
+}
+
+/// <summary>
 /// Creates a row of three stars, so many filled: how well a level went. Set its Saved to a level's best stars in the save
 /// data (on a level select menu), or its Track and Output to a Level Goal's Stars (on the panel a won level opens).
 /// </summary>

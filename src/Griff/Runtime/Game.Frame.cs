@@ -547,6 +547,7 @@ public sealed partial class Game
         Step(Steps.Health, _combat.RunHealth);
         Step(Steps.Respawns, _levels.RunRespawns);
         Step(Steps.Bars, _hud.RunBars);
+        Step(Steps.Charts, _hud.RunCharts);
         Step(Steps.Stars, _hud.RunStars);
         Step(Steps.Counters, _hud.RunCounters);
         Step(Steps.Tooltips, _hud.RunTooltips);

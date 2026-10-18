@@ -122,18 +122,8 @@ public sealed class TableChart : FrameworkElement
         return (low < 0 ? -Nice(-low) : 0, high > 0 ? Nice(high) : 0);
     }
 
-    // The next round number at or above the value: 1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6 or 8 times a power of ten.
-    private static double Nice(double value)
-    {
-        var power = Math.Pow(10, Math.Floor(Math.Log10(value)));
-        foreach (var step in new[] { 1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10 })
-        {
-            if (step * power >= value * 0.9999)
-                return step * power;
-        }
-
-        return 10 * power;
-    }
+    // The next round number at or above the value, as a game's Chart rounds its range.
+    private static double Nice(double value) => Griff.Scenes.ChartRange.RoundUp(value);
 
     // ----- Drawing
 

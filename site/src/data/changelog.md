@@ -7,6 +7,7 @@
 
 ## Unreleased
 
+- Graphs in the game: **Entity → UI → Chart** draws a line or bar chart of a few series (a name and a color each, the last **Keep** points of each) for the HUD or the world, with value lines and their numbers, a legend and **X Labels** along the bottom. A script feeds it (`chart.Add("Cards", 120)`, `Set`, `Clear`), or with no code a series names an output of its **Track** entity (`Cards: #4C9AFF = Cards Today`) and the chart takes a point of it every **Sample Every** seconds of game time. Its range fits the points to a round number unless **Max** says. Rewinds and network games keep its points.
 - Rooms found from walls: a **Wall Rooms** on a tilemap finds the closed rooms and open areas its walls make (solid tiles, **Wall Tiles** such as doors counted as shut, and colliders on **Wall Layers**), each with an id it keeps as walls change, its cells and area and whether it's open to the outside. It works them out again only when the walls change, raises **Changed** and sends its **Message**, answers which room a cell, point or entity is in and what's in a room, shows `Closed`, `RoomArea:<name>` and `RoomId:<name>` as outputs, and tints each room with **Show**.
 
 ## 0.1.0-alpha.17 - 2026-10-17

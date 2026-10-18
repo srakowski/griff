@@ -184,6 +184,12 @@ public sealed partial class FieldEditorAuditTests
         Button.NeedsSaved: Names:Saved
         Button.ShortcutAction: Names:Action
         Button.Sound: Sound
+        Chart.Series: Rows
+        Chart.Track: Entity
+        Chart.Format: NumberFormat
+        Chart.XLabels: Rows
+        Chart.Size: Resizable
+        Chart.Font: Names:Font
         Choice.Options: NameList
         Choice.Format: Format
         Choice.SaveAs: Names:Saved

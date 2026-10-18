@@ -69,7 +69,7 @@ internal sealed class MenuSystem : GameSystem
     }
 
     // Clicks, hovering, dragging, picking and shortcuts. Runs after Start and before Update, using the mouse as last drawn.
-    // While a panel is open, only the controls on the top one take any notice.
+    // While a panel is open, only the controls on the top one take any notice, and buttons that work over panels.
     private void UpdateControls()
     {
         if (Game.PanelSystem.UpdateRebinding())
@@ -77,6 +77,9 @@ internal sealed class MenuSystem : GameSystem
 
         // A panel left open behind the minigame that has the screen takes no notice.
         var top = Game.TopPanel is { Entity: { } open } panel && !Game.MinigameSystem.IsBehindMinigame(open) ? panel : null;
+        // A press off a pop-up only closes it.
+        if (Game.PanelSystem.ClickAway(top))
+            return;
         var allButtons = OnTop(_menus.AllButtons, Game.Scene.ActiveNow<Button>(), top);
         foreach (var button in allButtons)
         {
@@ -100,7 +103,8 @@ internal sealed class MenuSystem : GameSystem
         controls.Clear();
         foreach (var button in buttons)
         {
-            if (button.Navigable)
+            // One that works over the panel (a menu bar) takes the mouse and its shortcut, but the arrows stay on the panel.
+            if (button.Navigable && (top is null || PanelSystem.Inside(button.Entity!, top)))
                 controls.Add(button);
         }
 
@@ -147,8 +151,17 @@ internal sealed class MenuSystem : GameSystem
         if (Game.Input.Scroll != 0 && buttons.FirstOrDefault(b => b.IsHovered)?.Entity!.GetComponent<Choice>() is { } scrolled)
             SetChoice(scrolled, scrolled.Step(Math.Sign(Game.Input.Scroll)));
 
+        // A key or gamepad button whose click opens or closes a panel is used up, so it doesn't also reach the game.
+        var focused = _focus;
         foreach (var button in clicked)
+        {
+            var (before, count) = (Game.TopPanel, Game.PanelSystem.OpenCount);
             Click(button);
+            Game.PanelSystem.CloseAfterClick(button);
+            if (Game.TopPanel != before || Game.PanelSystem.OpenCount != count)
+                UsePressesOf(button, button == focused);
+        }
+
         foreach (var toggle in toggles)
             LabelToggle(toggle);
         foreach (var choice in choices)
@@ -181,7 +194,7 @@ internal sealed class MenuSystem : GameSystem
         foreach (var control in all)
         {
             // Not those behind the minigame that has the screen.
-            if ((top is null || PanelSystem.Inside(control.Entity!, top)) && !MinigameRoot.IsBehind(control.Entity!, shown))
+            if ((top is null || PanelSystem.Inside(control.Entity!, top) || control is Button { OverPanels: true }) && !MinigameRoot.IsBehind(control.Entity!, shown))
                 into.Add(control);
         }
 
@@ -240,6 +253,25 @@ internal sealed class MenuSystem : GameSystem
         return clicked;
     }
 
+    // The keys and buttons that may have clicked it: its shortcuts, Enter, Space and A if it was picked, Back if it goes back.
+    private void UsePressesOf(Button button, bool picked)
+    {
+        var input = Game.MachineInput;
+        if (button.Shortcut != Key.None)
+            input.Use(button.Shortcut);
+        if (!string.IsNullOrWhiteSpace(button.ShortcutAction))
+            input.Use(button.ShortcutAction.Trim());
+        if (picked)
+        {
+            input.Use(Key.Enter);
+            input.Use(Key.Space);
+            input.Use(GamepadButton.A);
+        }
+
+        if (GoesBack(button))
+            PanelSystem.UseBack(input);
+    }
+
     // Whether an action has Enter, Space or A: what clicks the picked button, so it doesn't fire other buttons' shortcuts.
     private bool Submits(string action)
     {
@@ -277,7 +309,8 @@ internal sealed class MenuSystem : GameSystem
     {
         foreach (var button in buttons)
         {
-            if (GoesBack(button))
+            // Not one that works over panels from outside the one open: B is that panel's way back.
+            if (GoesBack(button) && !(button.OverPanels && Game.TopPanel is { } top && !PanelSystem.Inside(button.Entity!, top)))
                 return button;
         }
 

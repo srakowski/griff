@@ -643,6 +643,36 @@ public sealed class InputState : IHostInput
     private bool WasReleased(InputBinding binding) =>
         binding.Key is { } key ? WasReleased(key) : binding.Mouse is { } mouse ? WasReleased(mouse) : binding.Gamepad is { } pad && WasReleased(pad);
 
+    // A press a menu acted on (a panel's Back or OpenOn, a button's shortcut that opened or closed a panel) is used up: for
+    // the rest of the frame it isn't pressed, so the actions bound to it don't read as pressed (it's still held), it isn't
+    // buffered for later and it isn't sent to a network game's host, until it's pressed again.
+    internal void Use(InputBinding binding)
+    {
+        if (!WasPressed(binding))
+            return;
+        _pressedAt.Remove(binding);
+        if (binding.Key is { } key)
+            _pressed.Remove(key);
+        else if (binding.Mouse is { } mouse)
+            _mousePressed.Remove(mouse);
+        else if (binding.Gamepad is { } button)
+        {
+            _padPressed.Remove(button);
+            foreach (var pad in _pads)
+            {
+                if (pad.Pressed.Remove(button))
+                    pad.PressedAt.Remove(button);
+            }
+        }
+    }
+
+    // Each of the action's keys and buttons pressed this frame, used up.
+    internal void Use(string action)
+    {
+        foreach (var binding in Bindings(action))
+            Use(binding);
+    }
+
     /// <summary>Sets the first controller's state for this frame (called by the platform each tick).</summary>
     public void SetGamepad(IEnumerable<GamepadButton> down, Vector2 leftStick) =>
         SetGamepad(0, down, leftStick, Vector2.Zero);

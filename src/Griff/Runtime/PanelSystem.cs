@@ -212,34 +212,116 @@ internal sealed class PanelSystem : GameSystem, IPanels
 
     // Esc or B closes the top panel (unless it has a button for that), and its OpenOn action toggles it; with no panel
     // open, a panel's OpenOn action opens it. Uses the panel on top at the start of the frame, so the press that opens a
-    // panel doesn't close it again.
+    // panel doesn't close it again. The press that opens or closes one is used up: scripts don't see it this frame.
     internal void UpdatePanelKeys(Panel? top, List<Button> clicked, List<Button> buttons)
     {
+        var input = Game.MachineInput;
         if (top is not null)
         {
             if (top.Entity?.Scene != Game.Scene || TopPanel != top || clicked.Any(Game.MenuSystem.GoesBack))
                 return;
-            var toggled = !string.IsNullOrWhiteSpace(top.OpenOn) && Game.Input.WasPressed(top.OpenOn);
-            var back = top.CloseOnBack && !buttons.Any(Game.MenuSystem.GoesBack) &&
-                       (Game.Input.WasPressed(Key.Escape) || Game.Input.WasPressed(GamepadButton.B));
-            if (toggled || back)
-                ClosePanel(top);
+            var toggled = !string.IsNullOrWhiteSpace(top.OpenOn) && input.WasPressed(top.OpenOn);
+            var back = top.CloseOnBack && !HasBackButton(buttons, top) && BackPressed(input);
+            // A script that claims Back gets it first, behind a panel that lets the game go on.
+            if (!(toggled || back) || (BackPressed(input) && ScriptClaimsBack()))
+                return;
+            ClosePanel(top);
+            if (toggled)
+                input.Use(top.OpenOn!);
+            if (back)
+                UseBack(input);
             return;
         }
 
-        // Back cancels what a system has under way (a building being placed) before it opens a pause menu.
+        // Back cancels what a system or script has under way (a building being placed, a tool in hand) before it opens a
+        // pause menu.
         if (clicked.Count > 0 || TopPanel is not null || SystemClaimsBack())
             return;
         foreach (var panel in Game.Scene.AllNow<Panel>())
         {
             if (string.IsNullOrWhiteSpace(panel.OpenOn) || panel.Entity!.IsEnabled || Game.MinigameSystem.IsBehindMinigame(panel.Entity))
                 continue;
-            if ((panel.Entity.Parent is null || panel.Entity.Parent.IsActive) && Game.Input.WasPressed(panel.OpenOn) && Game.FlagHolds(panel.NeedsFlag))
+            if ((panel.Entity.Parent is null || panel.Entity.Parent.IsActive) && input.WasPressed(panel.OpenOn) && Game.FlagHolds(panel.NeedsFlag))
             {
+                if (BackPressed(input) && ScriptClaimsBack())
+                    return;
                 OpenPanel(panel);
+                input.Use(panel.OpenOn);
                 return;
             }
         }
+    }
+
+    // Whether one of the panel's own buttons is its way back (not one that works over panels from outside it).
+    private bool HasBackButton(List<Button> buttons, Panel top)
+    {
+        foreach (var button in buttons)
+        {
+            if (Game.MenuSystem.GoesBack(button) && Inside(button.Entity!, top))
+                return true;
+        }
+
+        return false;
+    }
+
+    // A mouse press off a pop-up on top closes it, and is used up: nothing else hears it. On it or off it, the mouse counts
+    // as on the UI for the step, so a press on its backdrop isn't taken for one on the world either. Returns whether it
+    // closed it.
+    internal bool ClickAway(Panel? top)
+    {
+        var input = Game.MachineInput;
+        if (top is not { Popup: true } || !input.IsMouseInView || !(input.WasPressed(MouseButton.Left) || input.WasPressed(MouseButton.Right)))
+            return false;
+        _pressOnPopupAt = Game.StepCount;
+        if (MouseOver(top, input.MouseWorld))
+            return false;
+        ClosePanel(top);
+        input.Use(MouseButton.Left);
+        input.Use(MouseButton.Right);
+        return true;
+    }
+
+    // The step the mouse was pressed with a pop-up open on top, on it or closing it.
+    [NotState("only read in the step it's set in")]
+    private long _pressOnPopupAt = -1;
+
+    internal bool PressedOnPopup => _pressOnPopupAt == Game.StepCount;
+
+    // Over something on the panel: a button, or what's drawn (its backdrop).
+    private static bool MouseOver(Panel panel, System.Numerics.Vector2 mouse)
+    {
+        foreach (var entity in panel.Entity!.SelfAndDescendants())
+        {
+            if (!entity.IsActive)
+                continue;
+            if (entity.GetComponent<Button>() is { } button && MenuSystem.AreaOf(button).Contains(mouse))
+                return true;
+            if (entity.GetComponent<Sprite>() is not null && Follow.AreaOf(entity) is { } area && area.Contains(mouse))
+                return true;
+        }
+
+        return false;
+    }
+
+    // Clicking a button on a pop-up closes it once the button has done what it does (opened a window in its place).
+    internal void CloseAfterClick(Button button)
+    {
+        for (var i = _open.Count - 1; i >= 0; i--)
+        {
+            if (_open[i].Panel is { Popup: true } popup && Inside(button.Entity!, popup))
+            {
+                ClosePanel(popup);
+                return;
+            }
+        }
+    }
+
+    private static bool BackPressed(InputState input) => input.WasPressed(Key.Escape) || input.WasPressed(GamepadButton.B);
+
+    internal static void UseBack(InputState input)
+    {
+        input.Use(Key.Escape);
+        input.Use(GamepadButton.B);
     }
 
     // While listening for a binding, the next key or button pressed is it. Returns true while still listening, when menus
@@ -259,6 +341,8 @@ internal sealed class PanelSystem : GameSystem, IPanels
         if (pressed.Key is not Key.Escape && pressed.Gamepad is not (GamepadButton.Start or GamepadButton.Back))
             Rebind(action, pressed, _rebindButton is null ? 0 : SlotOf(_rebindButton));
 
+        // The press it took (or that stopped it) is used up, so it doesn't also do what it's now bound to.
+        Game.MachineInput.Use(pressed);
         StopRebinding();
         return true;
     }
@@ -344,6 +428,20 @@ internal sealed class PanelSystem : GameSystem, IPanels
 
             text.SetShown(InputPrompts.Fill(Game.Input, value, _listeningFor));
         }
+    }
+
+    // A running script that claims Back (Behavior.ClaimsBack): not on a paused entity, nor behind a panel that pauses the
+    // game (or would: online the game goes on, but this player's keys don't reach it). Asked only as Back is pressed.
+    private bool ScriptClaimsBack()
+    {
+        var paused = AnyPanelPauses();
+        foreach (var script in Game.Scene.RunningNow<Behavior>())
+        {
+            if (script.HasBack && (!paused || InOpenPanel(script.Entity!)))
+                return true;
+        }
+
+        return false;
     }
 
     private bool SystemClaimsBack()

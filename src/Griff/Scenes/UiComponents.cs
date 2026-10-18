@@ -280,6 +280,14 @@ public sealed class Button : Component, IDrawEffect
     [Group("Control")]
     public bool Navigable { get; set; } = true;
 
+    /// <summary>
+    /// Whether it still takes clicks and its shortcuts while a <see cref="Panel"/> it isn't on is open, even one that pauses
+    /// the game: a menu bar's Game button or a pause button that opens the game menu over a letter or a shop, on top of it
+    /// (closing that menu leaves the letter open). The arrow keys stay on the panel. Off, it waits until panels close.
+    /// </summary>
+    [Group("Control")]
+    public bool OverPanels { get; set; }
+
     /// <summary>True while the mouse is over the button.</summary>
     [DoNotSerialize]
     public bool IsHovered { get; internal set; }
@@ -783,8 +791,9 @@ public sealed class Toggle : Component
 /// <summary>
 /// A menu that opens over the game and closes again: a pause menu, an options panel, a shop, a map. It's open while its
 /// entity is showing; while it is, the mouse, keyboard and gamepad only reach controls on it (not the HUD or a panel
-/// underneath), its top control is picked straight away, and Esc or the gamepad's B closes it. Closing it gives the
-/// keyboard back to whatever was picked before. Open one with a <see cref="ButtonAction.OpenPanel"/> button, with
+/// underneath, except buttons marked <see cref="Button.OverPanels"/>), its top control is picked straight away, and Esc or
+/// the gamepad's B closes it. The press that opens or closes it is used up: the game's scripts don't see it that frame.
+/// Closing it gives the keyboard back to whatever was picked before. Open one with a <see cref="ButtonAction.OpenPanel"/> button, with
 /// <see cref="OpenOn"/> (a pause menu opens on "Pause"), with <see cref="OpenMessage"/> (a puzzle's "Solved" screen), or
 /// from scripts with <c>Game.OpenPanel</c> (or by showing its entity).
 /// </summary>
@@ -817,7 +826,8 @@ public sealed class Panel : Component
 
     /// <summary>
     /// An input action that opens it when no other panel is open, and closes it again: "Pause" for a pause menu (Esc, P
-    /// or Start), or one of your own, like "Map". Empty opens it only from a button or a script.
+    /// or Start), or one of your own, like "Map". It waits while a script or system claims Back (Esc and B) for something
+    /// under way, like a tool in hand. Empty opens it only from a button or a script.
     /// </summary>
     [Names(NameKind.Action)]
     public string? OpenOn { get; set; }
@@ -839,10 +849,19 @@ public sealed class Panel : Component
     public string? NeedsFlag { get; set; }
 
     /// <summary>
-    /// Whether Esc and the gamepad's B close it. If it has a button whose Shortcut is Esc, they click that instead. Untick
-    /// it for a panel the player has to choose their way out of.
+    /// Whether Esc and the gamepad's B close it. If it has a button whose Shortcut is Esc, they click that instead; while a
+    /// running script claims Back (a builder's tool in hand), they're the script's. Untick it for a panel the player has to
+    /// choose their way out of.
     /// </summary>
     public bool CloseOnBack { get; set; } = true;
+
+    /// <summary>
+    /// Whether it's a pop-up, like a tool palette's fly-out, a dropdown or a context menu: a mouse press anywhere off it
+    /// closes it and does nothing else (no button there clicks, scripts don't see the press and <c>Game.MouseOnUi</c> is
+    /// true for it), and clicking one of its buttons closes it once the button has done what it does, so an Open Panel
+    /// button on it opens its window in its place. Untick Pause Game for one the game goes on behind.
+    /// </summary>
+    public bool Popup { get; set; }
 
     /// <summary>The name of the control to pick as it opens, e.g. "Resume". Empty picks its top one.</summary>
     [EntityName(Inside = true)]

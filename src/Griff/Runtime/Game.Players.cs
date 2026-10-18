@@ -70,9 +70,10 @@ public sealed partial class Game
 
     /// <summary>
     /// The mouse is over this machine's HUD, so a click there isn't meant for the world. Only buttons showing count: one on a
-    /// panel just closed keeps the hover it had.
+    /// panel just closed keeps the hover it had. A press on a pop-up panel (<see cref="Panel.Popup"/>), or off it closing
+    /// it, counts too.
     /// </summary>
-    public bool MouseOnUi => MouseOnHud || AnyButtonHovered();
+    public bool MouseOnUi => MouseOnHud || _panels.PressedOnPopup || AnyButtonHovered();
 
     private bool AnyButtonHovered()
     {

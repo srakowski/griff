@@ -137,6 +137,17 @@ public abstract class Behavior : Component
     {
     }
 
+    /// <summary>
+    /// Override it to have Back (Esc and the gamepad's B) for this script while it's true: meanwhile they don't open a
+    /// <see cref="Panel"/> on its Open On or close one that lets the game go on behind it, so the script's own reading of
+    /// them (putting a tool down, skipping a cutscene) comes first, and the next press, once it's false, opens the game
+    /// menu. Only a script that's running claims it: not one on a disabled or paused entity, or behind a panel that pauses
+    /// the game. <example><code>protected override bool ClaimsBack => _tool is not null;</code></example>
+    /// </summary>
+    protected virtual bool ClaimsBack => false;
+
+    internal bool HasBack => ClaimsBack;
+
     /// <summary>Called when this entity's body bumps into a solid collider, or something bumps into it.</summary>
     protected virtual void OnCollision(Entity other)
     {

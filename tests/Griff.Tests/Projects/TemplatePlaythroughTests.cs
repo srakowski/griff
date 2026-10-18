@@ -28,33 +28,34 @@ public sealed class TemplatePlaythroughTests
     // when bars got a Fill Image, a Background Image and its slice (the same without them).
     // Those with a grid mover changed when grid movement got a Destination to
     // walk to, Blocking Layers, Give Way and its walk messages (the same without them). Every template with a button changed
-    // when buttons got a Binding Slot (the same without it).
+    // when buttons got a Binding Slot (the same without it), and again when they got Over Panels
+    // (the same without it). Every template with a panel changed when panels got Popup (the same without it).
     private static readonly Dictionary<string, string> Expected = new()
     {
-        ["Adventure"] = "F537C9D2D92195EC",
-        ["Arcade"] = "BB3F61998B2CB096",
+        ["Adventure"] = "E28EAD7D49FAA3B9",
+        ["Arcade"] = "0E7B9103F22FB218",
         ["BunnyMark"] = "5DA87DF8545F3763",
-        ["Cards"] = "C5F81A0936FE45E3",
-        ["Contraption"] = "F7439CBBC3184DB1",
+        ["Cards"] = "8410988CA1783848",
+        ["Contraption"] = "8E167F6E780E5509",
         ["Empty"] = "515ECFE77AC91034",
-        ["FallingBlocks"] = "DC322643239712A9",
-        ["Fighter"] = "682CA39869FEADE2",
-        ["Isometric"] = "05A4B8CDCB2DD630",
-        ["Match3"] = "A10E6D3B60684F75",
-        ["Multiplayer"] = "C0259D0299FA669F",
-        ["Physics"] = "08480142DAF12CC3",
-        ["Pinball"] = "AA0C5F2C3FDA88DF",
-        ["Platformer"] = "84C895564FC90B1E",
-        ["Puzzle"] = "4134FE51729CE5A9",
-        ["Rhythm"] = "8DCE18825CB0FE11",
-        ["Roguelike"] = "1512247890B96789",
-        ["RpgStats"] = "EEA80EAF79A6B6B3",
-        ["Sandbox"] = "D4D26E75993737E0",
-        ["Shooter"] = "A1F7A4E70BC9949C",
-        ["Strategy"] = "778EDCDF23BCB701",
-        ["Tactics"] = "59AFBFB3FED932E7",
-        ["TopDown"] = "CDDCD4700274C112",
-        ["VisualNovel"] = "ED14A23DDF5FD046",
+        ["FallingBlocks"] = "6E1D9128A2AAF826",
+        ["Fighter"] = "BDB6E8410C64B55D",
+        ["Isometric"] = "A9C88AFD1633C099",
+        ["Match3"] = "098934BA51966178",
+        ["Multiplayer"] = "9A9E6A068EC03950",
+        ["Physics"] = "7740698F72F0C7E6",
+        ["Pinball"] = "3475FE42BA9C954C",
+        ["Platformer"] = "207FD7C219E41F68",
+        ["Puzzle"] = "A3F164EF47608C6F",
+        ["Rhythm"] = "224417D910318AF8",
+        ["Roguelike"] = "A9D1C1E93BF5AABB",
+        ["RpgStats"] = "D4ABA808611087BB",
+        ["Sandbox"] = "9D098123917BE11A",
+        ["Shooter"] = "94A63A974E993B7F",
+        ["Strategy"] = "6822993FF3FABDBB",
+        ["Tactics"] = "4D7D842702F4143E",
+        ["TopDown"] = "A1CB54AC4E76D9E0",
+        ["VisualNovel"] = "EE1109F769A7D031",
     };
 
     public static TheoryData<string> Templates => [.. ProjectTemplates.All.Select(t => t.Name)];

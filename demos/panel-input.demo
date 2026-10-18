@@ -1,0 +1,124 @@
+title: Panels and the game's own Esc
+intro: A script can have Esc before the game menu does, a press a panel uses doesn't reach the game too, a menu bar button works over a letter that pauses the game, and a fly-out closes when you click away.
+
+project: Empty | Panels and Esc
+
+chapter: A tool that has Esc first | ClaimsBack
+write: Scripts/BuildTool.cs | panel-input/BuildTool.cs
+code: Assets/Scripts/BuildTool.cs | BuildTool.cs
+say: A builder's tool. While it's in hand, ClaimsBack is true: Esc is the script's, to put the tool down, before it's the game menu's.
+hidecode
+deselect
+create: Text
+rename: Tool
+set: Transform.Position = 0, 2, 0
+add: BuildTool
+deselect
+create: Panel
+rename: Game Menu
+explain: field:Panel.OpenOn | Open On | The game menu opens on Pause: Esc, P or Start.
+set: Panel.OpenOn = Pause
+create: Button
+rename: Quit
+set: Button.Action = Quit
+
+chapter: Play | Esc puts the tool down, then opens the menu
+play
+wait: 1
+expectvalue: Tool.BuildTool.Held = true
+tap: Escape
+wait: 0.5
+expectvalue: Tool.BuildTool.Held = false
+expectvalue: Game Menu.Panel.Open = false
+say: The first Esc put the tool down, and the menu waited.
+tap: Escape
+wait: 0.5
+expectvalue: Game Menu.Panel.Open = true
+say: With nothing in hand, the next Esc opens the game menu.
+tap: Escape
+wait: 0.5
+expectvalue: Game Menu.Panel.Open = false
+expectvalue: Tool.BuildTool.EscSeen = 1
+say: And Esc closes it again. The script saw only the first Esc: the presses the menu used, opening and closing it, didn't reach the game too.
+stop
+
+chapter: A menu bar over a letter | Over Panels
+deselect
+create: Panel
+rename: Letter
+set: Panel.Open = true
+create: Text
+set: Text.Value = Welcome to the factory. Read this before you build.
+deselect
+create: Button
+rename: Game
+set: Transform.Position = -6, 4, 0
+set: Button.Action = OpenPanel
+set: Button.Panel = Game Menu
+set: Button.Shortcut = F10
+explain: field:Button.OverPanels | Over Panels | Over Panels keeps the menu bar's Game button working while a panel it isn't on is open, even one that pauses the game.
+set: Button.OverPanels = true
+play
+wait: 1
+expectvalue: Letter.Panel.Open = true
+tap: F10
+wait: 0.5
+expectvalue: Game Menu.Panel.Open = true
+expectvalue: Letter.Panel.Open = true
+say: The game opens on the letter, and F10 opens the game menu over it.
+tap: Escape
+wait: 0.5
+expectvalue: Game Menu.Panel.Open = false
+expectvalue: Letter.Panel.Open = true
+say: Closing the game menu leaves the letter open, where it was.
+stop
+chapter: A fly-out | Popup
+select: Letter
+set: Panel.Open = false
+deselect
+create: Panel
+rename: Contracts
+deselect
+create: Panel
+rename: Fly Out
+set: Sprite.Size = 4, 2.5
+set: Panel.PauseGame = false
+explain: field:Panel.Popup | Popup | A pop-up closes as soon as the player clicks anywhere off it, and that click does nothing else.
+set: Panel.Popup = true
+create: Button
+rename: Belt
+set: Transform.Position = 0, 0.6, 0
+select: Fly Out
+create: Button
+rename: Open Contracts
+set: Transform.Position = 0, -0.6, 0
+set: Button.Action = OpenPanel
+set: Button.Panel = Contracts
+deselect
+create: Button
+rename: Palette
+set: Transform.Position = -6, -3, 0
+set: Button.Action = OpenPanel
+set: Button.Panel = Fly Out
+play
+wait: 1
+gameclick: Palette
+wait: 0.5
+expectvalue: Fly Out.Panel.Open = true
+say: The palette's icon opens its fly-out.
+gameclick: 6, 3
+wait: 0.5
+expectvalue: Fly Out.Panel.Open = false
+say: A click off it closes it, and goes no further: a builder's tool wouldn't lay anything there.
+gameclick: Palette
+wait: 0.5
+gameclick: Open Contracts
+wait: 0.5
+expectvalue: Contracts.Panel.Open = true
+expectvalue: Fly Out.Panel.Open = false
+say: Picking something on it closes it once the pick is done. This one opened the contracts window in the fly-out's place.
+tap: Escape
+wait: 0.5
+expectvalue: Contracts.Panel.Open = false
+say: So closing the window shows nothing left underneath.
+stop

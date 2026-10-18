@@ -306,7 +306,10 @@ public interface ISceneEndListener
     void SceneEnding();
 }
 
-/// <summary>A system that has something under way that Back should cancel first.</summary>
+/// <summary>
+/// A system that has something under way that Back should cancel first. A script claims it with no system of its own by
+/// overriding <see cref="Behavior"/>'s ClaimsBack.
+/// </summary>
 public interface IClaimsBack
 {
     /// <summary>

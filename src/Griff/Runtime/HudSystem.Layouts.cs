@@ -13,6 +13,7 @@ internal sealed partial class HudSystem : IMouseOnHud
     {
         // Controls lists make their rows first, for their layouts to line up.
         BuildControlsLists();
+        BuildTogglesLists();
         // Up (away from the player) goes back towards the start.
         if (Game.Input.Scroll != 0 && Game.Input.IsMouseInView && Scrolled() is { } scrolled)
             scrolled.Scroll -= Game.Input.Scroll * scrolled.ScrollStep;

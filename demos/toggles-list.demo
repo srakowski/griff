@@ -1,0 +1,46 @@
+title: A toggles list
+intro: A Toggles List makes an on/off switch for each row of a table, remembered by the game and starting as the table says.
+
+project: Empty | Toggles List
+
+chapter: A table of fires | Data > New Table
+menu: Data > New Table...
+prompt: Fires
+click: tables:header:Value
+click: tables:column:name
+key: Ctrl+A
+type: On\n
+columntype: On = yes or no
+cell: Row 1 > Name = Rain
+cell: Rain > On = yes
+click: tables:addrow
+cell: Row 2 > Name = Smoke
+cell: Smoke > On = no
+expecttable: 2 rows, 1 columns
+say: A table of fires: the events that slow the game down, with a column for whether each starts on.
+
+chapter: A switch for each row | Toggles List
+create: Panel
+rename: Options
+set: Panel.Open = true
+add: TogglesList
+explain: field:TogglesList.Table | Table | A Toggles List makes a switch for each row of this table. Adding it brought a Layout, which lines the rows up.
+set: TogglesList.Table = Fires
+explain: field:TogglesList.DefaultColumn | Default Column | The yes or no column says whether each row starts on, until the player flips it.
+set: TogglesList.DefaultColumn = On
+explain: field:TogglesList.SaveAs | Save As | Each switch is remembered in the save data under this name, where {row} is the row's name: fire.Rain, fire.Smoke. Scripts read them with GetBool, like any Toggle.
+set: TogglesList.SaveAs = fire.{row}
+
+chapter: Play | Flip Smoke on
+play
+wait: 1
+expectvalue: Rain.Toggle.IsOn = true
+expectvalue: Smoke.Toggle.IsOn = false
+say: Rain starts on and Smoke off, as the table says.
+tap: Down
+tap: Down
+tap: Enter
+wait: 0.5
+expectvalue: Smoke.Toggle.IsOn = true
+say: Flipping Smoke is remembered under fire.Smoke, so next time the game starts it is on.
+stop

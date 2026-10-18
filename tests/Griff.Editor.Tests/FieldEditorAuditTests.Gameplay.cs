@@ -217,6 +217,15 @@ public sealed partial class FieldEditorAuditTests
         Toggle.SaveAs: Names:Saved
         Toggle.OnText: Text
         Toggle.OffText: Text
+        TogglesList.Table: Names:Table
+        TogglesList.Hide: Names:Row*
+        TogglesList.LabelColumn: Names:Column
+        TogglesList.DefaultColumn: Names:Column
+        TogglesList.SaveAs: Text
+        TogglesList.OnText: Text
+        TogglesList.OffText: Text
+        TogglesList.Template: Entity
+        TogglesList.Font: Names:Font
         Tooltip.Value: OutputFormat
         Tooltip.Into: Entity
         Tooltip.Track: Entity

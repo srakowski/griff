@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+- A **Toggles List** makes an on/off switch for each row of a data table: put it on an entity with a Layout (an options panel), name its **Table**, and while the game runs it makes a row for each table row with its label (**Label Column**, else the row's name) and a real Toggle kept in the save data as **Save As** says (`fire.{row}`), starting as the **Default Column** says until the player flips it or the game has one saved. **Hide** leaves rows out, and a **Template** entity styles the rows. Scripts read the switches with `Game.SaveData.GetBool("fire.Rain")`.
+
 ## 0.1.0-alpha.14 - 2026-10-17
 
 - A **Needs Flag** can name several flags joined by "or": `run.Contracts or run.Work` holds while either is set, on a Show When, panel, door, switch or spawner.

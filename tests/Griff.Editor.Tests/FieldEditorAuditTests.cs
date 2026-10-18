@@ -208,6 +208,7 @@ public sealed partial class FieldEditorAuditTests
         Animation.Clip: Choice
         Light.Offset: Offset
         ParticleEmitter.Image: Image
+        ParticleEmitter.Frames: Text
         Sprite.Image: Image
         Text.Value: OutputFormat
         Text.Font: Names:Font

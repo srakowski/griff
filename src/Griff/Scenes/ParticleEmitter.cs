@@ -92,6 +92,7 @@ public sealed class ParticleEmitter : Component, IDrawable
     /// <c>3-4, 7</c> is 3, 4 and 7, and <c>3-0</c> runs backward. Each particle picks one at random as it's born (from the
     /// game's random, so a rewound or networked game repeats), or with <see cref="AnimateFrames"/> steps through them.
     /// </summary>
+    [PlainText("frame numbers and ranges, as an Animation clip writes them")]
     public string? Frames
     {
         get => _frames;

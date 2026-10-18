@@ -1,0 +1,64 @@
+title: Fast-forward that stays exact
+intro: A Game Speed runs a sim faster by taking more steps of the usual length, so workers cross as many cells in a game second at 16x as at 1x.
+project: Empty | Fast Forward
+
+chapter: A worker and a long walk | Twenty-five cells, round a corner
+create: Tilemap
+rename: Floor
+set: Tilemap.Tiles = 1111111111111111\n1..............1\n11111111111111.1\n11111111111111.1\n11111111111111.1\n11111111111111.1\n11111111111111.1\n11111111111111.1\n11111111111111.1\n11111111111111.1\n11111111111111.1\n11111111111111.1\n11111111111111.1\n11111111111111.1\n1111111111111111
+select: Main Camera
+set: Transform.Position.X = 8
+set: Transform.Position.Y = -7.5
+look: 8, -7.5, 9
+deselect
+create: Grid Player
+rename: Worker
+set: Transform.Position.X = 1.5
+set: Transform.Position.Y = -1.5
+set: GridMovement.Controllable = false
+set: GridMovement.StepTime = 0.1
+set: GridMovement.Destination = 14 13
+say: A worker with a Step Time of a tenth of a second, sent to the far end of a corridor: twenty-five cells, round a corner.
+
+chapter: Normal speed | Two and a half seconds
+play
+wait: 3
+expectat: Worker = 14.5, -13.5
+say: At normal speed it takes two and a half seconds, a tenth of a second a cell.
+stop
+
+chapter: A Game Speed | Sixteen times as fast, the same walk
+create: Empty
+rename: Speed
+add: GameSpeed
+explain: field:GameSpeed.Speed | Speed | How fast the game runs: 1 is normal, 16 sixteen times as fast, 0 paused.
+set: GameSpeed.Speed = 16
+explain: field:GameSpeed.Exact | Exact | Faster speeds take more steps of the usual length each frame, not longer steps, so everything goes as at normal speed, only sooner.
+play
+wait: 0.6
+expectat: Worker = 14.5, -13.5
+say: Sixteen steps a frame: the same twenty-five cells in the same two and a half seconds of game time, a sixth of a second of ours. A sim plays out the same at any speed.
+stop
+
+chapter: Speed buttons | Set Speed, with no code
+select: Speed
+set: GameSpeed.Speed = 1
+deselect
+create: Button
+rename: Fast
+set: Button.Action = Do
+pick: Button.Targets = Speed
+pick: Button.Do = Set Speed
+set: Button.With = 16
+set: Button.Shortcut = F
+add: ScreenAnchor
+set: ScreenAnchor.Offset = 2.5, -1.5
+explain: field:Button.Do | Do | A button sets the speed with the Game Speed's Set Speed action; Faster and Slower go through its Speeds.
+play
+wait: 0.8
+say: It walks at normal speed, until the button's pressed.
+tap: F
+wait: 0.6
+expectat: Worker = 14.5, -13.5
+stop
+say: That's fast-forward. Scripts set Time.FastForward themselves, the camera and menus keep real time, and a slow machine runs the game slower rather than skipping steps.

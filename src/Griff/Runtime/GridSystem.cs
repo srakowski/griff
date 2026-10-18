@@ -14,6 +14,9 @@ internal sealed partial class GridSystem : GameSystem
     // The most crates one step pushes along in a row.
     private const int GridPushRowLimit = 16;
 
+    // The most cells a mover takes in one game step, however long the step (a Time.Scale of 100 with a short Step Time).
+    private const int MostCellsPerStep = 64;
+
     // A player's machine asks the host to push a crate the host runs.
     internal const string GridPushCommand = "griff.gridpush";
 
@@ -108,7 +111,9 @@ internal sealed partial class GridSystem : GameSystem
 
         m.Rest = Math.Max(0, m.Rest - Game.Time.Delta);
         m.Idle = false;
-        if (!m.Stepping)
+        // A game step longer than its Step Time (a high Time.Scale) holds more than one cell: each cell it covers is taken
+        // in turn, checked for what's in the way and decided as at normal speed, so it walks as far in game time.
+        for (var cells = 0; !m.Stepping && cells < MostCellsPerStep; cells++)
         {
             // A script's step first, then a way pressed during the last step (or while it waited for its turn), then the
             // way held, then where a chase or a patrol wants to go.
@@ -151,6 +156,17 @@ internal sealed partial class GridSystem : GameSystem
 
             // Taking turns, a chaser or a patrol with nowhere to go on its turn passes (unless it swings instead).
             m.Idle = byTurns && (thinks || walks) && !m.Stepping;
+
+            // The step it started ends within this one, with time to spare for the next: it's in the cell now. Not a
+            // swing (it lasts its step), nor taking turns (a step a turn); a press is one cell, a held key walks on.
+            if (!m.Stepping || !(spare > stepTime) || byTurns || m.Lunge != Vector2.Zero)
+                break;
+            spare -= stepTime;
+            m.Stepping = false;
+            MoveTo(entity, m.To);
+            pressed = false;
+            if (patrol is not null)
+                CountPatrolSteps(patrol, grid);
         }
 
         // Which way it faces on the screen: on an isometric map, every step along the grid is a diagonal, seen from behind

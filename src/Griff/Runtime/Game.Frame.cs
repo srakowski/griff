@@ -295,7 +295,9 @@ public sealed partial class Game
     /// rest for the next frame, so the game moves the same on any machine. <see cref="Time.Blend"/> then says how far
     /// between its last two steps to draw it. Presses (and typing, scrolling, mouse movement) count in the next step taken,
     /// once: a frame with no step keeps them for the next. A frame covers at most <see cref="Time.MaxDelta"/>; a longer
-    /// one (a stall) slows the game down rather than running a burst of steps.
+    /// one (a stall) slows the game down rather than running a burst of steps. Fast-forwarded (<see cref="Time.FastForward"/>),
+    /// it takes that many times the steps, spending at most a twentieth of a second on them: a machine that can't keep
+    /// up runs the game slower, never skipping a step.
     /// </summary>
     public void Advance(double seconds)
     {
@@ -325,9 +327,19 @@ public sealed partial class Game
         var whole = Math.Round(seconds / step);
         if (whole is >= 1 and <= MaxSnappedSteps && Math.Abs(seconds - whole * step) < step * FrameSnap)
             seconds = whole * step;
-        _owed = Math.Min(_owed + seconds, Math.Max(Time.MaxDelta, step));
+        var fast = _fast = FastForwardNow();
+        _owed = Math.Min(_owed + seconds * fast, Math.Max(Time.MaxDelta, step) * fast);
+        var started = fast > 1 ? Stopwatch.GetTimestamp() : 0;
         while (_owed >= step - StepTolerance && !_stopped)
         {
+            // Fast-forwarding, the steps this frame owes may be more than the machine takes in a frame: past its budget,
+            // the rest are let go, and the game runs slower (in real time, never in game time) until it catches up.
+            if (fast > 1 && Stopwatch.GetElapsedTime(started).TotalSeconds > FastForwardBudget)
+            {
+                _owed %= step;
+                break;
+            }
+
             _owed -= step;
             try
             {
@@ -359,6 +371,7 @@ public sealed partial class Game
         try
         {
             Time.CountFrame(seconds);
+            _fast = FastForwardNow();
             Step(seconds);
             Scene.HeldStill = Time.FrozenLeft;
             Time.Blend = 1;
@@ -379,6 +392,19 @@ public sealed partial class Game
     // How much real time the game owes in steps: what's left of the frames so far, less than a step.
     [NotState("real time owed by the host's frames")]
     private double _owed;
+
+    // How many steps the frame under way takes for each it would at normal speed (see Time.FastForward).
+    [NotState("the host's frame under way")]
+    private float _fast = 1;
+
+    internal float FastForwarding => _fast;
+
+    // The most real time a fast-forwarded frame spends taking steps.
+    private const double FastForwardBudget = 0.05;
+
+    // Fast-forward speeds up the game a player plays alone; a network game's steps are kept in step between machines, and
+    // while a panel pauses the game there's nothing to hurry.
+    private float FastForwardNow() => Network.IsOnline || Time.IsPaused ? 1 : Time.FastForward;
 
     // Frame times measured in floating point land a hair either side of a step; within this, it's a step.
     private const double StepTolerance = 1e-7;

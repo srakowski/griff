@@ -77,6 +77,7 @@ public sealed partial class FieldEditorAuditTests
         FallingBoard.ScoreMessage: Names:Message
         FallingBoard.LevelMessage: Names:Message
         FallingBoard.GameOverMessage: Names:Message
+        GameSpeed.Speeds: Rows
         Grabber.Action: Names:Action
         Grabber.HoldOffset: Offset
         Grabber.RefuseSound: Sound

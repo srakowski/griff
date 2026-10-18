@@ -28,7 +28,10 @@ public sealed class Time : IKeepsState
     /// <summary>Game seconds this step covers, after <see cref="Scale"/>: <see cref="FixedDelta"/> at normal speed.</summary>
     public float Delta { get; private set; }
 
-    /// <summary>Real seconds this step covers, ignoring <see cref="Scale"/>: <see cref="FixedDelta"/> as the game runs.</summary>
+    /// <summary>
+    /// Real seconds this step covers, ignoring <see cref="Scale"/>: <see cref="FixedDelta"/> as the game runs, and a
+    /// fraction of it while it's fast-forwarded (see <see cref="FastForward"/>).
+    /// </summary>
     public float UnscaledDelta { get; private set; }
 
     /// <summary>Scaled seconds since the game started.</summary>
@@ -37,8 +40,32 @@ public sealed class Time : IKeepsState
     /// <summary>How many steps the game has taken since it started.</summary>
     public long Frame { get; private set; }
 
-    /// <summary>1 is normal speed, 0.5 is slow motion, 0 pauses gameplay.</summary>
+    /// <summary>
+    /// 1 is normal speed, 0.5 is slow motion, 0 pauses gameplay. It makes each step cover more or less game time: above 1,
+    /// what goes a step at a time (a grid mover's cells, physics) is coarser. <see cref="FastForward"/> speeds a game up
+    /// with steps of the usual length instead.
+    /// </summary>
     public float Scale { get; set; } = 1f;
+
+    /// <summary>The fastest <see cref="FastForward"/> goes.</summary>
+    public const float MaxFastForward = 64;
+
+    /// <summary>
+    /// Fast-forward that stays exact: 4 runs the game four times as fast by taking four steps of the usual length for
+    /// each one it would take, where <see cref="Scale"/> 4 takes steps four times as long. Everything goes as it does at
+    /// normal speed, only sooner: a walker crosses as many cells in a game second, a body falls the same arc, a timer
+    /// fires on the same step, so a sim plays out the same at any speed. It multiplies <see cref="Scale"/> (Scale 0 still
+    /// pauses). Real time stays real: the camera's pan keys, fades and menus (what goes by <see cref="UnscaledDelta"/>)
+    /// move at their usual speed. A machine that can't take that many steps slows down rather than skipping any. From 1
+    /// (normal speed) to 64; it does nothing in a network game, whose steps are kept in step between the players.
+    /// </summary>
+    public float FastForward
+    {
+        get => _fastForward;
+        set => _fastForward = float.IsFinite(value) ? Math.Clamp(value, 1, MaxFastForward) : 1;
+    }
+
+    private float _fastForward = 1;
 
     /// <summary>
     /// How many steps the game takes a second: the project's Step Rate (Game &gt; Step Rate in the editor, 60 unless it's
@@ -112,15 +139,16 @@ public sealed class Time : IKeepsState
         (_slowScale, _slowSeconds, _slowLeft) = (scale, seconds, Math.Max(seconds, _slowScale == scale ? _slowLeft : 0));
     }
 
-    // One step, covering `seconds` of real time.
-    internal void Advance(double seconds)
+    // One step `seconds` long, fast-forwarded `fast` times: it covers that fraction of the real time.
+    internal void Advance(double seconds, float fast = 1)
     {
-        UnscaledDelta = Math.Clamp((float)seconds, 0f, MaxDelta);
+        var step = Math.Clamp((float)seconds, 0f, MaxDelta);
+        UnscaledDelta = fast > 1 ? step / fast : step;
         var frozen = _frozenFor > 0;
         _frozenFor = Math.Max(0, _frozenFor - UnscaledDelta);
         var slow = SlowMotionScale;
         _slowLeft = Math.Max(0, _slowLeft - UnscaledDelta);
-        Delta = frozen || IsPaused ? 0 : UnscaledDelta * Scale * slow;
+        Delta = frozen || IsPaused ? 0 : step * Scale * slow;
         Total += Delta;
         Frame++;
     }

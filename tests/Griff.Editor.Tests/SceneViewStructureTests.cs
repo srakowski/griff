@@ -56,7 +56,7 @@ public class SceneViewStructureTests
         Assert.Equal(0, palette.Shown);
         Assert.Equal(Enumerable.Range(0, 12), palette.Tiles);
         Assert.Equal(2, palette.Rows);
-        Assert.Equal([TileTool.Select, TileTool.Brush, TileTool.Rectangle, TileTool.Fill], palette.Tools);
+        Assert.Equal([TileTool.Select, TileTool.Brush, TileTool.Rectangle, TileTool.Fill, TileTool.Line], palette.Tools);
         Assert.Equal(["Level"], palette.Layers);
         Assert.Equal(0, palette.Layer);
         Assert.StartsWith("Brush:", palette.Hint);

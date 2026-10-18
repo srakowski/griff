@@ -95,6 +95,14 @@ public sealed partial class FieldEditorAuditTests
         Inventory.UseSound: Sound
         Inventory.SaveAs: Names:Saved
         Inventory.ForTeam: Names:Kind
+        LineTool.Map: Entity
+        LineTool.Conveyor: Entity
+        LineTool.Tiles: Entity
+        LineTool.Action: Names:Action
+        LineTool.RotateAction: Names:Action
+        LineTool.CancelAction: Names:Action
+        LineTool.BlockingLayers: Names:Layer*
+        LineTool.Message: Names:Message
         MatchBoard.Gems: TileNumbers
         MatchBoard.Collect: TileCounts
         MatchBoard.Cleared: Text

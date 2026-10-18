@@ -327,6 +327,31 @@ public sealed class Conveyor : Component, IDrawable
         Lay(cell.X, cell.Y, way.X, way.Y, kind);
 
     /// <summary>
+    /// Lays <paramref name="cells"/> all at once (each as <see cref="Lay(int, int, int, int, ConveyorCellKind)"/> does,
+    /// turning a cell already there): a line from a <see cref="LineTool"/>, gaps and all.
+    /// </summary>
+    public void Lay(IEnumerable<ConveyorCell> cells)
+    {
+        ArgumentNullException.ThrowIfNull(cells);
+        var all = _belts.ToList();
+        var places = new Dictionary<(int X, int Y), int>(_at);
+        foreach (var cell in cells)
+        {
+            if (WayIndex(cell.WayX, cell.WayY) < 0)
+                throw new ArgumentException($"A belt carries right (1, 0), up (0, 1), left (-1, 0) or down (0, -1), not {cell.Way}.");
+            if (places.TryGetValue(cell.Cell, out var at))
+                all[at] = cell;
+            else
+            {
+                places[cell.Cell] = all.Count;
+                all.Add(cell);
+            }
+        }
+
+        Relay(all);
+    }
+
+    /// <summary>
     /// Lays a belt through <paramref name="points"/>, each cell carrying on to the next: between two points that aren't
     /// next to each other it goes along the row first, then up or down the column, so the corners of a line are its points,
     /// e.g. <c>LayPath([(2, 4), (9, 4), (9, 8)])</c>. The last cell carries on the way the one before it does (or

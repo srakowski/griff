@@ -7,6 +7,7 @@
 
 ## Unreleased
 
+- Lines with corners laid by dragging, for belts, pipes and rails: **Line Tiles** on a tilemap (a straight piece and a corner, each drawn once, optional end pieces) are laid turned to follow the line, by the Scene view's new **Line** tool (L; Z turns a single cell or swaps the corner) and in the game by a **Line Tool**: the player presses, drags and lets go, a ghost shows the line green where it fits and red on walls, past **Max Cells** or where a script's `CanLay` says no, and letting go lays belts on its **Conveyor** and tiles on its **Tiles** map and raises `Placed`. The line goes the way the drag started and turns one corner by itself; R (the new **Rotate** action) turns a single cell or swaps the corner.
 - `project.griff` changed outside the editor (a text editor, a pull, an agent) is read again by itself: its controls, step rate and start scene take over, in the **Controls** window and a running game too.
 - A script saved while the game plays starts the game over with it, as a fresh Play would, rather than swapping it into the game as it stands, which started each script again (spawning what its `Start` spawns twice) without its own fields, and had the others read scripts that hadn't started yet.
 - `entity_update`'s `remove` takes off a component whose script is gone, by the name `scene_tree` shows it with (`ShopSign (missing)`), as **Remove Component** does.

@@ -133,6 +133,10 @@ public sealed partial class FieldEditorAuditTests
         Goal.CoverMessage: Names:Message
         Goal.UncoverMessage: Names:Message
         Goal.AllCoveredMessage: Names:Message
+        LineTiles.StraightTile: TileNumbers
+        LineTiles.CornerTile: TileNumbers
+        LineTiles.StartTile: TileNumbers
+        LineTiles.EndTile: TileNumbers
         Minigame.Scene: Names:Scene
         Minigame.WonMessage: Names:Message
         Minigame.LostMessage: Names:Message

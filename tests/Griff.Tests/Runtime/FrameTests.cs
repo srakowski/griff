@@ -23,7 +23,7 @@ public class FrameTests
             "Logic: Item Uses",
             "Scripts: Scripts",
             "Simulate: HUD", "Simulate: Blocks", "Simulate: Tools", "Simulate: Other Players' Tools",
-            "Simulate: Dragging", "Simulate: Cards", "Simulate: Match Boards", "Simulate: Slingshots", "Simulate: Flippers", "Simulate: Selection", "Simulate: Falling Boards",
+            "Simulate: Dragging", "Simulate: Cards", "Simulate: Match Boards", "Simulate: Slingshots", "Simulate: Flippers", "Simulate: LineTools", "Simulate: Selection", "Simulate: Falling Boards",
             "Simulate: Strategy",
             "Simulate: Attacks", "Simulate: Idle Grid Movers", "Simulate: Timers", "Simulate: Coroutines",
             "Simulate: Tweens", "Simulate: Lifetimes", "Simulate: Spawners", "Simulate: Shooters", "Simulate: Movers", "Simulate: Conveyors",

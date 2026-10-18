@@ -24,6 +24,12 @@ public enum TileTool
 
     /// <summary>Click to fill the area around a cell, like a paint bucket: the cells joined to it holding the same tile.</summary>
     Fill,
+
+    /// <summary>
+    /// Drag a line round a corner, each cell pointing the way the line runs: laid with the tilemap's
+    /// <see cref="LineTiles"/> (a straight piece and a corner, turned to follow it), or without them the brush's tile.
+    /// </summary>
+    Line,
 }
 
 public sealed partial class SceneViewModel
@@ -34,8 +40,8 @@ public sealed partial class SceneViewModel
 
     /// <summary>
     /// What clicking and dragging on the selected tilemap in the Scene view does: paint cell by cell (Brush, the
-    /// default), fill a box (Rectangle), fill an area (Fill), or select and move entities as usual (Select, the cursor).
-    /// V, B, R and G pick it in the Scene view while a tilemap is selected. It stays as it's left while other things are
+    /// default), fill a box (Rectangle), fill an area (Fill), lay a line round a corner (Line), or select and move
+    /// entities as usual (Select, the cursor). V, B, R, G and L pick it in the Scene view while a tilemap is selected. It stays as it's left while other things are
     /// selected, so a tilemap selected again with Select picked doesn't paint until a painting tool is picked.
     /// </summary>
     public TileTool TileTool
@@ -289,6 +295,64 @@ public sealed partial class SceneViewModel
         var (tiles, turns) = tilemap.Filled(x, y, tile, turn);
         Apply(tilemap, tiles, turns, 0, 0, erase ? "Erase Tiles" : "Fill Tiles");
         return count;
+    }
+
+    /// <summary>
+    /// Lays a line on the selected tilemap from one cell to another, as the Line tool's drag does, as one undo step: along
+    /// the row first, then up or down the column (or the column first, with <paramref name="acrossFirst"/> false), each
+    /// cell's tile turned to point the way the line runs. With <see cref="LineTiles"/> on the tilemap (or the map it's a
+    /// layer of) it lays their straight piece, corners at the corner and their start and end pieces at the ends; without,
+    /// the <see cref="BrushTile"/> pointing along the line. A single cell points the way the <see cref="BrushTurn"/> turns
+    /// a tile drawn pointing right (Z turns it). <paramref name="erase"/> clears the line's cells instead. Like painting,
+    /// a line reaching past the left or top edge grows the grid that way. Returns the cells it laid, in order.
+    /// </summary>
+    public IReadOnlyList<LineCell> PaintLine(int fromX, int fromY, int toX, int toY, bool acrossFirst = true, bool erase = false)
+    {
+        var line = LineDrag.Path((fromX, fromY), (toX, toY), acrossFirst, (fromX, fromY) == (toX, toY) ? SingleWay : null);
+        PaintLine(line, erase);
+        return line;
+    }
+
+    // The way a single cell of a line points: where the brush's turn takes a tile drawn pointing right.
+    internal (int X, int Y) SingleWay => BrushTurn.Apply(Vector2.UnitX) is var way ? ((int)MathF.Round(way.X), (int)MathF.Round(way.Y)) : (1, 0);
+
+    // Lays the cells of a line (from PaintLine, or the Line tool's drag), as one undo step.
+    internal void PaintLine(IReadOnlyList<LineCell> line, bool erase)
+    {
+        var tilemap = PaintTarget ?? throw NothingToPaint();
+        if (sceneDocuments.Scene is not { } document)
+            throw NothingToPaint();
+        document.History.Seal();
+        using (document.History.BeginGroup(erase ? "Erase Line" : "Paint Line"))
+        {
+            // Cells painted left of or above the grid grow it, moving the cells after them along.
+            var (shiftX, shiftY) = (0, 0);
+            for (var i = 0; i < line.Count; i++)
+            {
+                var (tile, turn) = erase ? (-1, TileTurn.None) : LineTile(tilemap, line, i);
+                var (x, y) = (line[i].X + shiftX, line[i].Y + shiftY);
+                if (tilemap.GetTile(x, y) == tile && tilemap.GetTurn(x, y) == turn)
+                    continue;
+                var (tiles, turns, sx, sy) = tilemap.PaintedRect(x, y, x, y, tile, turn);
+                TileStroke.Put(document, projectSession.Components, tilemap, tiles, turns, sx, sy);
+                (shiftX, shiftY) = (shiftX + sx, shiftY + sy);
+            }
+        }
+
+        document.History.Seal();
+    }
+
+    /// <summary>
+    /// The tile, turned, that the Line tool lays in cell <paramref name="index"/> of <paramref name="line"/> on
+    /// <paramref name="tilemap"/>: its <see cref="LineTiles"/>' piece for it, or the <see cref="BrushTile"/> pointing the
+    /// way the line runs.
+    /// </summary>
+    public (int Tile, TileTurn Turn) LineTile(Tilemap tilemap, IReadOnlyList<LineCell> line, int index)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        if (LineTiles.For(tilemap) is { } pieces && pieces.TileFor(line, index) is (>= 0, _) piece)
+            return piece;
+        return (BrushTile, TileTurns.Pointing(line[index].WayX, line[index].WayY));
     }
 
     /// <summary>

@@ -27,7 +27,7 @@ public sealed class GameSystemsTests
         { "Menus", "Menus" }, { "Lobby", "Lobby" }, { "Grids", "Tilemaps" }, { "SwitchTargets", "Switches" }, { "Turns", "Turns" },
         { "BeatClocks", "Beat" }, { "Calibrations", "Calibration" }, { "Enemies", "Levels" }, { "Movement", "Movement" },
         { "ItemUses", "Items" }, { "Scripts", "Scripts" }, { "HUD", "HUD" }, { "OtherPlayersTools", "Network" },
-        { "Dragging", "Dragging" }, { "Selection", "Selection" }, { "Attacks", "Combat" }, { "IdleGridMovers", "Turns" }, { "Timers", "Timers" },
+        { "Dragging", "Dragging" }, { "LineTools", "Selection" }, { "Selection", "Selection" }, { "Attacks", "Combat" }, { "IdleGridMovers", "Turns" }, { "Timers", "Timers" },
         { "Coroutines", "Timers" }, { "Tweens", "Timers" }, { "Lifetimes", "Lifetimes" }, { "Spawners", "Lifetimes" },
         { "Shooters", "Levels" }, { "Movers", "Levels" }, { "Conveyors", "Conveyors" }, { "Animations", "Effects" }, { "AnimatedTiles", "Tilemaps" },
         { "Particles", "Effects" }, { "CameraShake", "Effects" }, { "SpriteEffects", "Effects" }, { "SimulatePrompts", "Panels" },

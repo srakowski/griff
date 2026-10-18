@@ -8,9 +8,10 @@ namespace Griff.Runtime;
 /// Runs each <see cref="SelectionControls"/>: clicks, boxes, double-clicks, control groups, Esc and right-click commands on
 /// the <see cref="Selectable"/>s in its camera's view (the rules are <see cref="SelectionState"/>'s), and draws the
 /// markers round what's selected and the box being dragged out. With something selected it claims Back, so Esc clears the
-/// selection before it opens the game menu; a window open over the game has it first.
+/// selection before it opens the game menu; a window open over the game has it first. Before them it runs each
+/// <see cref="LineTool"/> (a line dragged on the grid, its ghost and laying it), which has the mouse while it's in hand.
 /// </summary>
-internal sealed class SelectionSystem : GameSystem, IClaimsBack
+internal sealed partial class SelectionSystem : GameSystem, IClaimsBack
 {
     public override string Name => "Selection";
 
@@ -48,7 +49,7 @@ internal sealed class SelectionSystem : GameSystem, IClaimsBack
     private bool TakesInput(SelectionControls controls) =>
         controls.Controllable && !Game.PausedThisFrame && !Game.LocalInputBlocked && !controls.Entity!.IsPaused && !IsBusy(controls);
 
-    private bool IsBusy(SelectionControls controls) =>
+    private bool IsBusy(SelectionControls controls) => LineToolInHand() ||
         controls.Busy || (!string.IsNullOrWhiteSpace(controls.BusyFlag) && Game.FlagHolds(controls.BusyFlag));
 
     // What's gone (destroyed, hidden, or no longer selectable) stops being selected.
@@ -214,6 +215,7 @@ internal sealed class SelectionSystem : GameSystem, IClaimsBack
 
     protected override void Draw(FrameDrawing frame)
     {
+        DrawLineTools(frame);
         foreach (var controls in Game.Scene.Active<SelectionControls>())
         {
             // In its camera's view only.

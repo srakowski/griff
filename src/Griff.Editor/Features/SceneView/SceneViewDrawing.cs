@@ -564,7 +564,14 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
         var color = input.Erasing ? "Brush.Status.Error" : "Brush.Accent";
         var outline = new Pen(style.Brush(color), 2 / viewport.Zoom);
         Geometry Cells(int left, int top, int right, int bottom) => Polygon(tilemap.OutlineOf(left, top, right, bottom));
-        if (input.RectangleFrom is var (fx, fy) && input.HoverCell is var (tx, ty))
+        var line = input.LineCells;
+        if (line.Count > 0)
+        {
+            var shade = style.Faded(color, 0.2);
+            foreach (var cell in line)
+                dc.DrawGeometry(shade, outline, Cells(cell.X, cell.Y, cell.X, cell.Y));
+        }
+        else if (input.RectangleFrom is var (fx, fy) && input.HoverCell is var (tx, ty))
         {
             var box = Cells(Math.Min(fx, tx), Math.Min(fy, ty), Math.Max(fx, tx), Math.Max(fy, ty));
             dc.DrawGeometry(style.Faded(color, 0.2), outline, box);
@@ -590,8 +597,25 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
 
         dc.Pop();
 
+        // A line being dragged out shows its tiles, faintly, turned as they'll go down: straight pieces and corners.
+        if (!input.Erasing)
+        {
+            var world = tilemap.Entity!.Transform.WorldMatrix;
+            for (var i = 0; i < line.Count; i++)
+            {
+                var (tile, turn) = model.LineTile(tilemap, line, i);
+                if (TileImage(tilemap, tile) is not { } piece)
+                    continue;
+                var (center, size) = tilemap.PictureOf(line[i].X, line[i].Y);
+                var box = new Rect(viewport.ToScreen(Vector2.Transform(center - size / 2, world)), viewport.ToScreen(Vector2.Transform(center + size / 2, world)));
+                dc.PushOpacity(0.6);
+                DrawTurned(dc, piece, box, turn);
+                dc.Pop();
+            }
+        }
+
         // A turned brush shows its tile turned in the cell under the cursor, faintly, so you see which way it will go down.
-        if (input.HoverCell is var (gx, gy) && model.IsPainting && !input.Erasing && input.RectangleFrom is null &&
+        if (input.HoverCell is var (gx, gy) && model.IsPainting && !input.Erasing && input.RectangleFrom is null && line.Count == 0 &&
             model.BrushTurn != TileTurn.None && TileImage(tilemap, model.BrushTile) is { } ghost)
         {
             var (center, size) = tilemap.PictureOf(gx, gy);

@@ -59,10 +59,11 @@ public sealed class GridWalls
     /// Gathers what's in the way on <paramref name="grid"/> in <paramref name="scene"/> for something on
     /// <paramref name="layer"/> (ignoring <paramref name="ignoreLayers"/>): solid tiles, and solid colliders only on
     /// <paramref name="only"/> when it's given (and grid movers too, with <paramref name="moversByLayer"/>), leaving out
-    /// <paramref name="self"/> and anything but grid movers in <paramref name="except"/>. A map with no scene is its own wall.
+    /// <paramref name="self"/> and anything but grid movers in <paramref name="except"/>, and the belts of
+    /// <paramref name="leaveOut"/> (the conveyor a line is being laid on). A map with no scene is its own wall.
     /// </summary>
     internal static GridWalls Gather(Scene? scene, GridCells grid, bool stayOnMap, Entity? self, string? layer, string? ignoreLayers,
-        string[]? only, bool moversByLayer, Entity? except)
+        string[]? only, bool moversByLayer, Entity? except, Conveyor? leaveOut = null)
     {
         var walls = new GridWalls(grid, stayOnMap);
         var ignores = CollisionLayers.Parse(ignoreLayers);
@@ -113,7 +114,7 @@ public sealed class GridWalls
                         walls._polygons.Add(polygon);
                         break;
                     // Its belts are solid on its layer, as a collider is; its crossings aren't.
-                    case Conveyor { Solid: true } conveyor when !PassesThrough(conveyor.Layer, null) &&
+                    case Conveyor { Solid: true } conveyor when conveyor != leaveOut && !PassesThrough(conveyor.Layer, null) &&
                                                                 (only is null || CollisionLayers.Contains(only, conveyor.Layer)):
                         walls._conveyors.Add((conveyor, conveyor.Grid));
                         break;

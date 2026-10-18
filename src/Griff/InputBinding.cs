@@ -119,6 +119,8 @@ public static class InputActions
             ["Group7"] = [Key.D7],
             ["Group8"] = [Key.D8],
             ["Group9"] = [Key.D9],
+            // A build tool's turn: a Line Tool turns a single cell, or swaps the corner of a line being dragged.
+            ["Rotate"] = [Key.R],
         };
 
     /// <summary>

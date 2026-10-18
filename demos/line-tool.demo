@@ -1,0 +1,57 @@
+title: Lines with corners
+intro: Belts, pipes and rails go down by dragging a line: it turns its own corner, and each cell points the way the line runs.
+project: Empty | Belts
+write: Tiles/lines.png | line-tool/lines.png
+
+chapter: Two pictures | A straight piece and a corner
+create: Tilemap
+set: Transform.Position = -4, 3, 0
+pickimage: Tilemap.Image = Tiles/lines.png
+set: Tilemap.Columns = 3
+set: Tilemap.Tint = #FFFFFF
+set: Tilemap.Solid = false
+look: 0, -0.5, 4.5
+click: tiles:Rectangle
+click: tiles:0
+scenedrag: -3.5, 2.5 > 3.5, -3.5
+expecttile: Tilemap 7, 6 = 0
+say: A factory floor, and a tileset with a belt drawn just twice: running straight to the right, and turning from the left down to the bottom.
+add: Line Tiles
+click: editor:LineTiles.StraightTile:tiles
+click: editor:LineTiles.StraightTile:tile:1
+click: editor:LineTiles.CornerTile:tiles
+click: editor:LineTiles.CornerTile:tile:2
+expectvalue: Tilemap.LineTiles.StraightTile = 1
+expectvalue: Tilemap.LineTiles.CornerTile = 2
+explain: component:LineTiles | Line Tiles | Line Tiles on the map say which tile is the straight piece and which the corner. Ends can have pieces of their own too.
+
+chapter: The Line tool | L, then drag
+key: L
+explain: tiles:Line | Line | L picks the Line tool under the palette.
+scenedrag: -2.5, 1.5 > 1.5, -1.5
+expecttile: Tilemap 1, 1 = 1
+expecttile: Tilemap 5, 1 = 2
+expecttile: Tilemap 5, 4 = 1
+explain: world:-3, 2, 2, -2 | Round the corner | Dragged from here to there, the line runs the way the drag started, turns its own corner, and goes down. Every cell is turned to point the way the line runs: one picture of each piece serves every direction.
+scenedrag: 2.5, -2.5 > -2.5, 0.5
+expecttile: Tilemap 6, 5 = 1
+expecttile: Tilemap 1, 5 = 2
+say: Dragged back the other way, the corner turning the other way round is laid mirrored. While dragging, Z swaps which leg comes first, and Shift erases.
+key: Ctrl+Z
+expecttile: Tilemap 1, 5 = 0
+say: Each line is one undo step.
+
+chapter: In the game | A Line Tool for the player
+select: Main Camera
+add: Line Tool
+pick: LineTool.Tiles = Tilemap
+explain: component:LineTool | Line Tool | A Line Tool lets the player lay lines the same way: on a conveyor as belts, as the map's line tiles, or for a script to handle as build orders.
+play
+gamehover: -2.5, -2.5
+tap: R
+explain: world:-3, -2, -2, -3 | Turned | Over the floor, a ghost shows the cell the line would start on. R turns a single cell, and a click lays it.
+gamedrag: -0.5, -1.5, 2.5, -3.5
+expecttile: Tilemap 3, 4 = 1
+expecttile: Tilemap 6, 4 = 2
+say: Pressed, dragged and let go, the line goes down where it fits: the ghost turns red where a wall, the money or the game's own rule says no, and the game hears about what was laid.
+stop

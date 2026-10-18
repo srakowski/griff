@@ -513,6 +513,7 @@ public sealed partial class Game
         Step(Steps.HUD, _hud.LayOutHuds);
         Step(Steps.OtherPlayersTools, _network.RunOtherPlayersTools);
         Step(Steps.Dragging, _drags.RunDragging);
+        Step(Steps.LineTools, _selection.RunLineTools);
         Step(Steps.Selection, _selection.RunSelection);
         Step(Steps.Attacks, _combat.RunAttacks);
         Step(Steps.IdleGridMovers, _turns.PassIdleGridMovers);

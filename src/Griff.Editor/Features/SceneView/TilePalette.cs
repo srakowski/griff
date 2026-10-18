@@ -120,7 +120,7 @@ public sealed class TilePalette : ObservableObject
         : Turn == TileTurn.FlipY ? "flipped upside down"
         : string.Join(", ", new[] { Turn.IsFlipped() ? "flipped" : "", Turn.Quarters() > 0 ? $"turned {Turn.Quarters() * 90}°" : "" }.Where(t => t.Length > 0));
 
-    /// <summary>The tools under the tiles, in order: Select (V), Brush (B), Rectangle (R) and Fill (G).</summary>
+    /// <summary>The tools under the tiles, in order: Select (V), Brush (B), Rectangle (R), Fill (G) and Line (L).</summary>
     public IReadOnlyList<TileTool> Tools => Enum.GetValues<TileTool>();
 
     /// <summary>The tool picked (see <see cref="SceneViewModel.TileTool"/>).</summary>
@@ -141,7 +141,8 @@ public sealed class TilePalette : ObservableObject
     {
         TileTool.Rectangle => $"Rectangle{Turned}: drag a box to fill · Shift erase · Ctrl pick · [ ] tile · Z X turn · Esc done",
         TileTool.Fill => $"Fill{Turned}: click an area to fill it · Shift erase · Ctrl pick · [ ] tile · Z X turn · Esc done",
-        TileTool.Select => "Select: click or drag to select and move · B R G paint again · Esc done",
+        TileTool.Line => $"Line{Turned}: drag a line round a corner · Z turns a cell, or the corner while dragging · Shift erase · Ctrl pick · Esc done",
+        TileTool.Select => "Select: click or drag to select and move · B R G L paint again · Esc done",
         _ => $"Brush{Turned}: drag to paint · Shift erase · Ctrl pick · [ ] tile · Z X turn · Esc done",
     };
 
@@ -167,6 +168,7 @@ public sealed class TilePalette : ObservableObject
         TileTool.Select => 'V',
         TileTool.Rectangle => 'R',
         TileTool.Fill => 'G',
+        TileTool.Line => 'L',
         _ => 'B',
     };
 

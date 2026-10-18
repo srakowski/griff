@@ -115,7 +115,8 @@ public sealed class SelectionControls : Component
 
     /// <summary>
     /// True while the mouse is busy with something else (a building tool in hand, a road being painted): it neither selects,
-    /// commands nor clears, so the game's left-drag can paint. Set by scripts; see also <see cref="BusyFlag"/>.
+    /// commands nor clears, so the game's left-drag can paint. Set by scripts; see also <see cref="BusyFlag"/>. A
+    /// <see cref="LineTool"/> in hand (its Controllable ticked) makes it busy too.
     /// </summary>
     [DoNotSerialize]
     public bool Busy { get; set; }

@@ -101,6 +101,9 @@ public static class Steps
     /// <summary>The "Dragging" step of the Simulate phase.</summary>
     public static readonly StepId Dragging = new(FramePhase.Simulate, "Dragging");
 
+    /// <summary>The "LineTools" step of the Simulate phase.</summary>
+    public static readonly StepId LineTools = new(FramePhase.Simulate, "LineTools");
+
     /// <summary>The "Selection" step of the Simulate phase.</summary>
     public static readonly StepId Selection = new(FramePhase.Simulate, "Selection");
 

@@ -101,8 +101,14 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
 
     public bool RectangleErases { get; private set; }
 
-    /// <summary>Whether painting now erases: the stroke's or rectangle's way, or Shift held.</summary>
-    public bool Erasing => Stroke?.Erasing ?? (RectangleFrom is not null ? RectangleErases : Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+    // The line being dragged out with the Line tool (it erases as a rectangle does, by RectangleErases).
+    public LineDrag? Line { get; private set; }
+
+    /// <summary>Whether painting now erases: the stroke's, rectangle's or line's way, or Shift held.</summary>
+    public bool Erasing => Stroke?.Erasing ?? (RectangleFrom is not null || Line is not null ? RectangleErases : Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+
+    /// <summary>The cells of the line being dragged out with the Line tool, or empty.</summary>
+    public IReadOnlyList<LineCell> LineCells => Line?.Cells(model.SingleWay) ?? [];
 
     // The tilemap whose palette shows, and the one clicks paint (none with the Select tool).
     private Tilemap? PaintTarget => model.PaintTarget;
@@ -236,6 +242,8 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
             UpdateHoverCell(tilemap, position);
             if (Stroke is not null)
                 PaintTo(tilemap, position);
+            else if (Line is not null && CellUnder(tilemap, position) is { } cell && Line.MoveTo(cell))
+                view.InvalidateVisual();
             return;
         }
 
@@ -327,6 +335,8 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
             selection.Select(pressed);
         else if (Drag == SceneDrag.Paint && RectangleFrom is var (fromX, fromY) && Painting is { } tilemap && CellUnder(tilemap, position) is var (toX, toY))
             model.PaintRectangle(fromX, fromY, toX, toY, RectangleErases);
+        else if (Drag == SceneDrag.Paint && Line is not null && Painting is not null)
+            model.PaintLine(LineCells, RectangleErases);
 
         if (Drag != SceneDrag.None)
             EndDrag();
@@ -409,6 +419,11 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
                 return;
             case TileTool.Rectangle:
                 (RectangleFrom, RectangleErases, HoverCell) = ((x, y), erase, (x, y));
+                BeginDrag(SceneDrag.Paint, position);
+                view.InvalidateVisual();
+                return;
+            case TileTool.Line:
+                (Line, RectangleErases, HoverCell) = (new LineDrag((x, y)), erase, (x, y));
                 BeginDrag(SceneDrag.Paint, position);
                 view.InvalidateVisual();
                 return;
@@ -527,15 +542,16 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
             return;
         }
 
-        // While a tilemap is selected (painting hides the handles), B, R and G pick the brush, rectangle and fill, as in
+        // While a tilemap is selected (painting hides the handles), B, R, G and L pick the brush, rectangle, fill and line, as in
         // the Sprite Painter, and V the cursor, to select and move things without painting.
-        if (e.Key is Key.V or Key.B or Key.R or Key.G && Keyboard.Modifiers == ModifierKeys.None && Drag == SceneDrag.None && PaintTarget is not null)
+        if (e.Key is Key.V or Key.B or Key.R or Key.G or Key.L && Keyboard.Modifiers == ModifierKeys.None && Drag == SceneDrag.None && PaintTarget is not null)
         {
             palette.Tool = e.Key switch
             {
                 Key.V => TileTool.Select,
                 Key.R => TileTool.Rectangle,
                 Key.G => TileTool.Fill,
+                Key.L => TileTool.Line,
                 _ => TileTool.Brush,
             };
             ClearHoverCell();
@@ -571,8 +587,8 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
             switch (e.Key)
             {
                 case Key.Escape:
-                    // Esc lets go of a rectangle being dragged; otherwise it stops painting.
-                    if (RectangleFrom is not null)
+                    // Esc lets go of a rectangle or line being dragged; otherwise it stops painting.
+                    if (RectangleFrom is not null || Line is not null)
                         EndDrag();
                     else
                         selection.Select(null);
@@ -580,8 +596,11 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
                     return;
                 case Key.Z or Key.X when Keyboard.Modifiers is ModifierKeys.None or ModifierKeys.Shift:
                     // Z turns the brush a quarter clockwise (Shift+Z back), X flips it left to right (Shift+X upside down).
+                    // While a line is dragged out, Z turns its corner the other way round instead.
                     var shift = Keyboard.Modifiers == ModifierKeys.Shift;
-                    if (e.Key == Key.Z)
+                    if (e.Key == Key.Z && Line is { IsSingle: false } line)
+                        line.SwapCorner();
+                    else if (e.Key == Key.Z)
                         model.TurnBrush(shift ? -1 : 1);
                     else
                         model.FlipBrush(upsideDown: shift);
@@ -721,6 +740,7 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
                 Stroke?.End();
                 Stroke = null;
                 RectangleFrom = null;
+                Line = null;
                 break;
         }
 

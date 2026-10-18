@@ -258,6 +258,35 @@ public static class TileTurns
         return point;
     }
 
+    /// <summary>
+    /// The turn that points a tile drawn pointing right (a belt moving right, an arrow) the way (<paramref name="wayX"/>,
+    /// <paramref name="wayY"/>), x right and y up: <see cref="TileTurn.None"/> for (1, 0), <see cref="TileTurn.Turn90"/>
+    /// for down (0, -1), <see cref="TileTurn.Turn180"/> for left and <see cref="TileTurn.Turn270"/> for up. Any other way
+    /// is taken along its longer axis.
+    /// </summary>
+    public static TileTurn Pointing(int wayX, int wayY) =>
+        Math.Abs(wayX) >= Math.Abs(wayY) ? wayX >= 0 ? TileTurn.None : TileTurn.Turn180 : wayY < 0 ? TileTurn.Turn90 : TileTurn.Turn270;
+
+    /// <summary>
+    /// The turn that lays a corner tile drawn coming in moving right and going out moving down (joining its left side to
+    /// its bottom, as a belt turning clockwise does) so it comes in moving <paramref name="in"/> and goes out moving
+    /// <paramref name="out"/> (x right, y up): turned for a clockwise corner, mirrored for an anticlockwise one. Ways that
+    /// don't make a corner (straight on, or back) point it as <see cref="Pointing"/> does <paramref name="out"/>.
+    /// </summary>
+    public static TileTurn Corner((int X, int Y) @in, (int X, int Y) @out)
+    {
+        for (var turn = 0; turn < 8; turn++)
+        {
+            var t = (TileTurn)turn;
+            if (Way(t.Apply(Vector2.UnitX)) == @in && Way(t.Apply(-Vector2.UnitY)) == @out)
+                return t;
+        }
+
+        return Pointing(@out.X, @out.Y);
+
+        static (int X, int Y) Way(Vector2 v) => ((int)MathF.Round(v.X), (int)MathF.Round(v.Y));
+    }
+
     /// <summary>The transform of a tile's picture (round its middle, y up) that turns it by <paramref name="turn"/>.</summary>
     public static Matrix4x4 Matrix(this TileTurn turn)
     {

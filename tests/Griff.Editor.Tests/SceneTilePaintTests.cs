@@ -362,4 +362,47 @@ public class SceneTilePaintTests
             Assert.Equal(TileTurn.FlipY, model.BrushTurn);
         });
     }
+
+    [Fact]
+    public void TheLineTool_LaysLineTilesRoundACorner_TurnedToFollowIt_AsOneUndoStep()
+    {
+        EditorHost.Run(services =>
+        {
+            var (document, _, model, map) = Open(services);
+            var palette = services.GetRequiredService<TilePalette>();
+            palette.Tool = TileTool.Line;
+            Assert.StartsWith("Line:", palette.Hint);
+            Assert.Equal('L', TilePalette.KeyOf(TileTool.Line));
+
+            // Without Line Tiles, the brush's tile pointing along the line; a single cell points the brush's way.
+            model.BrushTile = 2;
+            model.PaintLine(1, 4, 3, 4);
+            Assert.Equal([2, 2, 2], Enumerable.Range(1, 3).Select(x => map.GetTile(x, 4)));
+            Assert.Equal(TileTurn.None, map.GetTurn(3, 4));
+            model.BrushTurn = TileTurn.Turn90;
+            model.PaintLine(0, 5, 0, 5);
+            Assert.Equal((2, TileTurn.Turn90), (map.GetTile(0, 5), map.GetTurn(0, 5)));
+            document.History.Undo();
+            document.History.Undo();
+            Assert.Equal(["1111", "1..1", "1111"], map.Tiles);
+
+            // With Line Tiles: straight pieces and a corner, turned down the column after it.
+            var tiles = map.Entity!.AddComponent<LineTiles>();
+            (tiles.StraightTile, tiles.CornerTile) = (3, 4);
+            var line = model.PaintLine(1, 3, 3, 5);
+            Assert.Equal(5, line.Count);
+            Assert.Equal((3, TileTurn.None), (map.GetTile(1, 3), map.GetTurn(1, 3)));
+            Assert.Equal((4, TileTurn.None), (map.GetTile(3, 3), map.GetTurn(3, 3)));
+            Assert.Equal((3, TileTurn.Turn90), (map.GetTile(3, 4), map.GetTurn(3, 4)));
+            Assert.Equal((3, TileTurn.Turn90), (map.GetTile(3, 5), map.GetTurn(3, 5)));
+
+            // Up the column first, then left: the corner is laid mirrored.
+            model.PaintLine(3, 2, 1, 0, acrossFirst: false);
+            Assert.Equal((4, TileTurns.Corner((0, 1), (-1, 0))), (map.GetTile(3, 0), map.GetTurn(3, 0)));
+            document.History.Undo();
+            document.History.Undo();
+            Assert.Equal(["1111", "1..1", "1111"], map.Tiles);
+            Assert.Empty(map.Turns);
+        });
+    }
 }

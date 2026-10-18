@@ -604,6 +604,9 @@ public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
             Tables = tables,
             Components = components,
             StepRate = project.StepRate,
+            Controls = project.Controls,
+            SaveVersion = project.SaveVersion,
+            ScriptsNow = () => _scriptSession.ScriptTypes is [var first, ..] ? first.Assembly : null,
             ScriptTypes = _scriptSession.ScriptTypes,
             LoadScene = name => open.Text is not null && string.Equals(open.Name, name, StringComparison.OrdinalIgnoreCase)
                 ? new SceneSerializer(components).LoadFromString(open.Text)

@@ -1,3 +1,4 @@
+using Griff.Input;
 using System.Reflection;
 using Griff.Projects;
 using Griff.Scenes;
@@ -125,6 +126,11 @@ public sealed record LoadedGame(Project? Project, ComponentRegistry Components, 
             game.UseProjectSettings(project, host.Tables);
         else if (host.Tables is { } tables)
             game.Tables = tables;
+        // A host without a project (a simulation's) hands over what the project says of its controls and saves.
+        if (host.Controls is { } controls)
+            game.HostInput.UseControls(controls);
+        if (host.SaveVersion is { } saveVersion)
+            game.SaveVersion = saveVersion;
         game.Time.StepRate = StepRate;
         game.AlreadySaid(Problems.Lines);
         if (host.Audio is { } audio)
@@ -171,6 +177,15 @@ public sealed record GameHostOptions
     /// simulation step's.
     /// </summary>
     public Griff.Data.TableSet? Tables { get; init; }
+
+    /// <summary>
+    /// The game's input actions with their bindings, as the project's Controls say, for a host that has no project to read
+    /// them from (a simulation's); null leaves them as the project, or the built-in ones, have them.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<InputBinding>>? Controls { get; init; }
+
+    /// <summary>The game's <see cref="Game.SaveVersion"/>, for a host with no project to read it from; null leaves it as it is.</summary>
+    public int? SaveVersion { get; init; }
 
     /// <summary>Told each problem the game reports (something set up without code that can't do its job).</summary>
     public Action<Problem>? Problems { get; init; }

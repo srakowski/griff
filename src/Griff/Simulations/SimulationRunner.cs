@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using Griff.Data;
+using Griff.Input;
 using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
@@ -32,6 +33,21 @@ public sealed class SimulationHost
     /// <summary>Steps a second of game time, as the project says.</summary>
     public int StepRate { get; init; } = Time.DefaultStepRate;
 
+    /// <summary>
+    /// The game's input actions and their bindings, as the project's Controls say, so a script asking for an action by name
+    /// finds it as in Play. Nothing is ever pressed in a run; the names are what count.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<InputBinding>> Controls { get; init; } = new Dictionary<string, IReadOnlyList<InputBinding>>();
+
+    /// <summary>The version of the game's saved games, as the project says (<see cref="Game.SaveVersion"/>).</summary>
+    public int SaveVersion { get; init; }
+
+    /// <summary>
+    /// Says which build of the project's scripts is running now (the editor's: its assembly), so a run that fails while they
+    /// were rebuilt under it says so. Null when the scripts can't change under a run (a game's).
+    /// </summary>
+    public Func<object?>? ScriptsNow { get; init; }
+
     /// <summary>Types that can be script simulations (classes deriving from <see cref="SimulationScript"/>), besides those beside the components.</summary>
     public IReadOnlyList<Type> ScriptTypes { get; init; } = [];
 
@@ -47,6 +63,8 @@ public sealed class SimulationHost
         LoadScene = game.SceneLoader,
         LoadPrefab = game.PrefabLoader,
         StepRate = game.Time.StepRate,
+        Controls = game.Input.Actions.ToDictionary(a => a, a => game.Input.BindingsOf(a), StringComparer.OrdinalIgnoreCase),
+        SaveVersion = game.SaveVersion,
     };
 
     /// <summary>
@@ -195,6 +213,9 @@ public static class SimulationRunner
         public Simulation Simulation { get; } = simulation;
 
         public SimulationHost Host { get; } = host;
+
+        // The build of the scripts the plan started with (see SimulationHost.ScriptsNow).
+        public object? ScriptsAtStart { get; } = host.ScriptsNow?.Invoke();
 
         public SceneSerializer Serializer { get; } = new(host.Components);
 
@@ -564,14 +585,21 @@ public static class SimulationRunner
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    var of = plan.HasScene && second is null ? first?.Name ?? plan.FirstLabel : $"{first?.Name ?? plan.FirstLabel} against {second?.Name ?? plan.SecondLabel}";
-                    plan.Problems.Report($"{type.Name} threw in a run of {of}: {ex.GetType().Name}: {ex.Message}");
+                    Threw(plan, type.Name, first, second, ex);
                     run.Draw();
                 }
             }
             else if (plan.HasScene)
             {
-                PlayScene(plan, step, run, null);
+                try
+                {
+                    PlayScene(plan, step, run, null);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    Threw(plan, null, first, second, ex);
+                    run.Draw();
+                }
             }
             else
             {
@@ -603,6 +631,37 @@ public static class SimulationRunner
         return run;
     }
 
+    // Says an exception ended a run, as Play's Output does: the script and line it came up through (File.cs(57), the first
+    // frame in the project's scripts), then the type and message, then the scripts' frames that led there. A run cut short
+    // because the scripts were rebuilt under it says that too.
+    private static void Threw(Plan plan, string? strategy, TableRow? first, TableRow? second, Exception ex)
+    {
+        var of = plan.HasScene && second is null ? first?.Name ?? plan.FirstLabel : $"{first?.Name ?? plan.FirstLabel} against {second?.Name ?? plan.SecondLabel}";
+        var frames = ScriptFrames(ex);
+        var who = frames.Count > 0 ? frames[0].Place : strategy ?? "The game";
+        var text = $"{who} threw in a run of {of}: {ex.GetType().Name}: {ex.Message}";
+        if (frames.Count > 0)
+            text += $" (at {string.Join(", ", frames.Select(f => $"{f.Method} {f.Place}"))})";
+        if (plan.Host.ScriptsNow is { } now && !ReferenceEquals(now(), plan.ScriptsAtStart))
+            text += ", after the project's scripts were rebuilt while the simulation ran, which can cut a run short: run it again";
+        plan.Problems.Report(text);
+    }
+
+    // The frames of an exception's stack that are in the project's scripts (built with debug info), innermost first, as
+    // "File.cs(57)" with the method they're in.
+    private static List<(string Place, string Method)> ScriptFrames(Exception ex)
+    {
+        var frames = new List<(string, string)>();
+        foreach (var frame in new StackTrace(ex, fNeedFileInfo: true).GetFrames())
+        {
+            if (frame.GetMethod() is { } method && method.Module.Assembly.GetName().Name?.StartsWith("GriffScripts_", StringComparison.Ordinal) == true
+                && frame.GetFileName() is { Length: > 0 } file && frame.GetFileLineNumber() > 0)
+                frames.Add(($"{Path.GetFileName(file)}({frame.GetFileLineNumber()})", $"{method.DeclaringType?.Name}.{method.Name}"));
+        }
+
+        return frames;
+    }
+
     /// <summary>
     /// One fight in the arena: loaded afresh, its sides' entities given the rows through Table Values, and stepped until a
     /// side is beaten (every entity of it dead or gone) or the time limit passes. With <paramref name="run"/>, each side's
@@ -628,7 +687,7 @@ public static class SimulationRunner
             Prefabs = host.LoadPrefab,
             StepRate = host.StepRate,
             Modules = host.Modules,
-        }.NewGame(new GameHostOptions { Tables = step.Tables, Problems = plan.Problems.Report });
+        }.NewGame(new GameHostOptions { Tables = step.Tables, Problems = plan.Problems.Report, Controls = host.Controls, SaveVersion = host.SaveVersion });
 
         double dealt = 0, taken = 0;
         var firstHealth = firsts.Select(e => e.GetComponent<Health>()).OfType<Health>().ToList();
@@ -737,7 +796,7 @@ public static class SimulationRunner
             Prefabs = host.LoadPrefab,
             StepRate = host.StepRate,
             Modules = host.Modules,
-        }.NewGame(new GameHostOptions { Tables = step.Tables, Problems = plan.Problems.Report });
+        }.NewGame(new GameHostOptions { Tables = step.Tables, Problems = plan.Problems.Report, Controls = host.Controls, SaveVersion = host.SaveVersion });
         foreach (var flag in simulation.Flags)
         {
             if (!string.IsNullOrWhiteSpace(flag))

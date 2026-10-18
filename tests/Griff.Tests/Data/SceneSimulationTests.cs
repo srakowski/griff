@@ -1,4 +1,6 @@
+using System.Runtime.Loader;
 using Griff.Data;
+using Griff.Input;
 using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scenes;
@@ -323,6 +325,75 @@ public sealed class SceneSimulationTests(ITestOutputHelper output)
         Assert.Equal(240, coarse.Steps[0].Pairs[0]["Seconds"], 3);
         Assert.Equal(fine.Steps[0].Pairs[0]["Acts"], coarse.Steps[0].Pairs[0]["Acts"]);
         Assert.Equal(fine.Steps[0].Pairs[0].OverARun["Cash"].Count, coarse.Steps[0].Pairs[0].OverARun["Cash"].Count);
+    }
+
+    // A host whose scene is one entity with the script below, compiled with debug info as the editor's are.
+    private static SimulationHost ScriptedHost(string source, IReadOnlyDictionary<string, IReadOnlyList<InputBinding>>? controls = null)
+    {
+        var compiled = Griff.Scripting.ScriptCompiler.Compile([new Griff.Scripting.ScriptSource("Flow.cs", source)]);
+        Assert.True(compiled.Success, string.Join("\n", compiled.Errors));
+        var type = new AssemblyLoadContext("Test", isCollectible: true)
+            .LoadFromStream(new MemoryStream(compiled.Assembly!), new MemoryStream(compiled.Symbols!)).GetType("Flow")!;
+        var components = ComponentRegistry.CreateDefault();
+        components.Register(type);
+        var scene = new Scene();
+        var entity = new Entity("Flow");
+        entity.AddComponent((Component)Activator.CreateInstance(type)!);
+        scene.Add(entity);
+        var text = new SceneSerializer(components).SaveToString(scene);
+        return new SimulationHost
+        {
+            Components = components,
+            Controls = controls ?? new Dictionary<string, IReadOnlyList<InputBinding>>(),
+            LoadScene = _ => new SceneSerializer(components).LoadFromString(text),
+        };
+    }
+
+    private static Simulation Brief() => new() { Name = "Brief", Scene = "Flow", Runs = 1, TimeLimit = 1 };
+
+    [Fact]
+    public void AScriptReadingAProjectAction_RunsWithoutBindingIt_WhenTheHostHasTheProjectsControls()
+    {
+        const string source = """
+            public class Flow : Behavior
+            {
+                protected override void Update()
+                {
+                    if (Input.WasPressed("OpenMap"))
+                        Game.SetFlag("Opened");
+                }
+            }
+            """;
+        var controls = new Dictionary<string, IReadOnlyList<InputBinding>> { ["OpenMap"] = [(InputBinding)Key.M] };
+        var results = SimulationRunner.Run(Brief(), ScriptedHost(source, controls));
+        Assert.Empty(results.Warnings);
+        Assert.Equal(60, results.GameSteps);
+
+        // Without them the name is unknown, which the run says rather than throwing out of the simulation.
+        var without = SimulationRunner.Run(Brief(), ScriptedHost(source));
+        Assert.Contains(without.Warnings, w => w.Contains("OpenMap", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ARunWhoseGameThrows_NamesTheScriptAndLine()
+    {
+        const string source = """
+            public class Flow : Behavior
+            {
+                private string? _name;
+
+                protected override void Update()
+                {
+                    Game.SetFlag("Going");
+                    Game.SetFlag(_name!.Trim());
+                }
+            }
+            """;
+        var results = SimulationRunner.Run(Brief(), ScriptedHost(source));
+        var warning = Assert.Single(results.Warnings);
+        output.WriteLine(warning);
+        Assert.StartsWith("Flow.cs(8) threw in a run of Flow: NullReferenceException", warning, StringComparison.Ordinal);
+        Assert.Contains("Flow.Update Flow.cs(8)", warning, StringComparison.Ordinal);
     }
 
     [Fact]

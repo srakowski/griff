@@ -1,5 +1,7 @@
 using System.Numerics;
 using Griff.Hosting;
+using Griff.Input;
+using Griff.Runtime;
 
 namespace Griff.Editor.Features.Play;
 
@@ -9,7 +11,9 @@ namespace Griff.Editor.Features.Play;
 /// rather than wherever the real one is; the real mouse moving over the game takes it back. Put on a button or anything
 /// else of the HUD's, it rests on the screen as a real mouse does: as the camera moves, it stays on its spot on the
 /// screen (the game seeing it at the world point now under it), so a panel that opens there again, pinned to the screen
-/// while the camera moved, opens under it, and clicking where it rests clicks that. An exported game's loop has none.
+/// while the camera moved, opens under it, and clicking where it rests clicks that. Moved with a button held (a drag), it
+/// moves across the screen as far as the point it was put at moved, so dragging a camera with CameraControls from one
+/// point to another moves the view by that much rather than chasing the point. An exported game's loop has none.
 /// </summary>
 internal sealed class PlaytestPointer : IGameLoopExtension
 {
@@ -20,6 +24,10 @@ internal sealed class PlaytestPointer : IGameLoopExtension
     private Vector2? _onScreen;
     private long? _placedAt;
     private bool? _onHud;
+
+    // Where it is on the screen for what moves the camera by the mouse (IInput.MouseOnScreen), and the point it was at before.
+    private Vector2? _spot;
+    private Vector2? _from;
 
     /// <summary>
     /// The world point it was put at, or null for the real mouse. Set again to the point it was put at, it stays where it
@@ -32,7 +40,7 @@ internal sealed class PlaytestPointer : IGameLoopExtension
         {
             if (value == _at)
                 return;
-            _at = value;
+            (_from, _at) = (_at, value);
             (_onScreen, _placedAt, _onHud) = (null, null, null);
         }
     }
@@ -50,7 +58,13 @@ internal sealed class PlaytestPointer : IGameLoopExtension
         {
             _placedAt = frame;
             if (drawn is { } view)
+            {
                 _onScreen = ToScreen(at, view);
+                // Dragged on from where it was, it goes as far across the screen as the point did, as a hand moves a mouse.
+                _spot = _from is { } from && _spot is { } spot && Held(loop.Input)
+                    ? spot + _onScreen.Value - ToScreen(from, view)
+                    : _onScreen;
+            }
         }
         else if (_onHud is null && frame > _placedAt)
         {
@@ -62,7 +76,11 @@ internal sealed class PlaytestPointer : IGameLoopExtension
         if (RestsOnScreen && drawn is { } now && Matrix4x4.Invert(now, out var back))
             world = ToWorld(_onScreen!.Value, back);
         (loop.Input.MouseWorld, loop.Input.IsMouseInView) = (world, true);
+        loop.Input.MouseOnScreen = RestsOnScreen ? _onScreen : _spot;
     }
+
+    private static bool Held(IInput input) =>
+        input.IsDown(MouseButton.Left) || input.IsDown(MouseButton.Middle) || input.IsDown(MouseButton.Right);
 
     public void PointerMoved(GameLoop loop) => At = null;
 

@@ -267,6 +267,10 @@ internal sealed class RemoteInput : IInput
 
     public Vector2 MouseWorld { get; private set; }
 
+    // Where the mouse is on the player's view, from where it is in the world and the view they last reported.
+    public Vector2? MouseOnScreen =>
+        HasView && View.HalfHeight > 0 && View.Aspect > 0 ? (MouseWorld - View.Center) / new Vector2(View.HalfHeight * View.Aspect, View.HalfHeight) : null;
+
     public bool IsMouseInView { get; private set; }
 
     public float Scroll => _now.Scroll;

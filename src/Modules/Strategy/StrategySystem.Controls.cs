@@ -52,8 +52,16 @@ internal sealed partial class StrategySystem
     {
         var camera = commander.Entity!;
         Rts.MouseInView = Game.MouseIn(camera, out var world);
-        Rts.Mouse = world;
         Rts.ViewAspect = ViewAspectOf(commander);
+        // Through the main camera as it is now, as the HUD is laid out: as last drawn it's a step behind while it pans, and
+        // the edge scroll and a drag on the minimap, which move it, would chase that.
+        if (Input.MouseOnScreen is { } onScreen && camera == Views.FindCamera(Game.Scene))
+        {
+            var size = camera.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize;
+            world = Game.Flat(camera.Transform.WorldPosition) + onScreen * new Vector2(size * Rts.ViewAspect, size);
+        }
+
+        Rts.Mouse = world;
     }
 
     // The width over the height of the commander's camera's view: the screen's, or its viewport's.

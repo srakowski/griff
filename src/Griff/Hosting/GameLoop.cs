@@ -469,8 +469,8 @@ public sealed class GameLoop
         _times = _times with { SoundMilliseconds = _times.SoundMilliseconds + Milliseconds(started, Stopwatch.GetTimestamp()) };
     }
 
-    // The mouse and the fingers in the world, through the last frame's camera; then what the extensions set (where an agent
-    // points).
+    // The mouse and the fingers in the world, through the last frame's camera, and the mouse on the screen (for what moves
+    // the camera by it, as the camera is now); then what the extensions set (where an agent points).
     private void PlacePointer()
     {
         if (_lastFrame is not null && Matrix4x4.Invert(_lastFrame.ViewProjection, out var inverse))
@@ -479,6 +479,8 @@ public sealed class GameLoop
             var world = Vector4.Transform(new Vector4(_pointer, 0, 1), inverse);
             Input.MouseWorld = new Vector2(world.X, world.Y) / world.W;
         }
+
+        Input.MouseOnScreen = _pointer;
 
         foreach (var extension in _extensions)
             extension.BeforeSteps(this);

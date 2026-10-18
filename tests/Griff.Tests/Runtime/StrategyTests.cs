@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Hosting;
 using Griff.Input;
 using Griff.Modules.Strategy;
 using Griff.Rendering;
@@ -558,6 +559,46 @@ public sealed class StrategyTests
         Run(game, input, Frame);
         input.SetKey(Key.D1, false);
         Assert.Equal([a], game.Selected);
+    }
+
+    private sealed class WideView : IGameView
+    {
+        public float Aspect => 2;
+
+        public void Render(RenderFrame frame)
+        {
+        }
+
+        public (byte[] Pixels, int Width, int Height)? Capture(RenderFrame frame) => null;
+    }
+
+    [Fact]
+    public void TheMouseAtTheScreensEdge_PansTheCameraSteadily_FrameAfterFrame()
+    {
+        // A real mouse, through real frames: the loop puts it in the world through the camera as last drawn, a step behind
+        // while it pans; the edge goes by where it is on the screen, so the camera keeps going rather than stopping every
+        // other step.
+        var scene = new Scene();
+        var camera = new Entity("Main Camera");
+        camera.AddComponent<Camera>().Size = 8;
+        camera.AddComponent<Commander>().MapSize = new Vector2(400, 400);
+        scene.Add(camera);
+        var loop = new GameLoop(NewGame(scene, new InputState()), new WideView());
+        loop.Start();
+        loop.Frame(Frame);
+        loop.PointAt(new Vector2(0.995f, 0));
+        loop.Frame(Frame);
+        loop.Frame(Frame);
+
+        var from = camera.Transform.Position.X;
+        for (var i = 0; i < 60; i++)
+        {
+            var x = camera.Transform.Position.X;
+            loop.Frame(Frame);
+            Assert.Equal(16 / 60f, camera.Transform.Position.X - x, 3);
+        }
+
+        Assert.Equal(16, camera.Transform.Position.X - from, 1);
     }
 
     [Fact]

@@ -292,6 +292,8 @@ public sealed class LocalPlayerInput : IInput
 
     public Vector2 MouseWorld => _machine.MouseWorld;
 
+    public Vector2? MouseOnScreen => _machine.MouseOnScreen;
+
     public bool IsMouseInView => Keys == KeySet.All && _machine.IsMouseInView;
 
     public float Scroll => Keys == KeySet.All ? _machine.Scroll : 0;

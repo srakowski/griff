@@ -109,6 +109,14 @@ public interface IInput
     Vector2 MouseWorld { get; }
 
     /// <summary>
+    /// Where the mouse is on the game's view, from -1 to 1 each way (the middle 0, up and right positive), or null when it
+    /// was put straight in the world (a test's mouse). <see cref="MouseWorld"/> is found through the camera as it was last
+    /// drawn, a step behind while it moves; this isn't, so a camera that moves by the mouse (a drag, zooming toward it,
+    /// scrolling at the screen's edge) goes by this and the camera as it is now.
+    /// </summary>
+    Vector2? MouseOnScreen => null;
+
+    /// <summary>
     /// Every finger on a touch screen this frame, each where it is in world units, those lifted this frame included (their
     /// <see cref="TouchPoint.Released"/> set) and those that went down marked <see cref="TouchPoint.Pressed"/>. The first
     /// finger is also the mouse (a tap is a left click), so code that only needs one pointer reads the mouse; this is for
@@ -222,8 +230,11 @@ public interface IHostInput : IInput
     /// <summary>Everything held is let go (the game lost the keyboard).</summary>
     void ReleaseAll();
 
-    /// <summary>Where the mouse is in the world, which the host works out through the camera.</summary>
+    /// <summary>Where the mouse is in the world, which the host works out through the camera. Setting it forgets <see cref="MouseOnScreen"/>.</summary>
     new Vector2 MouseWorld { get; set; }
+
+    /// <summary>Where the mouse is on the view (-1..1 each way, up positive), set after <see cref="MouseWorld"/>; null when unknown.</summary>
+    new Vector2? MouseOnScreen { get; set; }
 
     /// <summary>Whether the mouse is over the game's view.</summary>
     new bool IsMouseInView { get; set; }
@@ -300,7 +311,15 @@ public sealed class InputState : IHostInput
     private SaveData? _saveData;
     private float _rumbleSeconds;
 
-    public Vector2 MouseWorld { get; set; }
+    public Vector2 MouseWorld
+    {
+        get => _mouseWorld;
+        set => (_mouseWorld, MouseOnScreen) = (value, null);
+    }
+
+    private Vector2 _mouseWorld;
+
+    public Vector2? MouseOnScreen { get; set; }
 
     // The fingers down (and those lifted this frame), each with where the platform said it was: on the screen (from -1 to 1
     // across the view, placed in the world by PlaceTouches) or already in the world.

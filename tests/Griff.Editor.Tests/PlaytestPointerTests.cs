@@ -114,4 +114,33 @@ public sealed class PlaytestPointerTests
         Assert.False(pointer.RestsOnScreen);
         Assert.Equal(new Vector2(2, 2), loop.Input.MouseWorld);
     }
+
+    [Fact]
+    public void Dragging_a_camera_with_CameraControls_moves_the_view_as_far_as_the_drag_and_it_stays()
+    {
+        _camera.AddComponent<CameraControls>();
+        var (loop, pointer) = Start();
+
+        // As game_input's drag with the middle button: put at the start, pressed, moved along in steps, two frames each.
+        var (from, to) = (new Vector2(1, 1), new Vector2(4, 2));
+        pointer.At = from;
+        Frames(loop, 1);
+        loop.Input.SetMouseButton(MouseButton.Middle, true);
+        Frames(loop, 2);
+        for (var i = 1; i <= 10; i++)
+        {
+            pointer.At = Vector2.Lerp(from, to, i / 10f);
+            Frames(loop, 2);
+        }
+
+        // The point it took hold of is where the drag ended, on the screen: the view went back by as much, and stays.
+        for (var i = 0; i < 30; i++)
+        {
+            Frames(loop, 1);
+            var at = new Vector2(_camera.Transform.Position.X, _camera.Transform.Position.Y);
+            Assert.True(Vector2.Distance(from - to, at) < 1e-3f, $"Expected {from - to}, got {at}.");
+        }
+
+        loop.Input.SetMouseButton(MouseButton.Middle, false);
+    }
 }

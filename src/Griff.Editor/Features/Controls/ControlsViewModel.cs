@@ -39,16 +39,30 @@ public sealed partial class ControlsViewModel : ObservableObject
     {
         _projectSession = projectSession;
         _play = play;
-        var project = projectSession.Project ?? throw new InvalidOperationException("No project is open.");
-        var controls = project.Controls;
+        _ = projectSession.Project ?? throw new InvalidOperationException("No project is open.");
+        GamepadChoices = Enum.GetValues<GamepadButton>().Select(b => new GamepadChoice(b, () => Add(b))).ToList();
+        Reload();
+    }
 
+    /// <summary>
+    /// Shows the project's controls as they are now: when project.griff was changed outside the editor and read again. The
+    /// action selected stays selected if it's still there.
+    /// </summary>
+    public void Reload()
+    {
+        if (_projectSession.Project is not { } project)
+            return;
+        var controls = project.Controls;
+        var selected = Selected?.Name;
+
+        Actions.Clear();
         foreach (var (name, builtIn) in InputActions.BuiltIn)
             Actions.Add(new ActionRow(this, name, isBuiltIn: true, controls.TryGetValue(name, out var mine) ? mine : builtIn));
         foreach (var (name, bindings) in controls.Where(p => !InputActions.BuiltIn.ContainsKey(p.Key)).OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
             Actions.Add(new ActionRow(this, name, isBuiltIn: false, bindings));
 
-        GamepadChoices = Enum.GetValues<GamepadButton>().Select(b => new GamepadChoice(b, () => Add(b))).ToList();
-        Selected = Actions[0];
+        _selected = null;
+        Selected = Actions.FirstOrDefault(a => string.Equals(a.Name, selected, StringComparison.OrdinalIgnoreCase)) ?? Actions[0];
         RefreshConflicts();
     }
 

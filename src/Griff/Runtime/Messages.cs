@@ -27,8 +27,8 @@ public sealed class MessageListener
     /// <summary>The entity whose removal stops this listener, if any.</summary>
     public Entity? OwnerEntity { get; }
 
-    // Behaviors own their listeners, so a script reload (which swaps in a new behavior) drops the old version's;
-    // Start runs again on the new one and listens afresh.
+    // Behaviors own their listeners, so a script reload (which swaps in a new behavior) drops the old version's; a game
+    // played in the editor then starts over with the new one.
     internal Behavior? OwnerBehavior { get; }
 
     public void Cancel() => IsActive = false;

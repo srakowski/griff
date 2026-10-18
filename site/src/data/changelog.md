@@ -7,6 +7,10 @@
 
 ## Unreleased
 
+- `project.griff` changed outside the editor (a text editor, a pull, an agent) is read again by itself: its controls, step rate and start scene take over, in the **Controls** window and a running game too.
+- A script saved while the game plays starts the game over with it, as a fresh Play would, rather than swapping it into the game as it stands, which started each script again (spawning what its `Start` spawns twice) without its own fields, and had the others read scripts that hadn't started yet.
+- `entity_update`'s `remove` takes off a component whose script is gone, by the name `scene_tree` shows it with (`ShopSign (missing)`), as **Remove Component** does.
+
 ## 0.1.0-alpha.18 - 2026-10-17
 
 - Conveyor belts on a grid: a **Conveyor** lays directed belt cells on a tilemap's cells (rows like `4 2 right`, or `LayPath` from a script) and carries items along them a cell apart at its **Speed**, backing up behind a full end; a belt joining another from the side merges, taking turns, and a **split** cell hands items round its belts. A **Conveyor Port** on a machine takes what reaches a belt's end into its inventory (until it **Holds** enough, leaving the wrong item waiting) and puts what it makes on a belt. Belts are walls to grid movers (`WalkTo` goes round them) and **crossings** let them over, items move in fixed steps of game time so a line plays out the same at 16x, and hundreds of items are drawn a quad each.

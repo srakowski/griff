@@ -53,6 +53,42 @@ public sealed class ProjectControlsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReloadManifest_TakesWhatTheFileSaysNow_WhenItChangedOutsideTheProject()
+    {
+        var project = await Project.CreateAsync(_root, "Game");
+        await project.SetControlsAsync(new Dictionary<string, IReadOnlyList<InputBinding>> { ["Shield"] = [Key.Q] });
+
+        // Its own save, read back, is nothing new.
+        Assert.Null(project.ReloadManifest());
+
+        // Edited in a text editor: an action renamed, another key, a step rate.
+        var text = (await File.ReadAllTextAsync(project.ManifestPath)).Replace("\"Shield\"", "\"Guard\"").Replace("\"Q\"", "\"Q\", \"E\"");
+        text = text.Replace("\"controls\"", "\"stepRate\": 30, \"controls\"");
+        await File.WriteAllTextAsync(project.ManifestPath, text);
+
+        var before = project.ReloadManifest();
+        Assert.NotNull(before);
+        Assert.Equal(["Shield"], before!.Controls!.Keys);
+        Assert.Equal(["Guard"], project.Controls.Keys);
+        Assert.Equal([Key.Q, Key.E], project.Controls["Guard"]);
+        Assert.Equal(30, project.StepRate);
+        // Read once: the same file again is nothing new.
+        Assert.Null(project.ReloadManifest());
+    }
+
+    [Fact]
+    public async Task ReloadManifest_OfAFileThatDoesntRead_KeepsTheSettings()
+    {
+        var project = await Project.CreateAsync(_root, "Game");
+        await project.SetControlsAsync(new Dictionary<string, IReadOnlyList<InputBinding>> { ["Shield"] = [Key.Q] });
+
+        await File.WriteAllTextAsync(project.ManifestPath, "{ \"name\": \"Game\", \"controls\": ");
+
+        Assert.ThrowsAny<System.Text.Json.JsonException>(() => project.ReloadManifest());
+        Assert.Equal(["Shield"], project.Controls.Keys);
+    }
+
+    [Fact]
     public void UseControls_RebindsBuiltInAndAddsActions()
     {
         var input = new InputState();

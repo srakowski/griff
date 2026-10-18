@@ -25,6 +25,8 @@ public sealed class ShowControlsCommand : EditorCommand
     private readonly PlayMode _play;
     private readonly Core.EditorWindow _editorWindow;
     private ControlsWindow? _window;
+    private ControlsViewModel? _viewModel;
+    private Griff.Projects.Project? _project;
 
     public ShowControlsCommand(IProjectSession projectSession, PlayMode play, Core.EditorWindow editorWindow)
     {
@@ -32,6 +34,8 @@ public sealed class ShowControlsCommand : EditorCommand
         _projectSession = projectSession;
         _play = play;
         projectSession.PropertyChanged += OnWorkspaceChanged;
+        // project.griff changed outside the editor: the window shows the controls it says now.
+        projectSession.ProjectSettingsChanged += (_, _) => _viewModel?.Reload();
     }
 
     public override string Id => "Game.Controls";
@@ -49,8 +53,14 @@ public sealed class ShowControlsCommand : EditorCommand
             return Task.CompletedTask;
         }
 
-        _window = new ControlsWindow(new ControlsViewModel(_projectSession, _play)) { Owner = _editorWindow.Main };
-        _window.Closed += (_, _) => _window = null;
+        _project = _projectSession.Project;
+        _viewModel = new ControlsViewModel(_projectSession, _play);
+        _window = new ControlsWindow(_viewModel) { Owner = _editorWindow.Main };
+        _window.Closed += (_, _) =>
+        {
+            _window = null;
+            _viewModel = null;
+        };
         _window.Show();
         return Task.CompletedTask;
     }
@@ -58,7 +68,7 @@ public sealed class ShowControlsCommand : EditorCommand
     // The window edits one project's controls, so it closes when another project opens.
     private void OnWorkspaceChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(IProjectSession.Project))
+        if (e.PropertyName == nameof(IProjectSession.Project) && _projectSession.Project != _project)
             _window?.Close();
     }
 }

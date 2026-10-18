@@ -147,7 +147,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             Description = "Changes entities, as one undo step: rename (fields that name it, a Switch's Targets or a camera's Follow target, are renamed too), enable, lock (\"locked\": the Scene view clicks through it), hide (\"hidden\": the Scene view doesn't draw it), move in the hierarchy (\"parent\": a name, or null for " +
                 "the top level; \"index\": its place among siblings), place (\"position\", \"rotation\", \"scale\"), and set component " +
                 "properties with \"components\": {\"Light\": {\"radius\": 6}} (a component it doesn't have yet is added, with what it needs; " +
-                "\"Weapon#2\" is its second Weapon). \"remove\": [\"Patrol\"] takes components off. " +
+                "\"Weapon#2\" is its second Weapon). \"remove\": [\"Patrol\"] takes components off (one whose script is gone by the name it's shown as). " +
                 "Instead of \"entity\", pick several to change alike: \"match\" is a glob on the path (\"HUD/Toolbar/Tool *\"; \"*\" is any characters " +
                 "within a name, \"?\" one; without a \"/\" it matches names at any depth), \"with\" keeps those with a component, \"under\" those inside an entity; " +
                 "any of them alone works too. \"updates\" gives many such changes at once. All or nothing: if any change fails, nothing changes and " +
@@ -853,9 +853,15 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             foreach (var item in remove.ValueKind == JsonValueKind.Array ? remove.EnumerateArray().ToList() : [remove])
             {
                 var (type, occurrence) = ParseKey(item.GetString() ?? "");
-                var descriptor = FindComponent(type);
-                var component = entity.Components.Where(descriptor.Type.IsInstanceOfType).ElementAtOrDefault(occurrence - 1)
-                    ?? throw new AgentException($"{entity.Name} has no {item.GetString()}.");
+                // A component whose type is gone (a deleted script) by the name it's saved as, as scene_tree and entity_get show it.
+                var missingName = type.EndsWith("(missing)", StringComparison.OrdinalIgnoreCase) ? type[..^"(missing)".Length].Trim() : type;
+                var missing = entity.Components.OfType<MissingComponent>().Where(m => m.TypeName.Equals(missingName, StringComparison.OrdinalIgnoreCase)
+                    || m.TypeName.EndsWith("." + missingName, StringComparison.OrdinalIgnoreCase)).ToList();
+                var component = missing.Count > 0
+                    ? missing.ElementAtOrDefault(occurrence - 1)
+                    : entity.Components.Where(FindComponent(type).Type.IsInstanceOfType).ElementAtOrDefault(occurrence - 1);
+                if (component is null)
+                    throw new AgentException($"{entity.Name} has no {item.GetString()}.");
                 host.Execute(new RemoveComponentEdit(component));
             }
         }

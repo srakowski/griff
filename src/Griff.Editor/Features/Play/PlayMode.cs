@@ -77,8 +77,12 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _status = status;
         _logger = logger;
 
-        // A script reload reaches the other players' games as well as the Game tab's.
+        // A script reload reaches the other players' games as well as the Game tab's, and then starts the game over.
         scriptSession.AddLiveScenes(() => _players.Select(p => p.Runner.Game.Scene).ToList());
+        scriptSession.ScriptsReloaded += (_, _) => PlayAgainWithNewScripts();
+
+        // project.griff changed on disk reaches the running games as a change in the Controls window or Step Rate does.
+        projectSession.ProjectSettingsChanged += (_, before) => UseProjectSettings(before);
 
         // The workspace can leave play mode on its own (e.g. when closing); follow it.
         playSession.PropertyChanged += (_, e) =>
@@ -249,6 +253,49 @@ public sealed class PlayMode : ObservableObject, IDisposable
 
     /// <summary>Player <paramref name="number"/>'s window (null for player 1, who plays in the Game tab).</summary>
     internal Window? PlayerWindowOf(int number) => _players.FirstOrDefault(p => p.Number == number)?.Window;
+
+    // Scripts rebuilt while the game plays start it over with them, as a fresh Play would (with as many players). Rebuilt in
+    // place, a game would go on part old and part new: each script starting again (spawning what it spawned at Start a
+    // second time) without the fields of its own it had, and the others reading scripts that hadn't started yet. A game
+    // held at a breakpoint leaves its frame first.
+    private void PlayAgainWithNewScripts()
+    {
+        if (_runner is null)
+            return;
+        var players = PlayerCount;
+        var held = _held is not null;
+        Stop();
+        if (held)
+            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background, () => PlayAgain(players));
+        else
+            PlayAgain(players);
+    }
+
+    private void PlayAgain(int players)
+    {
+        if (IsPlaying)
+            return;
+        Play(players);
+        if (!IsPlaying)
+            return;
+        _status.Show("Scripts changed: playing again from the start with them");
+        _logger.LogInformation("Scripts changed while playing: playing {Scene} again from the start", _sceneName);
+    }
+
+    // The project's settings read again: every running game takes its controls, and its step rate if that changed (a
+    // script's own Time.StepRate stays otherwise).
+    private void UseProjectSettings(Griff.Projects.ProjectManifest before)
+    {
+        if (_projectSession.Project is not { } project)
+            return;
+        var rateChanged = Math.Clamp(before.StepRate ?? Griff.Projects.Project.DefaultStepRate, Griff.Projects.Project.MinStepRate, Griff.Projects.Project.MaxStepRate) != project.StepRate;
+        foreach (var game in AllGames())
+        {
+            game.HostInput.UseControls(project.Controls);
+            if (rateChanged)
+                game.Time.StepRate = project.StepRate;
+        }
+    }
 
     /// <summary>Has every running game (the Game tab's and other players') take <paramref name="rate"/> steps a second from now on.</summary>
     public void UseStepRate(int rate)

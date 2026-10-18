@@ -38,6 +38,8 @@ public sealed class Workspace(
     private readonly ObservableCollection<SceneDocument> _prefabs = [];
     private ReadOnlyObservableCollection<SceneDocument>? _readOnlyPrefabs;
     private FileSystemWatcher? _scriptWatcher;
+    private FileSystemWatcher? _manifestWatcher;
+    private DispatcherTimer? _manifestDebounce;
     private Griff.Projects.WatchedAssetFolder? _assets;
     private Griff.Runtime.PrefabLibrary? _prefabLibrary;
     private Dispatcher? _dispatcher;
@@ -173,11 +175,88 @@ public sealed class Workspace(
         _scriptWatcher.EnableRaisingEvents = true;
     }
 
+    // project.griff changed on disk (a text editor, a pull, an agent) is read again once it's settled.
+    private void WatchManifest(Project project)
+    {
+        _manifestWatcher?.Dispose();
+        _manifestWatcher = null;
+        _manifestDebounce ??= new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) =>
+        {
+            _manifestDebounce!.Stop();
+            ReloadProjectSettings();
+        }, Dispatcher.CurrentDispatcher);
+        _manifestDebounce.Stop();
+
+        try
+        {
+            _manifestWatcher = new FileSystemWatcher(project.RootPath, Project.ManifestFileName)
+            {
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite,
+            };
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or PlatformNotSupportedException)
+        {
+            logger.LogWarning(ex, "Can't watch {File} for changes", Project.ManifestFileName);
+            return;
+        }
+
+        FileSystemEventHandler restart = (_, _) => _manifestDebounce.Dispatcher.InvokeAsync(() =>
+        {
+            _manifestDebounce.Stop();
+            _manifestDebounce.Start();
+        });
+        _manifestWatcher.Changed += restart;
+        _manifestWatcher.Created += restart;
+        _manifestWatcher.Renamed += (s, e) => restart(s, e);
+        _manifestWatcher.EnableRaisingEvents = true;
+    }
+
+    public event EventHandler<ProjectManifest>? ProjectSettingsChanged;
+
+    /// <summary>
+    /// Reads project.griff again (see <see cref="Project.ReloadManifest"/>), as the editor does by itself when the file
+    /// changes on disk. True when the settings changed, which <see cref="ProjectSettingsChanged"/> then says; false when
+    /// the file says what the project has already, or doesn't read (said in Output, the settings kept).
+    /// </summary>
+    public bool ReloadProjectSettings()
+    {
+        if (Project is not { } project)
+            return false;
+
+        ProjectManifest? before;
+        try
+        {
+            before = project.ReloadManifest();
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidDataException)
+        {
+            logger.LogWarning("{File} changed but doesn't read, so the project's settings are as they were: {Message}", Project.ManifestFileName, ex.Message);
+            status.Show($"{Project.ManifestFileName} doesn't read; the project's settings are as they were. See Output.");
+            return false;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Gone, or still being written: the watcher says when it's back.
+            return false;
+        }
+
+        if (before is null)
+            return false;
+        logger.LogInformation("{File} changed outside the editor: the project's settings were read again", Project.ManifestFileName);
+        status.Show($"{Project.ManifestFileName} changed: the project's settings were read again");
+        OnPropertyChanged(nameof(Project));
+        ProjectSettingsChanged?.Invoke(this, before);
+        return true;
+    }
+
     /// <summary>Stops watching the project's scripts and writing recovery files (the editor is closing).</summary>
     public void Dispose()
     {
         _scriptWatcher?.Dispose();
         _scriptWatcher = null;
+        _manifestWatcher?.Dispose();
+        _manifestWatcher = null;
+        _manifestDebounce?.Stop();
         _prefabLibrary?.Dispose();
         _prefabLibrary = null;
         _assets?.Dispose();
@@ -335,6 +414,9 @@ public sealed class Workspace(
         _scriptDebounce?.Stop();
         _scriptWatcher?.Dispose();
         _scriptWatcher = null;
+        _manifestDebounce?.Stop();
+        _manifestWatcher?.Dispose();
+        _manifestWatcher = null;
         _scripts?.Unload([]);
         _prefabLibrary?.Dispose();
         _prefabLibrary = null;
@@ -593,6 +675,7 @@ public sealed class Workspace(
         // Scripts first, so the scene's script components load as real components.
         ReloadScripts();
         WatchScripts(project);
+        WatchManifest(project);
         StartRecoveryTimer();
 
         // Copies of prefabs changed while the project was closed (a pull, a text editor) catch up before anything opens.

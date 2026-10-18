@@ -72,4 +72,11 @@ public interface IProjectSession : INotifyPropertyChanged
     IReadOnlyList<Griff.Agent.AssetFeedback> AssetChanged(string assetPath);
 
     Task SetStartSceneAsync(string path);
+
+    /// <summary>
+    /// The project's settings (project.griff: its controls, step rate, start scene...) changed on disk outside the editor (a
+    /// text editor, a pull, an agent) and were read again: with what they were before. The editor's own changes are saved
+    /// as they're made, so the file always wins.
+    /// </summary>
+    event EventHandler<ProjectManifest>? ProjectSettingsChanged;
 }

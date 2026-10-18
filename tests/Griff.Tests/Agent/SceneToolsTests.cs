@@ -800,6 +800,28 @@ public class SceneToolsTests
         Assert.DoesNotContain("Note:", Run("entity_update", """{"entity": "Hero", "changes": {"remove": ["BoxCollider", "PlatformerMovement"]}}""").Text);
     }
 
+    [Fact]
+    public void Update_RemovesAComponentWhoseScriptIsGone_ByTheNameItsShownAs()
+    {
+        var desk = new Entity("Desk");
+        using (var data = System.Text.Json.JsonDocument.Parse("""{ "type": "ShopSign", "Width": 3 }"""))
+        {
+            desk.AddComponent(new MissingComponent("ShopSign", data.RootElement));
+            desk.AddComponent(new MissingComponent("OldBoard", data.RootElement));
+        }
+        _host.Scene!.Add(desk);
+        Assert.Contains("ShopSign (missing)", Run("scene_tree", "{}").Text);
+
+        var result = Run("entity_update", """{"entity": "Desk", "changes": {"remove": ["ShopSign"]}}""");
+        Assert.False(result.IsError, result.Text);
+        Assert.DoesNotContain(desk.Components, c => c is MissingComponent { TypeName: "ShopSign" });
+
+        // As scene_tree writes it too, "(missing)" and all.
+        Assert.False(Run("entity_update", """{"entity": "Desk", "changes": {"remove": ["OldBoard (missing)"]}}""").IsError);
+        Assert.Empty(desk.Components.OfType<MissingComponent>());
+        Assert.True(Run("entity_update", """{"entity": "Desk", "changes": {"remove": ["OldBoard"]}}""").IsError);
+    }
+
     // A toolbar in a HUD (three tools and a toolbox, two of them lit) and a tool on its own at the top level.
     private void MakeToolbar()
     {

@@ -109,10 +109,21 @@ public sealed class Project
         JsonSerializer.Serialize(stream, Manifest, JsonOptions);
     }
 
+    // While it's being written, the file isn't read back (see ReloadManifest): it says neither what it did nor what it will.
+    private int _saving;
+
     private async Task SaveManifestAsync(CancellationToken cancellationToken)
     {
-        await using var stream = File.Create(ManifestPath);
-        await JsonSerializer.SerializeAsync(stream, Manifest, JsonOptions, cancellationToken);
+        _saving++;
+        try
+        {
+            await using var stream = File.Create(ManifestPath);
+            await JsonSerializer.SerializeAsync(stream, Manifest, JsonOptions, cancellationToken);
+        }
+        finally
+        {
+            _saving--;
+        }
     }
 
     /// <summary>Writes a new scene with a camera at Assets/Scenes/&lt;name&gt;.scene and returns its path.</summary>
@@ -228,17 +239,36 @@ public sealed class Project
         if (!File.Exists(manifestPath))
             throw new FileNotFoundException($"No {ManifestFileName} found at \"{path}\".", manifestPath);
 
-        ProjectManifest? manifest;
-        await using (var stream = File.OpenRead(manifestPath))
-            manifest = await JsonSerializer.DeserializeAsync<ProjectManifest>(stream, JsonOptions, cancellationToken);
+        var manifest = ParseManifest(await File.ReadAllTextAsync(manifestPath, cancellationToken), manifestPath);
+        return new Project(Path.GetDirectoryName(Path.GetFullPath(manifestPath))!, manifest);
+    }
 
-        if (manifest is null)
-            throw new InvalidDataException($"\"{manifestPath}\" is empty.");
-
+    private static ProjectManifest ParseManifest(string text, string manifestPath)
+    {
+        var manifest = JsonSerializer.Deserialize<ProjectManifest>(text, JsonOptions)
+            ?? throw new InvalidDataException($"\"{manifestPath}\" is empty.");
         if (manifest.FormatVersion > ProjectManifest.CurrentFormatVersion)
             throw new InvalidDataException($"\"{manifest.Name}\" was saved by a newer version of Griff.");
+        return manifest;
+    }
 
-        return new Project(Path.GetDirectoryName(Path.GetFullPath(manifestPath))!, manifest);
+    /// <summary>
+    /// Reads <c>project.griff</c> again after it changed on disk outside the editor (a text editor, a pull, an agent), taking
+    /// what it says now (its controls, step rate, start scene...) in place of what was loaded. Returns the settings it had
+    /// before, or null when the file says what the project has already (the project's own save, read back) or is being
+    /// saved by it just now. Throws <see cref="JsonException"/> or <see cref="InvalidDataException"/> when the file doesn't
+    /// read, keeping the settings as they were.
+    /// </summary>
+    public ProjectManifest? ReloadManifest()
+    {
+        if (_saving > 0)
+            return null;
+        var manifest = ParseManifest(File.ReadAllText(ManifestPath), ManifestPath);
+        if (JsonSerializer.Serialize(manifest, JsonOptions) == JsonSerializer.Serialize(Manifest, JsonOptions))
+            return null;
+        var before = Manifest;
+        Manifest = manifest;
+        return before;
     }
 
     private IEnumerable<string> FindFiles(string extension) =>

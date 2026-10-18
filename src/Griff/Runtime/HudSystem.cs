@@ -137,6 +137,17 @@ internal sealed partial class HudSystem : GameSystem
         }
     }
 
+    // Buttons that pop grow, shrink and shade into being under the mouse, held or left, in real time, as the player sees
+    // them (under a pause menu too).
+    internal void RunButtonPops()
+    {
+        foreach (var button in Game.Showing<Button>())
+        {
+            if (button.HoverGrow != 0 || button.PressShrink != 0 || button.PopTime > 0)
+                button.AdvancePop(Game.Time.UnscaledDelta);
+        }
+    }
+
     // Texts showing an output fill it into what they say, made again only when it (or what it's out of) changes.
     internal void ShowOutputs()
     {
@@ -156,12 +167,38 @@ internal sealed partial class HudSystem : GameSystem
             var reader = text.Reader;
             var found = reader.Find(text.Entity!, text.Track, text.Output);
             var (number, name, outOf) = found ? (reader.Number, reader.Text, reader.OutOf) : (0f, "", 0f);
+            if (text.CountTime > 0 && found && reader.Output!.ValueType != typeof(string) && reader.Output.ValueType != typeof(bool))
+                number = CountTo(text, number);
+            else
+                text.Counting = null;
             if (text.ReadFrom is { } from && ReferenceEquals(from.Template, text.Value) && from.Number.Equals(number) && from.Name == name &&
                 from.OutOf.Equals(outOf))
                 continue;
             text.ReadFrom = (text.Value, number, name, outOf);
             text.SetReadout(Readout.Fill(text.Value, number, name, outOf, found ? reader.Output!.ValueType : typeof(string)));
         }
+    }
+
+    // The number a text counting its output (see Text.CountTime) shows now, on its way to `number`: from what it showed
+    // when the number changed, eased, in real time (under a pause menu too). The first number it reads it shows as it is.
+    private float CountTo(Text text, float number)
+    {
+        var time = text.CountTime;
+        if (text.Counting is not { } counting)
+        {
+            text.Counting = (number, number, time);
+            return number;
+        }
+
+        var (from, to, age) = counting;
+        if (!to.Equals(number))
+            (from, to, age) = (Counted(from, to, age / time), number, 0);
+        else
+            age = Math.Min(time, age + Game.Time.UnscaledDelta);
+        text.Counting = (from, to, age);
+        return age >= time ? to : Counted(from, to, age / time);
+
+        static float Counted(float from, float to, float t) => from + (to - from) * Ease.OutQuad(Math.Clamp(t, 0, 1));
     }
 
     // A counter counting an output (a board's score, the dungeon's floor, a faction's gold), out of what it's out of.

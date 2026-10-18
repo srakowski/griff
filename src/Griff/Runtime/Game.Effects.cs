@@ -26,4 +26,11 @@ public sealed partial class Game
     /// <summary>Shakes the camera the game is viewed through, if there is one. See <see cref="Camera.Shake"/>.</summary>
     public void ShakeCamera(float strength = 0.3f, float duration = 0.25f) =>
         _effects.ShakeCamera(strength, duration);
+
+    /// <summary>
+    /// Kicks the camera the game is viewed through, if there is one: pushes the view <paramref name="by"/> (which way and
+    /// how far, in world units) and eases it back over <paramref name="duration"/> seconds. See <see cref="Camera.Kick(System.Numerics.Vector2, float)"/>.
+    /// </summary>
+    public void KickCamera(System.Numerics.Vector2 by, float duration = 0.2f) =>
+        _effects.KickCamera(by, duration);
 }

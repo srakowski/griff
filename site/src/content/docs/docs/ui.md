@@ -1,6 +1,6 @@
 ---
 title: "Menus, HUDs and pickups"
-description: "Buttons, options, pause menus and panels, button prompts, controls screens, HUD bars, pickups and scores."
+description: "Buttons, options, pause menus and panels, button prompts, controls screens, HUD bars, juice, pickups and scores."
 ---
 
 ## Menus and HUDs
@@ -72,6 +72,8 @@ A child takes the room of its Button's clickable area, its Sprite's **Size** or 
 
 Tick **Clip** and what doesn't fit its **Size** is cut off at its edges, and the mouse wheel over it scrolls it a row at a time (a click or the wheel there isn't the world's, as on a button). Scripts read how far it can go in **Most Scroll** and set **Scroll** themselves; `layout.Arrange()` places the children straight away, for a script that wants to know where one it just spawned went (otherwise they're placed after LateUpdate, before the frame is drawn).
 
+Tick **Slide** and, while the game runs, its children slide to new places over **Slide Time** rather than jumping there: the rest close up when one is destroyed or hidden, make room for one spawned in, and glide as the list is scrolled or put in a new order. A child that's just been added (or shown again) takes its place at once.
+
 ### Rows the player puts in order
 
 Tick **Reorderable** and the player sets the order of its children: a build queue, a research queue, the batches waiting for a machine. Press on a row and drag it up or down the list (about the grid, for a grid): it follows the mouse (or a finger), drawn over the rest, while the other rows slide out of the way (over **Slide Time**) to show where it would land, and letting go puts it there. A press that doesn't move is a click, so a Button on the row still works; Esc, or letting go off the list, puts the row back. Dragged near the end of a layout that clips, the list scrolls. With keys or a controller, pick a row's button with the arrows and press the layout's **Grab Action** ("Interact": E or Y) to lift it; the arrows then move it, and a second press (or Enter or A) puts it down, Esc or B back where it was.
@@ -113,6 +115,15 @@ Add a **Tooltip** to anything (a sprite in the world, a button, a card on the HU
 ## Pointing to something off the screen
 
 **Entity → UI → Edge Pointer** makes an objective marker: an amber arrow with an **EdgePointer**, which shows the way to its **Target** (an entity's name, e.g. `Goal`) while that's out of the camera's view. It sits on the screen's edge, in by its **Margin**, where the line from the screen's middle to the target crosses it, turned to point at the target, and slides along the edge as the camera pans and zooms; once the target is in view it hides. With **In View** set to **Over Target** it sits over the target instead (at **Over Target** from it, (0, 1) over a worker's head) pointing down at it, so one arrow marks the target on the screen and off it. Its sprite is drawn pointing right. It's pinned to the screen as a ScreenAnchor is (drawn over the world, keeping its size with the camera's **HudSize** and the player's UI Scale, and a click on it isn't one in the world), laid out after the anchored HUD each frame, on the main camera's view. Its Button's **Do** is `Glide`, so clicking it glides the camera there with the camera's **CameraControls** and leaves it the player's (as `GlideTo` does). The `Distance` text inside it shows its **Distance** output (how far the target is from the screen's middle, in world units) as `{0:0}`; it sits behind the arrow, so on the screen's side of it, and stays upright however the arrow turns. Moving the goal on is a Trigger's or Button's **Point At** action, or a script's `pointer.Target = "Reader"` (or `TargetEntity` for an entity it has in hand); with no target, or none of that name, it hides. It decides whether its entity shows, so to hide it some other way, hide what it's inside. A script reads `IsOnEdge` and `Distance`.
+
+## Juice: pops, counting numbers and kicks
+
+A few touches make a game feel alive, with no code, each off until it's set:
+
+- **Buttons that pop.** A **Button**'s **Hover Grow** draws it bigger under the mouse (0.08 is 8% bigger), **Press Shrink** smaller while it's held (0.06), and **Pop Time** eases it into each, its shading too (0.1 for a soft pop). Only how it's drawn changes: its clickable area stays its size.
+- **Numbers that count.** A **Text** showing an **Output** with a **Count Time** counts up or down to a new number over that many seconds rather than jumping there: a score adding up as points come in, gold draining as it's spent.
+- **Tween Player.** Add a **TweenPlayer** to anything for a little animation of how it's drawn: grown or shrunk (**Scale**, times its size), moved (**Move**), turned (**Rotate**, in degrees) and faded (**Fade**, 1 is gone), all at once, over **Duration** after a **Delay**, along an **Ease** (Out Back overshoots and settles, Out Bounce lands like a dropped ball). **From** (the default) starts at those values and settles to how the entity is, so as it comes it pops in from nothing; **To** goes the other way and stays there (fading out). It plays as the entity appears (**On Start**, also each time it's shown again), when its **Message** is sent, or from a script (`Play()`, `Stop()`, or a Trigger's Do), once or over and over (**Loop**: Repeat, or Ping Pong for a bob). What's inside the entity moves and fades with it, and its transform and collider stay put. A card popping in, a stamp landing (Scale 2, Fade 1, Out Bounce), a score jumping on its message (Scale 1.3), a coin bobbing (Move 0, 0.2, Ping Pong, In Out Sine).
+- **Camera kicks.** Where a shake rattles the view every way, a kick pushes it one way and eases it back: a **Camera**'s **Kick By** says which way and how far (0, -0.3 jolts it down, as a landing does), over **Kick Time**. A Trigger's or Button's Do `Kick` on the camera kicks it; scripts call `Game.KickCamera(direction, seconds)`.
 
 ## Pickups and scores
 

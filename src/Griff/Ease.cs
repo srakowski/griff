@@ -40,4 +40,61 @@ public static class Ease
             return n * (t -= 2.25f / d) * t + 0.9375f;
         return n * (t -= 2.625f / d) * t + 0.984375f;
     };
+
+    /// <summary>The curve <paramref name="easing"/> names.</summary>
+    public static Func<float, float> Of(Easing easing) => easing switch
+    {
+        Easing.InQuad => InQuad,
+        Easing.OutQuad => OutQuad,
+        Easing.InOutQuad => InOutQuad,
+        Easing.InCubic => InCubic,
+        Easing.OutCubic => OutCubic,
+        Easing.InOutCubic => InOutCubic,
+        Easing.InOutSine => InOutSine,
+        Easing.InBack => InBack,
+        Easing.OutBack => OutBack,
+        Easing.OutElastic => OutElastic,
+        Easing.OutBounce => OutBounce,
+        _ => Linear,
+    };
+}
+
+/// <summary>One of the <see cref="Ease"/> curves by name, for a component to be set to in the Inspector (a <c>TweenPlayer</c>'s).</summary>
+public enum Easing
+{
+    /// <summary>The same speed all the way.</summary>
+    Linear,
+
+    /// <summary>Starts slow and speeds up.</summary>
+    InQuad,
+
+    /// <summary>Starts fast and slows down to a stop.</summary>
+    OutQuad,
+
+    /// <summary>Speeds up, then slows down to a stop.</summary>
+    InOutQuad,
+
+    /// <summary>Starts slower than InQuad, and speeds up more.</summary>
+    InCubic,
+
+    /// <summary>Starts faster than OutQuad, and slows down more.</summary>
+    OutCubic,
+
+    /// <summary>Speeds up, then slows down, more sharply than InOutQuad.</summary>
+    InOutCubic,
+
+    /// <summary>Gently speeds up and slows down: a bob, a sway.</summary>
+    InOutSine,
+
+    /// <summary>Pulls back a little, then goes.</summary>
+    InBack,
+
+    /// <summary>Overshoots a little, then settles: something popping into place.</summary>
+    OutBack,
+
+    /// <summary>Springs past the end and wobbles to rest.</summary>
+    OutElastic,
+
+    /// <summary>Lands like a dropped ball: a stamp hitting the page.</summary>
+    OutBounce,
 }

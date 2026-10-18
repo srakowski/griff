@@ -158,6 +158,8 @@ public enum ButtonAction
 /// Makes the entity clickable: it lightens under the mouse, darkens while held, and clicks when the mouse is released
 /// over it. Behaviors on the entity get OnClick. Menus need no code at all: set <see cref="Action"/> to load a scene,
 /// restart or quit. Put a <see cref="Sprite"/> on the entity for a background and a <see cref="Text"/> for its label.
+/// <see cref="HoverGrow"/>, <see cref="PressShrink"/> and <see cref="PopTime"/> make it pop: grow under the mouse and
+/// shrink as it's pressed, easing into each (only as it's drawn: its clickable area stays its size).
 /// </summary>
 [Category("UI")]
 [WorksWith(typeof(Sprite), Note = "a background")]
@@ -168,6 +170,48 @@ public sealed class Button : Component, IDrawEffect
 {
     // Under the mouse or held, it shades its own sprite and label.
     Color IDrawEffect.Tint(IDrawable drawn, Color color) => drawn is Sprite or Text ? Shade(color) : color;
+
+    // Grown under the mouse and shrunk while held, with what's inside it, about its middle.
+    Matrix4x4? IDrawEffect.DrawTransform
+    {
+        get
+        {
+            if (HoverGrow == 0 && PressShrink == 0)
+                return null;
+            var (hover, press) = PopDrawn();
+            var scale = 1 + HoverGrow * hover;
+            scale += (1 - PressShrink - scale) * press;
+            if (scale == 1)
+                return null;
+            var center = Entity!.Transform.WorldPosition;
+            return Matrix4x4.CreateScale(scale, scale, 1, new Vector3(center.X, center.Y, 0));
+        }
+    }
+
+    // How far it's grown into being under the mouse (or picked) and into being held, from 0 to 1 each, as the game last
+    // stepped them (see PopTime); kept as they were when the step began too, so they're drawn between steps.
+    [NotState("only how it's drawn")]
+    private Smoothed<float> _hover;
+
+    [NotState("only how it's drawn")]
+    private Smoothed<float> _press;
+
+    // How far it's into being under the mouse and being held in the frame being drawn, eased.
+    private (float Hover, float Press) PopDrawn()
+    {
+        var blend = Entity is null ? StepBlend.AsIs : StepBlend.For(Entity);
+        return (Griff.Ease.InOutSine(blend.Of(_hover)), Griff.Ease.InOutSine(blend.Of(_press)));
+    }
+
+    // Moves its pop on by `seconds` towards how it is now: under the mouse (or picked), held, or neither.
+    internal void AdvancePop(float seconds)
+    {
+        var step = PopTime > 0 ? seconds / PopTime : 1;
+        _hover.Set(this, Toward(_hover.Value, IsUsable && (IsHovered || IsFocused) ? 1 : 0));
+        _press.Set(this, Toward(_press.Value, IsUsable && IsPressed && IsHovered ? 1 : 0));
+
+        float Toward(float from, float to) => from < to ? Math.Min(to, from + step) : Math.Max(to, from - step);
+    }
 
     /// <summary>The clickable area, centered on the entity, in world units before the transform's scale. Rotation is ignored.</summary>
     [Resizable(Upright = true)]
@@ -274,6 +318,21 @@ public sealed class Button : Component, IDrawEffect
     public float Highlight { get; set; } = 0.2f;
 
     /// <summary>
+    /// How much bigger it's drawn under the mouse or picked with keys, with what's inside it: 0.08 is 8% bigger. 0 keeps
+    /// its size.
+    /// </summary>
+    public float HoverGrow { get; set; }
+
+    /// <summary>How much smaller than its size it's drawn while it's held down: 0.06 is 6% smaller. 0 keeps its size.</summary>
+    public float PressShrink { get; set; }
+
+    /// <summary>
+    /// Seconds it takes to grow, shrink and shade into being under the mouse, held down or left, eased, rather than
+    /// changing at once: 0.1 for a soft pop. 0 changes at once.
+    /// </summary>
+    public float PopTime { get; set; }
+
+    /// <summary>
     /// Whether the arrow keys, D-pad and stick can move to this button (see <see cref="IsFocused"/>). Turn it off for a
     /// button on a HUD during play, so moving the player doesn't pick it.
     /// </summary>
@@ -320,12 +379,25 @@ public sealed class Button : Component, IDrawEffect
     /// <summary>Raised when the button is clicked, after its <see cref="Action"/> is requested and behaviors' OnClick ran.</summary>
     public event Action<Button>? Clicked;
 
-    /// <summary>The color to draw <paramref name="color"/> in for the button's current state.</summary>
-    public Color Shade(Color color) =>
-        !IsUsable ? Color.Lerp(color, new Color(0.5f, 0.5f, 0.5f, color.A), 0.6f) with { A = color.A * 0.5f }
-        : IsPressed && IsHovered ? Color.Lerp(color, Color.Black with { A = color.A }, 0.2f)
-        : IsHovered || IsFocused ? Color.Lerp(color, Color.White with { A = color.A }, Math.Clamp(Highlight, 0, 1))
-        : color;
+    /// <summary>
+    /// The color to draw <paramref name="color"/> in for the button's current state: with a <see cref="PopTime"/>, part
+    /// way into it.
+    /// </summary>
+    public Color Shade(Color color)
+    {
+        if (!IsUsable)
+            return Color.Lerp(color, new Color(0.5f, 0.5f, 0.5f, color.A), 0.6f) with { A = color.A * 0.5f };
+        if (PopTime > 0)
+        {
+            var (hover, press) = PopDrawn();
+            color = Color.Lerp(color, Color.White with { A = color.A }, Math.Clamp(Highlight, 0, 1) * hover * (1 - press));
+            return Color.Lerp(color, Color.Black with { A = color.A }, 0.2f * press);
+        }
+
+        return IsPressed && IsHovered ? Color.Lerp(color, Color.Black with { A = color.A }, 0.2f)
+            : IsHovered || IsFocused ? Color.Lerp(color, Color.White with { A = color.A }, Math.Clamp(Highlight, 0, 1))
+            : color;
+    }
 
     internal void RaiseClicked() => Clicked?.Invoke(this);
 }

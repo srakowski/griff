@@ -117,7 +117,22 @@ public sealed class Camera : Component
     private float _shakeDuration;
     private float _shakeLeft;
 
-    /// <summary>How far the view is currently thrown off by <see cref="Shake"/>, in world units.</summary>
+    // The kick: which way and how far, how long it takes and how long it has left.
+    private System.Numerics.Vector2 _kick;
+    private float _kickDuration;
+    private float _kickLeft;
+
+    /// <summary>
+    /// Which way and how far <see cref="Kick()"/> pushes the view, in world units: (0, -0.3) jolts it down a little, as a
+    /// landing or a heavy hit does. A Trigger's or a Button's Do "Kick" kicks it this way with no code.
+    /// </summary>
+    [Group("Feel")]
+    public System.Numerics.Vector2 KickBy { get; set; } = new(0, -0.3f);
+
+    /// <summary>Seconds a kick takes, out and back.</summary>
+    public float KickTime { get; set; } = 0.2f;
+
+    /// <summary>How far the view is currently thrown off by <see cref="Shake"/> and <see cref="Kick()"/>, in world units.</summary>
     [DoNotSerialize]
     public System.Numerics.Vector2 ShakeOffset
     {
@@ -140,20 +155,41 @@ public sealed class Camera : Component
         (_shakeStrength, _shakeDuration, _shakeLeft) = (strength, duration, duration);
     }
 
-    /// <summary>Moves the shake on by <paramref name="seconds"/> and picks this frame's offset. Called by the game.</summary>
+    /// <summary>
+    /// Pushes the view a short way <paramref name="by"/> (which way and how far, in world units) and eases it back over
+    /// <paramref name="duration"/> seconds: a jolt with a direction, where <see cref="Shake"/> rattles every way. A gun's
+    /// recoil kicks it back from where it fires, a landing down. A new kick replaces one in progress. Uses real time, as a
+    /// shake does, and adds to one.
+    /// </summary>
+    public void Kick(System.Numerics.Vector2 by, float duration = 0.2f)
+    {
+        if (!(duration > 0) || by == System.Numerics.Vector2.Zero || !float.IsFinite(by.X) || !float.IsFinite(by.Y))
+            return;
+        (_kick, _kickDuration, _kickLeft) = (by, duration, duration);
+    }
+
+    /// <summary>Kicks the view by its <see cref="KickBy"/> over its <see cref="KickTime"/> (see <see cref="Kick(System.Numerics.Vector2, float)"/>).</summary>
+    [Action]
+    public void Kick() => Kick(KickBy, KickTime);
+
+    /// <summary>Moves the shake and the kick on by <paramref name="seconds"/> and picks this frame's offset. Called by the game.</summary>
     public void AdvanceShake(float seconds)
     {
         _shakeLeft = Math.Max(0, _shakeLeft - seconds);
-        if (_shakeLeft <= 0)
+        _kickLeft = Math.Max(0, _kickLeft - seconds);
+        var offset = _kickLeft > 0 ? _kick * KickAt(1 - _kickLeft / _kickDuration) : System.Numerics.Vector2.Zero;
+        if (_shakeLeft > 0)
         {
-            ShakeOffset = System.Numerics.Vector2.Zero;
-            return;
+            var amount = _shakeStrength * (_shakeLeft / _shakeDuration);
+            var angle = Rand.Value * MathF.Tau;
+            offset += new System.Numerics.Vector2(MathF.Cos(angle), MathF.Sin(angle)) * amount * Rand.Value;
         }
 
-        var amount = _shakeStrength * (_shakeLeft / _shakeDuration);
-        var angle = Rand.Value * MathF.Tau;
-        ShakeOffset = new System.Numerics.Vector2(MathF.Cos(angle), MathF.Sin(angle)) * amount * Rand.Value;
+        ShakeOffset = offset;
     }
+
+    // How far out a kick is `t` of the way through it: out fast in its first fifth, then eased back.
+    private static float KickAt(float t) => t < 0.2f ? Ease.OutQuad(t / 0.2f) : 1 - Ease.InOutSine((t - 0.2f) / 0.8f);
 }
 
 /// <summary>Where text sits relative to its entity's position.</summary>
@@ -270,6 +306,17 @@ public sealed class Text : Component, IDrawable
     /// </summary>
     [OutputName(On = nameof(Track), TakesNames = true)]
     public string? Output { get; set; }
+
+    /// <summary>
+    /// Seconds a number its <see cref="Output"/> gives takes to count up or down to a new one, eased, rather than jumping
+    /// there: a score adding up as points come in, gold draining as it's spent. 0 jumps.
+    /// </summary>
+    [ShownWhen(nameof(Output))]
+    public float CountTime { get; set; }
+
+    // The number it's counting from and to and the seconds it's been counting, while it counts (see CountTime).
+    [NotState("only how the number is shown")]
+    internal (float From, float To, float Age)? Counting;
 
     private (string? From, string? To) _shown;
     private string? _readout;

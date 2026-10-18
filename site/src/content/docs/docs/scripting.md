@@ -128,9 +128,10 @@ Every(2f, () => Game.Spawn("Enemy", new Vector2(10, 0)));
 // Is there ground just below? Ignore our own collider.
 var below = Game.Physics.Raycast(new Vector2(Transform.Position.X, Transform.Position.Y), -Vector2.UnitY, 0.6f, ignore: Entity);
 
-// Juice: a burst of particles and a camera kick.
+// Juice: a burst of particles, a camera shake, and a kick back from where the gun fires.
 GetComponent<ParticleEmitter>()?.Burst(20);
 Game.ShakeCamera(0.3f, 0.2f);
+Game.KickCamera(new Vector2(-0.3f, 0), 0.15f);
 
 // Tweens: pop in, glide somewhere, then fade out and disappear.
 Transform.Scale = new Vector3(0, 0, 1);

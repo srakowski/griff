@@ -152,6 +152,9 @@ public static class Steps
     /// <summary>The "Sprite Effects" step of the Simulate phase.</summary>
     public static readonly StepId SpriteEffects = new(FramePhase.Simulate, "Sprite Effects");
 
+    /// <summary>The "Tween Players" step of the Simulate phase.</summary>
+    public static readonly StepId TweenPlayers = new(FramePhase.Simulate, "Tween Players");
+
     /// <summary>The "Prompts" step of the Simulate phase.</summary>
     public static readonly StepId SimulatePrompts = new(FramePhase.Simulate, "Prompts");
 
@@ -217,6 +220,9 @@ public static class Steps
 
     /// <summary>The "Tooltips" step of the Resolve phase.</summary>
     public static readonly StepId Tooltips = new(FramePhase.Resolve, "Tooltips");
+
+    /// <summary>The "Button Pops" step of the Resolve phase.</summary>
+    public static readonly StepId ButtonPops = new(FramePhase.Resolve, "Button Pops");
 
     /// <summary>The "Text Outputs" step of the Resolve phase.</summary>
     public static readonly StepId TextOutputs = new(FramePhase.Resolve, "Text Outputs");

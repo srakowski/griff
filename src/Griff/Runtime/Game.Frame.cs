@@ -530,6 +530,7 @@ public sealed partial class Game
         Step(Steps.Particles, _effects.RunParticles);
         Step(Steps.CameraShake, _effects.RunCameraShake);
         Step(Steps.SpriteEffects, _effects.RunSpriteEffects);
+        Step(Steps.TweenPlayers, _effects.RunTweenPlayers);
         Step(Steps.SimulatePrompts, _panels.FillPrompts);
         Step(Steps.Typewriters, _hud.RunTypewriters);
         Step(Steps.PickupSpin, _itemUses.RunPickupSpin);
@@ -556,6 +557,7 @@ public sealed partial class Game
         Step(Steps.Stars, _hud.RunStars);
         Step(Steps.Counters, _hud.RunCounters);
         Step(Steps.Tooltips, _hud.RunTooltips);
+        Step(Steps.ButtonPops, _hud.RunButtonPops);
         Step(Steps.TextOutputs, _hud.ShowOutputs);
         Step(Steps.Fade, _scenes.AdvanceFade);
         Step(Steps.ScreenFlash, _effects.RunScreenFlash);

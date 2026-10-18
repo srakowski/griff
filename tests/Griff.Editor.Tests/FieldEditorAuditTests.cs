@@ -228,6 +228,7 @@ public sealed partial class FieldEditorAuditTests
         Tilemap.Tiles: Lines
         Tilemap.Turns: Lines
         Tilemap.LinesUpWith: Entity
+        TweenPlayer.Message: Names:Message
         Weather.ThunderSound: Sound
         """;
 }

@@ -809,7 +809,7 @@ public static partial class SceneRenderer
         return lead?.GetType() ?? typeof(Entity);
     }
 
-    // Moves the draws from `start` on by the effects of the entity and what it's inside.
+    // Moves (and fades) the draws from `start` on by the effects of the entity and what it's inside.
     private static void MoveByEffects(Entity entity, List<SpriteDraw> sprites, int start)
     {
         if (sprites.Count == start)
@@ -820,10 +820,28 @@ public static partial class SceneRenderer
                 continue;
             foreach (var component in e.ComponentList)
             {
-                if (component is not IDrawEffect effect || effect.DrawTransform is not { } transform)
+                if (component is not IDrawEffect effect)
                     continue;
-                for (var d = start; d < sprites.Count; d++)
-                    sprites[d] = sprites[d] with { World = sprites[d].World * transform };
+                if (effect.DrawTransform is { } transform)
+                {
+                    for (var d = start; d < sprites.Count; d++)
+                        sprites[d] = sprites[d] with { World = sprites[d].World * transform };
+                }
+
+                if (effect.DrawOpacity is var opacity && opacity < 1)
+                {
+                    opacity = Math.Max(0, opacity);
+                    for (var d = start; d < sprites.Count; d++)
+                    {
+                        var draw = sprites[d];
+                        sprites[d] = draw with
+                        {
+                            Tint = draw.Tint with { A = draw.Tint.A * opacity },
+                            Background = draw.Background with { A = draw.Background.A * opacity },
+                            Flash = draw.Flash with { A = draw.Flash.A * opacity },
+                        };
+                    }
+                }
             }
         }
     }

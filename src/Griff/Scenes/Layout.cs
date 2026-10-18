@@ -24,7 +24,7 @@ public enum LayoutDirection
 /// <see cref="Size"/>, whatever their own positions: one spawned into it (<c>Game.Spawn("Card", board)</c>) goes after
 /// the last, and when one is destroyed or hidden the rest close up. With <see cref="Clip"/> what doesn't fit is cut off at
 /// its edges and the mouse wheel scrolls it. With <see cref="Reorderable"/> the player drags them into a new order: a queue,
-/// a build list.
+/// a build list. With <see cref="Slide"/> they slide to their new places rather than jumping there.
 /// </summary>
 /// <remarks>
 /// A child takes the room of its Button's clickable area, its Sprite's size or its own Layout's, whichever is biggest,
@@ -102,8 +102,17 @@ public sealed class Layout : Component, IClipsChildren, IDrawEffect
     [Names(NameKind.Action)]
     public string? GrabAction { get; set; } = "Interact";
 
-    /// <summary>Seconds the other rows take to slide out of the way, and a let-go row into its place. 0 jumps.</summary>
-    [ShownWhen(nameof(Reorderable))]
+    /// <summary>
+    /// While the game runs, its children slide to their new places rather than jumping there, over
+    /// <see cref="SlideTime"/>: the rest closing up when one is destroyed or hidden, making room for one added, moving
+    /// as they're put in a new order or scrolled. One that's just been added (or shown) is put in its place at once.
+    /// </summary>
+    public bool Slide { get; set; }
+
+    /// <summary>
+    /// Seconds its children take to slide into new places (with <see cref="Slide"/>), and, while it's
+    /// <see cref="Reorderable"/>, the other rows out of the way and a let-go row into its place. 0 jumps.
+    /// </summary>
     public float SlideTime { get; set; } = 0.1f;
 
     /// <summary>
@@ -208,6 +217,13 @@ public sealed class Layout : Component, IClipsChildren, IDrawEffect
     // Seconds left of the rows sliding into place after one was let go.
     [NotState("only how the rows ease into place")]
     private float _settling;
+
+    // The children it placed the last time it arranged them, so with Slide one that's new is put in place, not slid there.
+    [NotState("only how the rows ease into place")]
+    private readonly HashSet<Entity> _known = [];
+
+    [NotState("only how the rows ease into place")]
+    private readonly HashSet<Entity> _knownNow = [];
 
     // What its rows and children take up, from its middle (its area, and with no Clip the rows that run past it).
     [NotState("worked out again as it's arranged")]
@@ -400,7 +416,8 @@ public sealed class Layout : Component, IClipsChildren, IDrawEffect
 
         if (HeldRow is not null && heldAt < 0)
             LetGo();
-        var ease = seconds > 0 && SlideTime > 0 && (HeldRow is not null || _settling > 0) ? 1 - MathF.Exp(-seconds * 4 / SlideTime) : 1;
+        var ease = seconds > 0 && SlideTime > 0 && (Slide || HeldRow is not null || _settling > 0) ? 1 - MathF.Exp(-seconds * 4 / SlideTime) : 1;
+        var sliding = Slide && ease < 1;
         _settling = Math.Max(0, _settling - seconds);
 
         var area = Vector2.Abs(Size);
@@ -475,9 +492,12 @@ public sealed class Layout : Component, IClipsChildren, IDrawEffect
                 // Lifted with keys, it stands out of its line.
                 if (child == HeldRow)
                     flat += Direction == LayoutDirection.Vertical ? new Vector2(KeyLift, 0) : new Vector2(0, KeyLift);
-                if (ease < 1)
+                if (ease < 1 && (!sliding || _known.Contains(child)))
                     flat = Vector2.Lerp(new Vector2(transform.Position.X, transform.Position.Y), flat, ease);
             }
+
+            if (Slide)
+                _knownNow.Add(child);
 
             var at = new Vector3(flat, transform.Position.Z);
             if (transform.Position != at)
@@ -488,6 +508,9 @@ public sealed class Layout : Component, IClipsChildren, IDrawEffect
 
         // So children destroyed since aren't kept from being collected.
         _placed.Clear();
+        _known.Clear();
+        _known.UnionWith(_knownNow);
+        _knownNow.Clear();
 
         static float Within(float at, float size, float room) => room <= size ? 0 : Math.Clamp(at, -room / 2 + size / 2, room / 2 - size / 2);
 

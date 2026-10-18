@@ -1,0 +1,71 @@
+title: Juice with no code
+intro: Buttons that pop under the mouse, a score that counts up, cards that pop in and a stamp that lands, a list that slides, and a camera kick: each a few fields in the Inspector, and all off until they're set, so nothing that's there already changes.
+
+project: Empty | Juice
+
+chapter: A button that pops | Hover Grow, Press Shrink and Pop Time
+agent: entity_create {"entity": {"name": "Score", "components": {"Counter": {"message": ""}}}}
+agent: entity_create {"entity": {"name": "Score Label", "position": [-4, 3.2], "components": {"Text": {"value": "Score: {0}", "size": 0.7, "track": "Score", "output": "Count"}}}}
+agent: entity_create {"entity": {"name": "Add Points", "position": [-4, 1.6], "components": {"Sprite": {"tint": "#4C8BF5", "size": [3.4, 1]}, "Text": {"value": "Add 250", "size": 0.5, "order": 1}, "Button": {"size": [3.4, 1], "action": "Do", "targets": "Score", "do": "Add", "with": "250"}}}}
+look: 0, 0, 5
+say: Here's a score, and a button that adds 250 to it. As it is, the button lightens under the mouse at once, and the score jumps.
+select: Add Points
+set: Button.HoverGrow = 0.1
+set: Button.PressShrink = 0.08
+set: Button.PopTime = 0.12
+explain: field:Button.HoverGrow | Hover Grow | Hover Grow draws the button a tenth bigger under the mouse, and Press Shrink a little smaller while it's held down.
+explain: field:Button.PopTime | Pop Time | Pop Time eases it into each, its shading too, for a soft pop. Only how it's drawn changes: what it takes clicks on stays its size.
+
+chapter: A score that counts up | Count Time on a Text showing an output
+select: Score Label
+set: Text.CountTime = 0.6
+explain: field:Text.CountTime | Count Time | A text showing an output, here the score's count, counts up or down to a new number over its Count Time rather than jumping there.
+
+chapter: Cards that pop in and a stamp that lands | The Tween Player
+deselect
+agent: entity_create {"entity": {"name": "Card", "position": [0, 0.5], "components": {"Sprite": {"tint": "#F2E8CF", "size": [2.2, 3]}, "TweenPlayer": {"delay": 0.3}}}}
+agent: entity_create {"parent": "Card", "entity": {"name": "Stamp", "position": [0.3, -0.6], "rotation": 15, "components": {"Text": {"value": "PAID", "size": 0.6, "color": "#C0392B", "order": 2}, "TweenPlayer": {"scale": 2.5, "fade": 1, "ease": "OutBounce", "duration": 0.5, "delay": 1}}}}
+agent: entity_create {"entity": {"name": "Coin", "position": [0, -2.8], "components": {"Sprite": {"tint": "#F4C542", "size": [0.8, 0.8]}, "TweenPlayer": {"scale": 1, "move": [0, 0.25], "loop": "PingPong", "ease": "InOutSine", "duration": 0.6}}}}
+select: Card
+explain: field:TweenPlayer.Scale | Tween Player | A Tween Player plays a little animation of how its entity is drawn: grown or shrunk, moved, turned and faded at once. As it is, it pops the card in from nothing as it appears, overshooting a little and settling.
+explain: field:TweenPlayer.Delay | Delay | Delay waits a moment first, so cards can come in one after another.
+select: Stamp
+explain: field:TweenPlayer.Ease | Out Bounce | The stamp starts two and a half times its size and faded out, and lands with Out Bounce, like something dropped.
+select: Coin
+explain: field:TweenPlayer.Loop | Ping Pong | The coin moves a quarter of a unit up and back, over and over: Ping Pong, eased in and out. A tween player also plays on a message, or from a script or a trigger.
+
+chapter: A list that slides, and a camera kick | Slide on a Layout, Kick on the camera
+deselect
+write: Scripts/DoneOnClick.cs | juice/DoneOnClick.cs
+agent: entity_create {"entity": {"name": "Jobs", "position": [5, 0.5], "components": {"Sprite": {"tint": "#2E3440", "size": [3.4, 4.6]}, "Layout": {"size": [3.4, 4.6], "padding": 0.3, "spacing": 0.2, "slide": true, "slideTime": 0.25}}}}
+agent: entity_create {"parent": "Jobs", "entities": [{"name": "Smelt", "components": {"Sprite": {"tint": "#E0B040", "size": [2.8, 0.8], "order": 1}, "Text": {"value": "Smelt", "size": 0.4, "order": 2, "color": "#1B1F27"}, "Button": {"size": [2.8, 0.8]}, "DoneOnClick": {}}}, {"name": "Press", "components": {"Sprite": {"tint": "#D08A50", "size": [2.8, 0.8], "order": 1}, "Text": {"value": "Press", "size": 0.4, "order": 2, "color": "#1B1F27"}, "Button": {"size": [2.8, 0.8]}, "DoneOnClick": {}}}, {"name": "Lathe", "components": {"Sprite": {"tint": "#C06A70", "size": [2.8, 0.8], "order": 1}, "Text": {"value": "Lathe", "size": 0.4, "order": 2, "color": "#1B1F27"}, "Button": {"size": [2.8, 0.8]}, "DoneOnClick": {}}}, {"name": "Kiln", "components": {"Sprite": {"tint": "#5A9AB0", "size": [2.8, 0.8], "order": 1}, "Text": {"value": "Kiln", "size": 0.4, "order": 2, "color": "#1B1F27"}, "Button": {"size": [2.8, 0.8]}, "DoneOnClick": {}}}]}
+agent: entity_create {"entity": {"name": "Kick", "position": [-4, -1.6], "components": {"Sprite": {"tint": "#8A7AC0", "size": [3.4, 1]}, "Text": {"value": "Kick", "size": 0.5, "order": 1}, "Button": {"size": [3.4, 1], "action": "Do", "targets": "Main Camera", "do": "Kick", "hoverGrow": 0.1, "pressShrink": 0.08, "popTime": 0.12}}}}
+select: Jobs
+explain: field:Layout.Slide | Slide | With Slide ticked, the layout's rows slide to new places over its Slide Time: closing up when one's taken off, making room, or put in a new order. A tiny script here takes a job off when it's clicked.
+select: Main Camera
+explain: field:Camera.KickBy | Kick By | Where a shake rattles the view every way, a kick pushes it one way and eases it back. Kick By says which way and how far: a little down, like a landing. The purple button's Do is the camera's Kick.
+
+chapter: Play | Pop, count, land, slide and kick
+deselect
+play
+wait: 2
+gamehover: Add Points
+wait: 0.5
+say: Under the mouse the button grows and lightens, easing into it.
+gameclick: Add Points
+wait: 0.2
+gameclick: Add Points
+wait: 1.2
+expectvalue: Score.Counter.Value = 500
+expectvalue: Score Label.Text.Shown = Score: 500
+say: Each click shrinks it a little, and the score counts up to its new number rather than jumping. The card popped in, the stamp landed on it, and the coin bobs.
+gameclick: Press
+wait: 0.8
+say: Clicking a job takes it off the list, and the jobs under it slide up into the gap.
+gameclick: Smelt
+wait: 0.8
+gameclick: Kick
+wait: 0.5
+say: And the kick button jolts the camera down and lets it settle back.
+stop
+say: Scripts get the same: Game dot Kick Camera, a tween player's Play and Stop, and a text's count. Everything here only changes how things are drawn, so the game plays the same with or without it.

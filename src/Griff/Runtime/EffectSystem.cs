@@ -3,11 +3,15 @@ using Griff.Scenes;
 namespace Griff.Runtime;
 
 /// <summary>
-/// Animates what's drawn: sprite animations, particles, camera shake, sprite effects, trails, followers, and flashes of
-/// an entity or of the whole screen.
+/// Animates what's drawn: sprite animations, particles, camera shake and kicks, sprite effects, tween players, trails,
+/// followers, and flashes of an entity or of the whole screen.
 /// </summary>
 internal sealed class EffectSystem : GameSystem
 {
+    // Counts the passes over the tween players, so one that wasn't showing in the last plays on start as it shows again.
+    [NotState("only how things are drawn")]
+    private long _tweenPass;
+
     private Color _screenFlash;
 
     private float _screenFlashSeconds;
@@ -48,6 +52,12 @@ internal sealed class EffectSystem : GameSystem
         Views.FindCamera(Game.Scene)?.GetComponent<Camera>()?.Shake(strength, duration);
     }
 
+    public void KickCamera(System.Numerics.Vector2 by, float duration = 0.2f)
+    {
+        Crowds.ThrowIfRunning("kick the camera");
+        Views.FindCamera(Game.Scene)?.GetComponent<Camera>()?.Kick(by, duration);
+    }
+
     // Followers move after physics (so they see where things ended up) and before screen anchors (which pin to the camera).
     internal void RunFollowers()
     {
@@ -76,6 +86,22 @@ internal sealed class EffectSystem : GameSystem
             emitter.Advance(Game.Time.Delta, Game.Physics.Gravity);
             if (emitter.DestroyWhenFinished && emitter.IsFinished && Game.Runs(emitter.Entity!))
                 Game.Destroy(emitter.Entity!);
+        }
+    }
+
+    // Tween players play as they appear (as the scene starts, spawned, or shown again) and move on in real time, held while
+    // the game is paused, all but those on an open panel.
+    internal void RunTweenPlayers()
+    {
+        var pass = ++_tweenPass;
+        foreach (var tween in Game.Showing<TweenPlayer>())
+        {
+            var appeared = tween.SeenIn != pass - 1;
+            tween.SeenIn = pass;
+            if (appeared && tween.OnStart)
+                tween.Play();
+            else if (!Game.Time.IsPaused || Game.PanelSystem.InOpenPanel(tween.Entity!))
+                tween.Advance(Game.Time.UnscaledDelta);
         }
     }
 

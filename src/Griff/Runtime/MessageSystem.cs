@@ -75,6 +75,18 @@ internal sealed class MessageSystem : GameSystem
             foreach (var player in picked)
                 Game.AtmosphereSystem.Play((SoundPlayer)player);
 
+            // And tween players, which only change how things are drawn.
+            picked.Clear();
+            foreach (var tween in Game.Showing<TweenPlayer>())
+            {
+                if (Named(tween.Message, message) && route.Reaches(tween.Entity))
+                    picked.Add(tween);
+            }
+
+            players += picked.Count;
+            foreach (var tween in picked)
+                ((TweenPlayer)tween).Play();
+
             // And components that hear messages themselves (a dungeon going down a floor on its message) where the game is run.
             var done = 0;
             picked.Clear();

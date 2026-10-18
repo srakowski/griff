@@ -201,6 +201,13 @@ public interface IDrawEffect
     Matrix4x4? DrawTransform => null;
 
     /// <summary>
+    /// How much of everything the entity and what's inside it draw this frame shows, from 1 (all of it, the default) down
+    /// to 0 (none): a card fading in as it appears. What changes once a step is drawn between steps with
+    /// <see cref="StepBlend.For(Entity)"/>.
+    /// </summary>
+    float DrawOpacity => 1;
+
+    /// <summary>
     /// The color one of the entity's own drawable components draws in, from the color it would (a button under the
     /// mouse lightens its sprite and text). Components that want it ask <see cref="Drawing.Tint"/>.
     /// </summary>

@@ -569,6 +569,7 @@ public sealed partial class Game
         Step(Steps.LateScripts, _scriptSystem.LateUpdateScripts, timesItself: true);
         Step(Steps.Layouts, _hud.ArrangeLayouts);
         Step(Steps.ScreenAnchors, _hud.LayOutScreen);
+        Step(Steps.EdgePointers, _hud.PointEdgePointers);
         Step(Steps.Trails, _effects.RunTrails);
         Step(Steps.Lights, _atmosphere.RunLights);
         Step(Steps.Weather, _weather.RunWeather);

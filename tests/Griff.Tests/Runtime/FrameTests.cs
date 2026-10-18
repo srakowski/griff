@@ -35,7 +35,7 @@ public class FrameTests
             "Resolve: Goals", "Resolve: Wiring", "Resolve: Bouncers", "Resolve: Crumbles", "Resolve: Hitboxes", "Resolve: Touch Damage",
             "Resolve: Health", "Resolve: Respawns", "Resolve: Bars", "Resolve: Charts", "Resolve: Stars", "Resolve: Counters", "Resolve: Tooltips", "Resolve: Text Outputs", "Resolve: Fade",
             "Resolve: Screen Flash", "Resolve: Destroys", "Resolve: Wall Rooms", "Resolve: Scene Change",
-            "Present: Rooms", "Present: Camera Controls", "Present: Followers", "Present: Late Scripts", "Present: Layouts", "Present: Screen Anchors", "Present: Trails",
+            "Present: Rooms", "Present: Camera Controls", "Present: Followers", "Present: Late Scripts", "Present: Layouts", "Present: Screen Anchors", "Present: Edge Pointers", "Present: Trails",
             "Present: Lights", "Present: Weather", "Present: Prompts", "Present: Sound Sources", "Present: Sound Players",
             "Present: Patrol Walks",
             "End: Audio", "End: Settings", "End: Network",

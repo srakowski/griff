@@ -254,6 +254,9 @@ public static class Steps
     /// <summary>The "Screen Anchors" step of the Present phase.</summary>
     public static readonly StepId ScreenAnchors = new(FramePhase.Present, "Screen Anchors");
 
+    /// <summary>The "Edge Pointers" step of the Present phase.</summary>
+    public static readonly StepId EdgePointers = new(FramePhase.Present, "Edge Pointers");
+
     /// <summary>The "Trails" step of the Present phase.</summary>
     public static readonly StepId Trails = new(FramePhase.Present, "Trails");
 

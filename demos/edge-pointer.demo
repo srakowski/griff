@@ -1,0 +1,53 @@
+title: Point the way off the screen
+intro: An Edge Pointer is an objective marker: an arrow on the screen's edge showing which way to look for something out of view, sliding along the edge as the camera moves, gone once it's in view, and a click away from gliding the camera there.
+
+project: Empty | Edge Pointer
+
+chapter: A floor, a worker far off, and a camera | Camera Controls on the camera
+create: Tilemap
+rename: Level
+set: Tilemap.Tiles = 111122221111222211112222111122221111\n111122221111222211112222111122221111\n111122221111222211112222111122221111\n111122221111222211112222111122221111\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n111122221111222211112222111122221111\n111122221111222211112222111122221111\n111122221111222211112222111122221111\n111122221111222211112222111122221111\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n222211112222111122221111222211112222\n111122221111222211112222111122221111\n111122221111222211112222111122221111
+deselect
+create: Sprite
+rename: Worker
+set: Transform.Position = 2, -9, 0
+say: The worker stands at the far left of the floor.
+deselect
+select: Main Camera
+set: Transform.Position = 30, -9, -10
+set: Camera.Size = 6
+set: Camera.HudSize = 6
+add: CameraControls
+pick: CameraControls.StayInside = Level
+say: The camera starts over on the right, where the player can pan and zoom it.
+
+chapter: The pointer | Entity, UI, Edge Pointer
+deselect
+create: Edge Pointer
+pick: EdgePointer.Target = Worker
+explain: field:EdgePointer.Target | Target | Its Target is what it points at. A trigger, a button or a script moves it on to the next goal as the game goes.
+explain: field:EdgePointer.Margin | Margin | Margin is how far in from the screen's edges it sits. It keeps its size on the screen as the camera zooms, like the rest of the HUD.
+explain: field:EdgePointer.InView | In View | While the worker is in view it hides. Over Target would sit it over the worker instead, pointing down, so one arrow marks it on the screen and off it.
+explain: field:Button.Do | Do | Its button's Do is Glide: a click glides the camera to the worker. The text inside it shows how far off the worker is.
+
+chapter: Play | It points, slides, hides and glides
+play
+wait: 1
+expectvalue: Edge Pointer.EdgePointer.IsOnEdge = true
+say: The worker is off to the left, so the arrow sits on the left edge, pointing at it, with the distance beside it.
+hold: Up 1
+say: Pan up and it slides down the edge, staying on the line to the worker.
+hold: Left 2.5
+wait: 0.5
+expectvalue: Edge Pointer.EdgePointer.IsOnEdge = false
+say: With the worker in view, the arrow's gone.
+hold: Right 2.5
+wait: 0.5
+expectvalue: Edge Pointer.EdgePointer.IsOnEdge = true
+say: Pan away and it's back.
+gameclick: Edge Pointer
+wait: 1.5
+expectvalue: Main Camera.CameraControls.IsFocused = false
+expectvalue: Edge Pointer.EdgePointer.IsOnEdge = false
+say: A click on it glides the camera over to the worker and hands it straight back to the player.
+stop

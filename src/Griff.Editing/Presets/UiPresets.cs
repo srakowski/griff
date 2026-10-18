@@ -207,3 +207,53 @@ public sealed class DialogueBoxPreset : EntityPreset
         yield return tag;
     }
 }
+
+/// <summary>
+/// Creates an arrow for a HUD that points the way to something off the screen: an amber arrow with an
+/// <see cref="EdgePointer"/>, a Button that glides the camera there when it's clicked (Do: Glide), and how far off it is
+/// written beside it. Set its Target to what it points at.
+/// </summary>
+[Category("UI")]
+public sealed class EdgePointerPreset : EntityPreset
+{
+    /// <summary>The arrow's picture, pointing right, put in the project when it has none there.</summary>
+    public const string Arrow = "Textures/edge-arrow.png";
+
+    public override string Id => "Entity.CreateEdgePointer";
+    public override string Text => "Create _Edge Pointer";
+    public override int Order => 6;
+    public override string? Icon => "MoveRight";
+    public override string EntityName(Scene scene) => "Edge Pointer";
+    public override IReadOnlyDictionary<string, byte[]> Files() => new Dictionary<string, byte[]> { [Arrow] = ArrowArt().Png() };
+
+    public override void Configure(Entity entity, Scene scene)
+    {
+        entity.AddComponent<EdgePointer>();
+        var sprite = entity.AddComponent<Sprite>();
+        (sprite.Image, sprite.Size, sprite.Order) = (Arrow, new Vector2(1, 1), 250);
+        var button = entity.AddComponent<Griff.Scenes.Button>();
+        (button.Size, button.Action, button.Do, button.Navigable) = (new Vector2(1, 1), ButtonAction.Do, "Glide", false);
+    }
+
+    // How far off the target is, behind the arrow (so on the screen's side of it), kept upright.
+    public override IEnumerable<Entity> CreateChildren(Scene scene)
+    {
+        var label = new Entity("Distance");
+        label.Transform.Position = new Vector3(-1.1f, 0, 0);
+        var text = label.AddComponent<Griff.Scenes.Text>();
+        (text.Value, text.Output, text.Size, text.Order) = ("{0:0}", "Distance", 0.4f, 251);
+        yield return label;
+    }
+
+    // An amber arrowhead on a short shaft, pointing right, outlined dark so it reads on any ground.
+    private static Templates.TemplateArt.Canvas ArrowArt()
+    {
+        var c = new Templates.TemplateArt.Canvas(16, 16, seed: 47);
+        var amber = Templates.TemplateArt.Rgb(0xE3, 0xB3, 0x41);
+        c.Rect(2, 6, 7, 4, amber);
+        Templates.TemplateArt.Polygon(c, [(8, 1.5f), (15, 8), (8, 14.5f)], amber);
+        c.Rect(2, 6, 7, 1, amber.Times(1.2f));
+        c.Outline(Templates.TemplateArt.Rgb(0x2A, 0x1E, 0x0C));
+        return c;
+    }
+}

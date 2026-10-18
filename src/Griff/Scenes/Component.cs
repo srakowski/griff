@@ -55,7 +55,7 @@ public abstract class Component
                 (this is IDrawEffect ? ComponentRoles.DrawEffect : 0) |
                 (this is Sprite ? ComponentRoles.Sprite : 0) |
                 (this is Parallax ? ComponentRoles.Parallax : 0) |
-                (this is ScreenAnchor ? ComponentRoles.ScreenAnchor : 0) |
+                (this is ScreenAnchor or EdgePointer ? ComponentRoles.ScreenAnchor : 0) |
                 (this is Viewport ? ComponentRoles.Viewport : 0) |
                 (this is SortGroup ? ComponentRoles.SortGroup : 0) |
                 (this is IClipsChildren ? ComponentRoles.ClipsChildren : 0);
@@ -79,7 +79,7 @@ internal enum ComponentRoles : byte
     /// <summary>A <see cref="Scenes.Parallax"/>.</summary>
     Parallax = 8,
 
-    /// <summary>A <see cref="Scenes.ScreenAnchor"/>.</summary>
+    /// <summary>A <see cref="Scenes.ScreenAnchor"/> or an <see cref="Scenes.EdgePointer"/>: pinned to the screen.</summary>
     ScreenAnchor = 16,
 
     /// <summary>A <see cref="Scenes.Viewport"/>: its camera draws into part of the screen.</summary>

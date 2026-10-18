@@ -7,6 +7,7 @@
 
 ## Unreleased
 
+- An arrow on the HUD pointing the way to something off the screen: **Entity → UI → Edge Pointer** (an **EdgePointer**) sits on the screen's edge toward its **Target**, turned to point at it and sliding along the edge as the camera pans and zooms, hides once the target is in view (or sits over it), shows how far off it is, and glides the camera there when it's clicked.
 - A **Selectable**'s area turns with its entity, so a parked truck turned 90 degrees is clicked, boxed and marked as it lies, and a Button on a Selectable or inside one (a worker's own button) no longer stops **Selection Controls** selecting it: the click selects and the button still fires.
 
 ## 0.1.0-alpha.19 - 2026-10-18

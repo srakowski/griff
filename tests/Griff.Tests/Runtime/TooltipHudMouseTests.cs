@@ -43,20 +43,20 @@ public sealed class TooltipHudMouseTests
         (back.Size, back.Order) = (new Vector2(1.8f, 8.9f), 90);
         scene.Add(toolbar);
 
-        var tool = new Entity("Tool Mainframe");
+        var tool = new Entity("Tool Computer");
         tool.Transform.Position = new Vector3(-0.42f, 1.37f, 0);
         var icon = tool.AddComponent<Sprite>();
         (icon.Size, icon.Order) = (new Vector2(0.8f, 0.8f), 91);
         tool.AddComponent<Button>().Size = new Vector2(0.8f, 0.8f);
         var tip = tool.AddComponent<Tooltip>();
-        (tip.Value, tip.Delay, tip.Size, tip.Offset, tip.Width) = ("MAINFRAME", 0.4f, 0.28f, new Vector2(1.45f, 0.4f), 9);
+        (tip.Value, tip.Delay, tip.Size, tip.Offset, tip.Width) = ("COMPUTER", 0.4f, 0.28f, new Vector2(1.45f, 0.4f), 9);
         scene.Add(tool, toolbar);
 
         var game = new LoadedGame(null, ComponentRegistry.CreateDefault(), scene, new ProblemLog()).NewGame();
         var loop = new GameLoop(game, new View(16f / 9));
         loop.Start();
         loop.Frame(1 / 60.0);
-        return (loop, game.Find("Tool Mainframe")!.GetComponent<Tooltip>()!, game.Find("Tool Mainframe")!);
+        return (loop, game.Find("Tool Computer")!.GetComponent<Tooltip>()!, game.Find("Tool Computer")!);
     }
 
     // Where an entity is on the view (-1..1), through the last frame's camera.

@@ -412,6 +412,14 @@ public sealed partial class Tilemap : Component, ISortsInParts
     [DoNotSerialize]
     public float AnimationTime { get; set; }
 
+    /// <summary>
+    /// How far a <see cref="Conveyor"/> whose Belt Tiles this map is has moved its belts, in cells (a cell's worth kept):
+    /// while it's set, its <see cref="AnimatedTiles"/> step with it rather than with time, a run's frames making up one
+    /// cell of travel. Set by the conveyor; null plays them by time.
+    /// </summary>
+    [DoNotSerialize]
+    public float? BeltTravel { get; set; }
+
     /// <summary>The collision layer of the map's tiles, like <see cref="Collider.Layer"/>. Empty is "Default".</summary>
     [Names(NameKind.Layer, Defines = true)]
     public string? Layer { get; set; }
@@ -957,7 +965,9 @@ public sealed partial class Tilemap : Component, ISortsInParts
             if (tile < animation.First || tile > animation.Last)
                 continue;
             var length = animation.Last - animation.First + 1;
-            var step = (long)MathF.Floor(Math.Max(0, AnimationTime) * animation.FramesPerSecond);
+            var step = BeltTravel is { } travel
+                ? (long)MathF.Floor(Math.Clamp(travel, 0, 1) * length) % length
+                : (long)MathF.Floor(Math.Max(0, AnimationTime) * animation.FramesPerSecond);
             return animation.First + (int)((tile - animation.First + step) % length);
         }
 

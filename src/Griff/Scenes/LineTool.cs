@@ -306,7 +306,7 @@ public sealed class LineTool : Component
     [EntityName]
     public string? Conveyor { get; set; }
 
-    /// <summary>What it lays on the <see cref="Conveyor"/>: belts, crossings (walkers step over) or splitters.</summary>
+    /// <summary>What it lays on the <see cref="Conveyor"/>: belts, crossings (walkers step over), splitters or unders (a line passes beneath).</summary>
     public ConveyorCellKind BeltKind { get; set; }
 
     /// <summary>

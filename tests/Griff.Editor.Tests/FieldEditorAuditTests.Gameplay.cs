@@ -47,8 +47,10 @@ public sealed partial class FieldEditorAuditTests
         Conveyor.Map: Entity
         Conveyor.Belts: Lines
         Conveyor.Layer: Names:Layer
+        Conveyor.Filters: Lines
         Conveyor.Items: Lines
         Conveyor.ItemImages: Lines
+        Conveyor.BeltTiles: Entity
         ConveyorPort.Items: Names:Item*
         ConveyorPort.Message: Names:Message
         Counter.Message: Names:Message

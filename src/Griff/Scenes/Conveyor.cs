@@ -14,6 +14,13 @@ public enum ConveyorCellKind
 
     /// <summary>A splitter: it hands what reaches it to the belts leading out of it in turn, passing over one that's full.</summary>
     Split,
+
+    /// <summary>
+    /// A belt with a tunnel under it: it carries its own items its way, and items brought to its side by a belt crossing
+    /// it pass straight under to the cell beyond, neither line waiting for the other. Walkers cross it. It needs the
+    /// conveyor's <see cref="Conveyor.Spacing"/>; with one item a cell it's a crossing.
+    /// </summary>
+    Under,
 }
 
 /// <summary>
@@ -35,8 +42,11 @@ public readonly record struct ConveyorCell(int X, int Y, int WayX, int WayY, Con
 /// <summary>
 /// Belts on a grid that carry items: a factory's lines from machine to machine. Each cell of <see cref="Belts"/> points
 /// one way and holds one item at a time; items glide along at <see cref="Speed"/> cells a second while the cell ahead is
-/// free and wait when it isn't, so a full end backs the line up. A belt that runs into another's side merges, the two
-/// taking turns; a <see cref="ConveyorCellKind.Split"/> cell hands items to the belts leading out of it in turn. At a
+/// free and wait when it isn't, so a full end backs the line up. With a <see cref="Spacing"/> items glide on smoothly
+/// several to a cell, each that far behind the one ahead, and bunch up into a pile at a full end. A belt that runs into
+/// another's side merges, the two taking turns; a <see cref="ConveyorCellKind.Split"/> cell hands items to the belts
+/// leading out of it in turn (by item, with <see cref="Filters"/>), and an <see cref="ConveyorCellKind.Under"/> cell lets
+/// a crossing line pass under it. At a
 /// belt's end a <see cref="ConveyorPort"/> takes what arrives into a machine, and another puts what the machine makes
 /// onto a belt; a script can put items on, take them off and read any cell.
 /// </summary>
@@ -45,7 +55,7 @@ public readonly record struct ConveyorCell(int X, int Y, int WayX, int WayY, Con
 /// the walls. Items move in fixed steps of game time, so a line plays out the same at any game speed, sped up with
 /// <c>Time.FastForward</c> or <c>Time.Scale</c>. Its items are drawn by the conveyor itself, a quad or an image each,
 /// so hundreds cost no more than the sprites they look like. While it's <see cref="Solid"/>, belts and splitters are
-/// walls to grid movers (<c>WalkTo</c> goes round them), and crossings aren't. It's saved with the scene, items too,
+/// walls to grid movers (<c>WalkTo</c> goes round them), and crossings and unders aren't. It's saved with the scene, items too,
 /// so it rewinds with everything else; in a network game the host moves the items and the players see them.
 /// </remarks>
 /// <example><code>
@@ -54,13 +64,15 @@ public readonly record struct ConveyorCell(int X, int Y, int WayX, int WayY, Con
 /// belts.Lay(5, 4, 1, 0, ConveyorCellKind.Crossing); // walkers cross here
 /// belts.Put(2, 4, "Deck");
 /// belts.ReachedEnd += (_, cell, item) => Log($"{item} waits at {cell}");
+/// belts.Spacing = 0.25f;                  // up to four items a cell, gliding a quarter cell apart
+/// belts.Filter(10, 4, "Deck");            // the splitter before (10, 4) sends decks that way, the rest elsewhere
 /// </code></example>
 [Category("Gameplay")]
 [WorksWith(typeof(Tilemap), Note = "lies on its cells")]
 [WorksWith(typeof(ConveyorPort), Note = "takes items off a belt's end into a machine, or puts them on")]
 [WorksWith(typeof(GridMovement), Note = "walks round solid belts and over crossings")]
 [ComponentName("Conveyor")]
-public sealed class Conveyor : Component, IDrawable
+public sealed partial class Conveyor : Component, IDrawable
 {
     // The four ways a belt points (x right, y up), by number; a cell's way in from where its item came is one more than
     // its number, 0 for none.
@@ -96,10 +108,28 @@ public sealed class Conveyor : Component, IDrawable
     private byte[] _lastIn = [];
     private byte[] _nextOut = [];
 
-    // Fixed steps of game time owed, and items set before their cells were laid (a scene file read in any order).
+    // Fixed steps of game time owed, how far the belts have moved (a cell's worth of it, for drawing them moving), and
+    // items set before their cells were laid (a scene file read in any order), at their column and row (a part of one
+    // for an item between cells' middles).
     private double _owed;
+    private double _travel;
     [NotState("put down as soon as the belts are laid")]
-    private List<(int X, int Y, string Item)> _unplaced = [];
+    private List<(float X, float Y, string Item)> _unplaced = [];
+
+    // How close items follow each other (0 for one a cell), and the rows last set as Items while nothing has moved since,
+    // so a scene file that sets Items before Spacing loses none of the items it puts several to a cell.
+    private float _spacing;
+    [NotState("the rows a scene file set, until anything moves")]
+    private IReadOnlyList<string>? _givenRows;
+
+    // Each splitter way out's filter, by its cell, read from Filters.
+    private IReadOnlyList<string> _filters = [];
+    [NotState("read from Filters")]
+    private Dictionary<(int X, int Y), string> _filterOf = [];
+
+    // The tilemap whose animated tiles it moves, and what it was found for.
+    [NotState("found again as it's asked for")]
+    private (Tilemap? Map, (Scene, long, string?)? Key) _beltTiles;
 
     [NotState("worked out from the belts as they're asked for")]
     private IReadOnlyList<string>? _beltRows;
@@ -123,7 +153,7 @@ public sealed class Conveyor : Component, IDrawable
     [NotState("gathered each step")]
     private readonly Dictionary<(int X, int Y), ConveyorPort> _takers = [];
     [NotState("gathered each step")]
-    private readonly List<(ConveyorPort Port, int Cell, int From)> _givers = [];
+    private readonly List<(ConveyorPort Port, int Cell, int From, int Node)> _givers = [];
     [NotState("filled and emptied within a step")]
     private readonly List<int> _arrivedAtEnds = [];
 
@@ -166,6 +196,30 @@ public sealed class Conveyor : Component, IDrawable
     /// <summary>Cells an item moves a second, up to one a step of the game.</summary>
     public float Speed { get; set; } = 2;
 
+    /// <summary>
+    /// How close an item follows the one ahead, in cells, up to 1: with 0.25 a belt carries up to four items a cell,
+    /// gliding on smoothly while there's room ahead and closing up a quarter cell apart behind a full end, a pile you can
+    /// see. 0 keeps one item a cell, each waiting in its cell's middle until the cell ahead is free.
+    /// </summary>
+    public float Spacing
+    {
+        get => _spacing;
+        set
+        {
+            var spacing = float.IsFinite(value) ? Math.Clamp(value, 0, 1) : 0;
+            // Below a twentieth of a cell items would sit on top of each other: that's taken as the least.
+            if (spacing > 0)
+                spacing = Math.Max(spacing, 0.05f);
+            if (spacing == _spacing)
+                return;
+            var switching = (spacing > 0) != (_spacing > 0);
+            var rows = switching ? _givenRows ?? ItemRows() : null;
+            _spacing = spacing;
+            if (rows is not null)
+                Items = rows;
+        }
+    }
+
     /// <summary>While ticked, items move and ports take and put; untick it (or switch it off) to stop the line where it is.</summary>
     [Powered]
     public bool Running { get; set; } = true;
@@ -186,8 +240,33 @@ public sealed class Conveyor : Component, IDrawable
     public string? Layer { get; set; }
 
     /// <summary>
+    /// What a splitter sends onto each belt leading out of it, one a row: that belt's column and row and the items, e.g.
+    /// "10 4 Deck, Box". An item goes to the belts whose filter names it ("Deck" lets "Deck 17" by), else to those with
+    /// none, in turn; one with nowhere to go waits in the splitter's middle. Set them from a script with <see cref="Filter"/>.
+    /// </summary>
+    [Group("Splitters")]
+    [PlainText("a belt out of a splitter and the items it takes, a row each")]
+    public IReadOnlyList<string> Filters
+    {
+        get => _filters;
+        set
+        {
+            _filters = value ?? [];
+            _filterOf = [];
+            foreach (var row in _filters)
+            {
+                var parts = (row ?? "").Trim().Split(' ', 3, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (parts.Length == 3 && int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var x) &&
+                    int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var y) && Formats.Names(parts[2]).Length > 0)
+                    _filterOf[(x, y)] = parts[2];
+            }
+        }
+    }
+
+    /// <summary>
     /// What's on it, one a row: the cell's column and row and the item, e.g. "4 2 Deck". Set it to start with items on the
-    /// belts; the game keeps it up to date as they move.
+    /// belts; the game keeps it up to date as they move. With a <see cref="Spacing"/> a cell can hold several, and one
+    /// between cells' middles has a part column or row: "4.25 2 Deck" is a quarter cell right of (4, 2)'s middle.
     /// </summary>
     [Group("Items")]
     [PlainText("what's on each cell: the game writes it as the items move")]
@@ -199,6 +278,7 @@ public sealed class Conveyor : Component, IDrawable
             Array.Clear(_items);
             Array.Clear(_left);
             Array.Clear(_came);
+            ClearCarried();
             _unplaced.Clear();
             foreach (var row in value ?? [])
             {
@@ -208,6 +288,7 @@ public sealed class Conveyor : Component, IDrawable
 
             PlaceUnplaced();
             ItemsChanged();
+            _givenRows = value is null ? null : [.. value];
         }
     }
 
@@ -254,6 +335,17 @@ public sealed class Conveyor : Component, IDrawable
     [ShownWhen(nameof(ShowBelts))]
     public Color BeltColor { get; set; } = Color.FromBytes(0x3A, 0x40, 0x4C);
 
+    /// <summary>Slides <see cref="ShowBelts"/>' arrows along with the items while the line runs, so the belts look like they move.</summary>
+    [ShownWhen(nameof(ShowBelts))]
+    public bool MovingArrows { get; set; }
+
+    /// <summary>
+    /// A tilemap (a layer of its own, say) whose animated tiles are belts: they step with this conveyor's items instead of
+    /// with time, a run's frames making up one cell of travel, so belt art moves as fast as the items and stops with the line.
+    /// </summary>
+    [EntityName]
+    public string? BeltTiles { get; set; }
+
     /// <summary>Higher draws on top, like <see cref="Sprite.Order"/>.</summary>
     public int Order { get; set; }
 
@@ -277,6 +369,8 @@ public sealed class Conveyor : Component, IDrawable
     {
         get
         {
+            if (IsSpaced)
+                return CarriedCount();
             var count = 0;
             foreach (var item in _items)
                 count += item is null ? 0 : 1;
@@ -284,11 +378,13 @@ public sealed class Conveyor : Component, IDrawable
         }
     }
 
-    /// <summary>Every item on it and its cell, in the order the cells were laid.</summary>
+    /// <summary>Every item on it and its cell, in the order the cells were laid (the one furthest on first, with several on a cell).</summary>
     public IReadOnlyList<(int X, int Y, string Item)> Contents
     {
         get
         {
+            if (IsSpaced)
+                return [.. Positions.Select(p => (p.X, p.Y, p.Item))];
             var contents = new List<(int X, int Y, string Item)>();
             for (var i = 0; i < _belts.Length; i++)
             {
@@ -297,6 +393,25 @@ public sealed class Conveyor : Component, IDrawable
             }
 
             return contents;
+        }
+    }
+
+    /// <summary>Every item on it, its cell and where it is in the world now, in the order <see cref="Contents"/> lists them.</summary>
+    public IReadOnlyList<(int X, int Y, string Item, Vector2 Position)> Positions
+    {
+        get
+        {
+            if (IsSpaced)
+                return CarriedPositions();
+            var grid = Grid;
+            var positions = new List<(int X, int Y, string Item, Vector2 Position)>();
+            for (var i = 0; i < _belts.Length; i++)
+            {
+                if (_items[i] is { } item)
+                    positions.Add((_belts[i].X, _belts[i].Y, item, PositionOf(i, grid)));
+            }
+
+            return positions;
         }
     }
 
@@ -414,7 +529,7 @@ public sealed class Conveyor : Component, IDrawable
     {
         if (!_at.TryGetValue((x, y), out var at))
             return null;
-        var item = _items[at];
+        var item = IsSpaced ? ItemAt(x, y) : _items[at];
         _items[at] = null;
         var cells = _belts.ToList();
         cells.RemoveAt(at);
@@ -428,8 +543,24 @@ public sealed class Conveyor : Component, IDrawable
     /// <summary>The cell at column <paramref name="x"/>, row <paramref name="y"/>, or null if there's none.</summary>
     public ConveyorCell? CellAt(int x, int y) => _at.TryGetValue((x, y), out var at) ? _belts[at] : null;
 
-    /// <summary>True if a belt or splitter (not a crossing) is at the cell: what stops a grid mover while it's <see cref="Solid"/>.</summary>
-    public bool BlocksWalking((int X, int Y) cell) => _at.TryGetValue(cell, out var at) && _belts[at].Kind != ConveyorCellKind.Crossing;
+    /// <summary>True if a belt or splitter (not a crossing or an under) is at the cell: what stops a grid mover while it's <see cref="Solid"/>.</summary>
+    public bool BlocksWalking((int X, int Y) cell) =>
+        _at.TryGetValue(cell, out var at) && _belts[at].Kind is not (ConveyorCellKind.Crossing or ConveyorCellKind.Under);
+
+    /// <summary>
+    /// Sets what the splitter behind the belt at column <paramref name="x"/>, row <paramref name="y"/> sends onto it, e.g.
+    /// "Deck, Box" (see <see cref="Filters"/>); null or empty takes the filter off.
+    /// </summary>
+    public void Filter(int x, int y, string? items)
+    {
+        var rows = _filters.Where(r => ReadFilterCell(r) != (x, y)).ToList();
+        if (Formats.Names(items).Length > 0)
+            rows.Add(string.Create(CultureInfo.InvariantCulture, $"{x} {y} {items!.Trim()}"));
+        Filters = rows;
+    }
+
+    /// <summary>The items the splitter behind the belt at column <paramref name="x"/>, row <paramref name="y"/> sends onto it, or null for any.</summary>
+    public string? FilterAt(int x, int y) => _filterOf.GetValueOrDefault((x, y));
 
     /// <summary>The tilemap whose cells it lies on (see <see cref="Map"/>), or null for world units.</summary>
     public Tilemap? FindMap()
@@ -466,11 +597,13 @@ public sealed class Conveyor : Component, IDrawable
     /// <summary>
     /// Puts <paramref name="item"/> in the middle of the cell at column <paramref name="x"/>, row <paramref name="y"/>,
     /// to move on from there: false if there's no belt there, something's on it, or the item that just left it isn't a
-    /// cell away yet.
+    /// cell away yet (with a <see cref="Spacing"/>: an item is nearer its middle than that).
     /// </summary>
     public bool Put(int x, int y, string item)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(item);
+        if (IsSpaced)
+            return _at.TryGetValue((x, y), out var on) && PutCarried(on, item.Trim(), 0.5f, 0, Grid);
         if (!_at.TryGetValue((x, y), out var at) || !HasRoom(at))
             return false;
         (_items[at], _left[at], _came[at]) = (item.Trim(), 0, 0);
@@ -479,12 +612,37 @@ public sealed class Conveyor : Component, IDrawable
         return true;
     }
 
-    /// <summary>The item on the cell at column <paramref name="x"/>, row <paramref name="y"/>, or null.</summary>
-    public string? ItemAt(int x, int y) => _at.TryGetValue((x, y), out var at) ? _items[at] : null;
+    /// <summary>The item on the cell at column <paramref name="x"/>, row <paramref name="y"/> (the one furthest on, with several), or null.</summary>
+    public string? ItemAt(int x, int y)
+    {
+        if (!_at.TryGetValue((x, y), out var at))
+            return null;
+        if (!IsSpaced)
+            return _items[at];
+        return FrontNode(at) is var node && node >= 0 ? _carried[node][0].Item : null;
+    }
 
-    /// <summary>Takes the item off the cell at column <paramref name="x"/>, row <paramref name="y"/>: returns it, or null if there was none.</summary>
+    /// <summary>The items on the cell at column <paramref name="x"/>, row <paramref name="y"/>, the one furthest on first.</summary>
+    public IReadOnlyList<string> ItemsAt(int x, int y)
+    {
+        if (!_at.TryGetValue((x, y), out var at))
+            return [];
+        if (!IsSpaced)
+            return _items[at] is { } item ? [item] : [];
+        var items = _carried[at].Select(c => c.Item).ToList();
+        if (_crossOf[at] >= 0)
+            items.AddRange(_carried[_crossOf[at]].Select(c => c.Item));
+        return items;
+    }
+
+    /// <summary>
+    /// Takes the item off the cell at column <paramref name="x"/>, row <paramref name="y"/> (the one furthest on, with
+    /// several): returns it, or null if there was none.
+    /// </summary>
     public string? Take(int x, int y)
     {
+        if (IsSpaced)
+            return _at.TryGetValue((x, y), out var on) ? TakeCarried(on) : null;
         if (!_at.TryGetValue((x, y), out var at) || _items[at] is not { } item)
             return null;
         (_items[at], _left[at], _came[at]) = (null, 0, 0);
@@ -496,11 +654,24 @@ public sealed class Conveyor : Component, IDrawable
     /// True if an item on the cell has reached its middle and couldn't move on: the line is backed up there, or it's at an
     /// end with nothing taking it.
     /// </summary>
-    public bool IsWaiting(int x, int y) => _at.TryGetValue((x, y), out var at) && _items[at] is not null && _left[at] <= Near;
+    public bool IsWaiting(int x, int y)
+    {
+        if (!_at.TryGetValue((x, y), out var at))
+            return false;
+        if (IsSpaced)
+            return FrontNode(at) is var node && node >= 0 && _carried[node][0].Still;
+        return _items[at] is not null && _left[at] <= Near;
+    }
 
-    /// <summary>Where the item on the cell is in the world now (it glides from cell to cell), or null if there's none.</summary>
-    public Vector2? ItemPosition(int x, int y) =>
-        _at.TryGetValue((x, y), out var at) && _items[at] is not null ? PositionOf(at, Grid) : null;
+    /// <summary>Where the item on the cell (the one furthest on, with several) is in the world now (it glides from cell to cell), or null if there's none.</summary>
+    public Vector2? ItemPosition(int x, int y)
+    {
+        if (!_at.TryGetValue((x, y), out var at))
+            return null;
+        if (IsSpaced)
+            return FrontNode(at) is var node && node >= 0 ? CarriedPosition(node, _carried[node][0], Grid) : null;
+        return _items[at] is not null ? PositionOf(at, Grid) : null;
+    }
 
     // ---- Moving ----
 
@@ -524,16 +695,45 @@ public sealed class Conveyor : Component, IDrawable
         ticks = Math.Min(ticks, MostTicksPerStep);
         var grid = Grid;
         GatherPorts(ports, grid);
-        for (var i = 0; i < _belts.Length; i++)
+        _givenRows = null;
+        if (IsSpaced)
         {
-            if (_items[i] is not null)
-                _from[i] = PositionOf(i, grid);
+            StartCarrying(grid);
+            for (var t = 0; t < ticks; t++)
+                TickCarried(tick, grid);
+            ItemsChanged();
+        }
+        else
+        {
+            for (var i = 0; i < _belts.Length; i++)
+            {
+                if (_items[i] is not null)
+                    _from[i] = PositionOf(i, grid);
+            }
+
+            for (var t = 0; t < ticks; t++)
+                Tick(tick, grid);
         }
 
-        for (var t = 0; t < ticks; t++)
-            Tick(tick, grid);
+        // The belts move a step's worth with the items, a cell's worth kept, for their art.
+        var step = Math.Min(Speed * tick, 1f);
+        if (step > 0)
+            _travel = (_travel + (double)step * ticks) % 1;
+        if (BeltTileMap() is { } belts)
+            belts.BeltTravel = (float)_travel;
         if (Entity?.Scene is { } scene)
             _movedIn = scene.Step;
+    }
+
+    // The tilemap BeltTiles names, found again only when the scene's entities or the name have changed.
+    private Tilemap? BeltTileMap()
+    {
+        if (string.IsNullOrWhiteSpace(BeltTiles) || Entity?.Scene is not { } scene)
+            return null;
+        var key = (scene, scene.ActiveVersion, BeltTiles);
+        if (_beltTiles.Key != key)
+            _beltTiles = (EntityNames.Find(scene, BeltTiles, new NameLookup(Entity))?.GetComponent<Tilemap>(), key);
+        return _beltTiles.Map?.Entity is null ? null : _beltTiles.Map;
     }
 
     // What the last Advance did, for the game to raise.
@@ -574,7 +774,7 @@ public sealed class Conveyor : Component, IDrawable
         }
 
         // Ports put what their machines made on the belts they're at, where there's room.
-        foreach (var (port, cell, from) in _givers)
+        foreach (var (port, cell, from, _) in _givers)
         {
             if (!port.Open)
                 continue;
@@ -635,7 +835,7 @@ public sealed class Conveyor : Component, IDrawable
         for (var k = 0; k < outs.Length; k++)
         {
             var o = outs[(first + k) % outs.Length];
-            if (!CanEnter(o, i))
+            if (!Sends(outs, o, _items[i]!, c => _belts[c].Cell) || !CanEnter(o, i))
                 continue;
             Shift(i, o);
             _nextOut[i] = (byte)((first + k + 1) % outs.Length);
@@ -677,6 +877,36 @@ public sealed class Conveyor : Component, IDrawable
         return true;
     }
 
+    // Whether a splitter with ways on `outs` sends `item` onto `to`: the ways whose filter names it, else those with none.
+    private bool Sends(int[] outs, int to, string item, Func<int, (int X, int Y)> cellOf)
+    {
+        if (_filterOf.Count == 0)
+            return true;
+        if (_filterOf.TryGetValue(cellOf(to), out var names))
+            return Lets(names, item);
+        foreach (var o in outs)
+        {
+            if (o != to && _filterOf.TryGetValue(cellOf(o), out var other) && Lets(other, item))
+                return false;
+        }
+
+        return true;
+    }
+
+    // Whether `names` ("Deck, Box") name `item`, or its first word ("Deck" lets "Deck 17" by).
+    internal static bool Lets(string? names, string item)
+    {
+        var space = item.IndexOf(' ');
+        foreach (var name in Formats.Names(names))
+        {
+            if (string.Equals(name, item, StringComparison.OrdinalIgnoreCase) ||
+                (space > 0 && item.AsSpan(0, space).Equals(name, StringComparison.OrdinalIgnoreCase)))
+                return true;
+        }
+
+        return false;
+    }
+
     // Whether cell `from`'s item would go into `to` next: a belt's only way on, or a splitter's next.
     private bool Wants(int from, int to)
     {
@@ -715,16 +945,20 @@ public sealed class Conveyor : Component, IDrawable
 
             if (_at.TryGetValue(cell, out var on))
             {
-                _givers.Add((port, on, -1));
+                _givers.Add((port, on, -1, on));
                 continue;
             }
 
+            // With a Spacing, the belt next to it can be an under cell's tunnel leading away.
             for (var w = 0; w < Ways.Length; w++)
             {
                 var (wx, wy) = Ways[w];
-                if (_at.TryGetValue((cell.X + wx, cell.Y - wy), out var next) && _belts[next].Way == (wx, wy))
+                if (!_at.TryGetValue((cell.X + wx, cell.Y - wy), out var next))
+                    continue;
+                var node = _belts[next].Way == (wx, wy) ? next : IsSpaced && _crossOf[next] >= 0 && _nodeWay[_crossOf[next]] == w ? _crossOf[next] : -1;
+                if (node >= 0)
                 {
-                    _givers.Add((port, next, w));
+                    _givers.Add((port, next, w, node));
                     break;
                 }
             }
@@ -750,22 +984,47 @@ public sealed class Conveyor : Component, IDrawable
             var belt = drawing.Tint(this, BeltColor);
             var arrow = drawing.Tint(this, Color.Lerp(BeltColor, Color.White, 0.45f));
             var crossing = drawing.Tint(this, Color.Lerp(BeltColor, Color.White, 0.25f));
+            var under = drawing.Tint(this, Color.Lerp(BeltColor, Color.Black, 0.35f));
             var thick = drawing.LineWidth;
-            foreach (var cell in _belts)
+            // Moving, two arrows a cell slide along as far as the items have gone, wrapping round the cell.
+            var moved = MovingArrows ? (float)(_travel % 0.5) : -1;
+            for (var i = 0; i < _belts.Length; i++)
             {
+                var cell = _belts[i];
                 var center = grid.Center(cell.Cell);
                 if (!Seen(center))
                     continue;
-                drawing.Quad(center, new Vector2(across, up) * 0.9f, cell.Kind == ConveyorCellKind.Crossing ? crossing : belt);
+                drawing.Quad(center, new Vector2(across, up) * 0.9f, cell.Kind is ConveyorCellKind.Crossing or ConveyorCellKind.Under ? crossing : belt);
                 var way = grid.InWorld(new Vector2(cell.WayX, cell.WayY));
-                var side = new Vector2(-way.Y, way.X);
-                Chevron(center + way * 0.12f);
-                if (cell.Kind == ConveyorCellKind.Split)
-                    Chevron(center - way * 0.12f);
-                void Chevron(Vector2 tip)
+                if (cell.Kind == ConveyorCellKind.Under)
                 {
-                    drawing.Line(tip - way * 0.18f + side * 0.2f, tip, thick, arrow);
-                    drawing.Line(tip - way * 0.18f - side * 0.2f, tip, thick, arrow);
+                    // The tunnel underneath runs across it, darker, with its own arrow.
+                    (int X, int Y) cross = IsSpaced && _crossOf[i] >= 0 ? Ways[_nodeWay[_crossOf[i]]] : (-cell.WayY, cell.WayX);
+                    var tunnel = grid.InWorld(new Vector2(cross.X, cross.Y));
+                    drawing.Quad(center, cross.X != 0 ? new Vector2(across * 0.9f, up * 0.35f) : new Vector2(across * 0.35f, up * 0.9f), under);
+                    Arrows(tunnel, -0.3f);
+                }
+
+                Arrows(way, cell.Kind == ConveyorCellKind.Under ? 0.3f : 0);
+                void Arrows(Vector2 along, float aside)
+                {
+                    var side = new Vector2(-along.Y, along.X);
+                    var at = center + side * aside;
+                    if (moved >= 0)
+                    {
+                        Chevron(at + along * (moved - 0.41f));
+                        Chevron(at + along * (moved + 0.09f));
+                        return;
+                    }
+
+                    Chevron(at + along * 0.12f);
+                    if (cell.Kind == ConveyorCellKind.Split)
+                        Chevron(at - along * 0.12f);
+                    void Chevron(Vector2 tip)
+                    {
+                        drawing.Line(tip - along * 0.18f + side * 0.2f, tip, thick, arrow);
+                        drawing.Line(tip - along * 0.18f - side * 0.2f, tip, thick, arrow);
+                    }
                 }
             }
         }
@@ -773,6 +1032,12 @@ public sealed class Conveyor : Component, IDrawable
         var blend = drawing.Blend.For(_movedIn);
         var size = new Vector2(across, up) * ItemSize;
         var z = Entity!.Transform.WorldPosition.Z;
+        if (IsSpaced)
+        {
+            DrawCarried(drawing, grid, blend, size, z, Seen);
+            return;
+        }
+
         for (var i = 0; i < _belts.Length; i++)
         {
             if (_items[i] is not { } item)
@@ -853,8 +1118,11 @@ public sealed class Conveyor : Component, IDrawable
                 (left[i], came[i]) = (0, 0);
         }
 
+        var carried = KeepCarried();
         (_belts, _at, _items, _left, _came, _lastIn, _nextOut, _from) = ([.. kept], at, items, left, came, lastIn, nextOut, from);
         Link();
+        LinkNodes();
+        PutBackCarried(carried);
         PlaceUnplaced();
         _beltRows = null;
         ItemsChanged();
@@ -932,9 +1200,15 @@ public sealed class Conveyor : Component, IDrawable
         if (_unplaced.Count == 0 || _belts.Length == 0)
             return;
         var grid = Entity is null ? default : Grid;
+        if (IsSpaced)
+        {
+            _unplaced.RemoveAll(u => PlaceCarried(u.X, u.Y, u.Item, Entity is null ? null : grid));
+            return;
+        }
+
         _unplaced.RemoveAll(u =>
         {
-            if (!_at.TryGetValue((u.X, u.Y), out var at))
+            if (!_at.TryGetValue(CellNear(u.X, u.Y), out var at))
                 return false;
             if (_items[at] is null)
             {
@@ -951,6 +1225,8 @@ public sealed class Conveyor : Component, IDrawable
 
     private List<string> ItemRows()
     {
+        if (IsSpaced)
+            return CarriedRows();
         var rows = new List<string>();
         for (var i = 0; i < _belts.Length; i++)
         {
@@ -960,9 +1236,12 @@ public sealed class Conveyor : Component, IDrawable
 
         // Ones read before their belts were laid aren't lost.
         foreach (var (x, y, item) in _unplaced)
-            rows.Add(string.Create(CultureInfo.InvariantCulture, $"{x} {y} {item}"));
+            rows.Add(string.Create(CultureInfo.InvariantCulture, $"{x:0.####} {y:0.####} {item}"));
         return rows;
     }
+
+    // The cell a column and row (a part of one, between cells' middles) is in.
+    private static (int X, int Y) CellNear(float x, float y) => ((int)MathF.Floor(x + 0.5f), (int)MathF.Floor(y + 0.5f));
 
     private static int WayIndex(int x, int y) => Array.IndexOf(Ways, (x, y));
 
@@ -974,6 +1253,7 @@ public sealed class Conveyor : Component, IDrawable
         {
             ConveyorCellKind.Crossing => row + " crossing",
             ConveyorCellKind.Split => row + " split",
+            ConveyorCellKind.Under => row + " under",
             _ => row,
         };
     }
@@ -999,19 +1279,28 @@ public sealed class Conveyor : Component, IDrawable
         {
             "crossing" or "cross" => ConveyorCellKind.Crossing,
             "split" or "splitter" => ConveyorCellKind.Split,
+            "under" or "tunnel" => ConveyorCellKind.Under,
             _ => ConveyorCellKind.Belt,
         };
         return new ConveyorCell(x, y, w.X, w.Y, kind);
     }
 
-    // "4 2 Deck": the cell, then the item (the rest of the row).
-    private static (int X, int Y, string Item)? ReadItem(string? row)
+    // "4 2 Deck": the cell, then the item (the rest of the row); "4.25 2 Deck" is a quarter cell right of its middle.
+    private static (float X, float Y, string Item)? ReadItem(string? row)
     {
         var parts = (row ?? "").Trim().Split(' ', 3, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length < 3 || !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var x) ||
-            !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var y))
+        if (parts.Length < 3 || !float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x) ||
+            !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y) || !float.IsFinite(x) || !float.IsFinite(y))
             return null;
         return (x, y, parts[2]);
+    }
+
+    // The cell a Filters row is for, or null.
+    private static (int X, int Y)? ReadFilterCell(string? row)
+    {
+        var parts = (row ?? "").Trim().Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2 && int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var x) &&
+            int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var y) ? (x, y) : null;
     }
 }
 
@@ -1058,9 +1347,9 @@ public sealed class ConveyorPort : Component
 
     /// <summary>
     /// For an In port: it stops taking an item once the machine holds this many of it, so the line backs up until the
-    /// machine uses some. 0 for no limit.
+    /// machine uses some. For an Out port: how many items handed it with <see cref="Give"/> it keeps waiting for room on
+    /// the belt (a machine's out tray); once it has that many it's <see cref="Full"/> and takes no more. 0 for no limit.
     /// </summary>
-    [ShownWhen(nameof(Kind), Is = [ConveyorPortKind.In])]
     public int Holds { get; set; }
 
     /// <summary>While ticked it takes or puts items; untick it (or switch it off) to hold the line.</summary>
@@ -1087,35 +1376,30 @@ public sealed class ConveyorPort : Component
     /// <summary>What a script has handed an Out port with <see cref="Give"/> that isn't on the belt yet, first first.</summary>
     public IReadOnlyList<string> Waiting => _toGive;
 
+    /// <summary>True if an Out port with <see cref="Holds"/> has that many items waiting: its machine can stop making more until there's room.</summary>
+    public bool Full => Kind == ConveyorPortKind.Out && Holds > 0 && _toGive.Count >= Holds;
+
     /// <summary>Raised once the step is over for each item an In port took, with the item.</summary>
     public event Action<ConveyorPort, string>? Received;
 
     /// <summary>Raised once the step is over for each item an Out port put on a belt, with the item.</summary>
     public event Action<ConveyorPort, string>? Sent;
 
-    /// <summary>Hands an Out port <paramref name="item"/> to put on its belt as soon as there's room (after any it already has).</summary>
-    public void Give(string item)
+    /// <summary>
+    /// Hands an Out port <paramref name="item"/> to put on its belt as soon as there's room (after any it already has):
+    /// false if it's <see cref="Full"/>, and the item isn't taken.
+    /// </summary>
+    public bool Give(string item)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(item);
+        if (Full)
+            return false;
         _toGive.Add(item.Trim());
+        return true;
     }
 
     /// <summary>True if <see cref="Items"/> lets it take or put <paramref name="item"/> (its first word counts too: "Deck" lets "Deck 17" by).</summary>
-    public bool Lets(string item)
-    {
-        var names = Formats.Names(Items);
-        if (names.Length == 0)
-            return true;
-        var space = item.IndexOf(' ');
-        foreach (var name in names)
-        {
-            if (string.Equals(name, item, StringComparison.OrdinalIgnoreCase) ||
-                (space > 0 && item.AsSpan(0, space).Equals(name, StringComparison.OrdinalIgnoreCase)))
-                return true;
-        }
-
-        return false;
-    }
+    public bool Lets(string item) => Formats.Names(Items).Length == 0 || Conveyor.Lets(Items, item);
 
     // An In port takes `item` if it's open and lets it, a script agrees and the machine has room: into what holds items
     // on its entity, if anything does.

@@ -1,0 +1,64 @@
+title: Belts that carry piles
+intro: A Conveyor with a Spacing carries several items to a cell, gliding a set distance apart and piling up at a full machine, with a line passing under it.
+
+project: Empty | Piles
+
+chapter: The belt | Several items to a cell
+create: Empty
+rename: Line
+add: Conveyor
+set: Conveyor.Belts = -4 0 right\n-3 0 right\n-2 0 right\n-1 0 right under\n0 0 right\n1 0 right\n2 0 right\n3 0 right\n-1 -2 down\n-1 -1 down\n-1 1 down\n-1 2 down
+explain: field:Conveyor.Belts | Belts | A belt runs right along row zero. The cell in the middle is an under cell: the line coming down column minus one passes beneath it.
+set: Conveyor.Spacing = 0.25
+explain: field:Conveyor.Spacing | Spacing | With a spacing of a quarter cell, items glide on four to a cell instead of one, each a quarter cell behind the one ahead.
+set: Conveyor.Speed = 2
+set: Conveyor.MovingArrows = true
+explain: field:Conveyor.MovingArrows | Moving Arrows | The belt's arrows slide along with the items, so it looks like it moves, and stop when the line stops.
+look: 0, 0, 5
+
+chapter: Machines | A maker, a reader with a table of four, and a box line
+deselect
+create: Empty
+rename: Maker
+set: Transform.Position.X = -5
+add: Inventory
+set: Inventory.Items = Deck
+editorset: Inventory.Items:count:1 = 12
+add: ConveyorPort
+set: ConveyorPort.Kind = Out
+explain: component:ConveyorPort | Conveyor Port | The maker's Out port puts its twelve decks on the belt as fast as there's room.
+deselect
+create: Empty
+rename: Reader
+set: Transform.Position.X = 4
+add: Inventory
+add: ConveyorPort
+set: ConveyorPort.Items = Deck
+set: ConveyorPort.Holds = 4
+explain: field:ConveyorPort.Holds | Holds | The reader takes decks until its table holds four. The rest pile up on the belt behind it.
+deselect
+create: Empty
+rename: Boxes
+set: Transform.Position = -1, 3, 0
+add: Inventory
+set: Inventory.Items = Box
+editorset: Inventory.Items:count:1 = 8
+add: ConveyorPort
+set: ConveyorPort.Kind = Out
+deselect
+create: Empty
+rename: Box Bin
+set: Transform.Position = -1, -3, 0
+add: ConveyorPort
+explain: component:ConveyorPort | Conveyor Port | Boxes go down the column, under the belt, into a bin that takes everything.
+
+chapter: Play | Gliding, passing under, piling up
+play
+wait: 4
+say: Decks glide along a quarter cell apart while boxes pass under the belt, neither line waiting for the other.
+wait: 5
+expectvalue: Reader.Inventory.Items = Deck 4
+expectvalue: Reader.ConveyorPort.Blocked = true
+say: The reader's table is full, so the decks behind it bunch up into a pile, packed a quarter cell apart.
+stop
+say: A splitter's Filters send named items one way and the rest another, a full loop keeps going round, and Belt Tiles moves painted belt art with the items.

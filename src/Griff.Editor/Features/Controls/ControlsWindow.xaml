@@ -62,7 +62,6 @@
                                 Padding="0"
                                 VerticalAlignment="Center"
                                 Command="{Binding RemoveCommand}"
-                                CommandParameter="{Binding}"
                                 Style="{StaticResource Style.Button.Toolbar}"
                                 Tag="chip:remove">
                             <TextBlock FontSize="9" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.ChromeClose}" />

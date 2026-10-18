@@ -15,6 +15,7 @@
 - A **Selectable**'s area turns with its entity, so a parked truck turned 90 degrees is clicked, boxed and marked as it lies, and a Button on a Selectable or inside one (a worker's own button) no longer stops **Selection Controls** selecting it: the click selects and the button still fires.
 - The editor writes a line to the Windows Application log as it starts (with its version) and as it closes, saying why (the Exit command, an agent's App.Exit, its window closed, restarting into an update), and an error from outside the UI as it ends: an editor that went with no closing line was ended from outside.
 - Fixed: a camera's **Edge Scroll** no longer pans while the mouse rests on the HUD at the screen's edge (a button row along the bottom, an open panel), as the wheel and drags already didn't; beside it, the edge still pans.
+- Fixed: an agent taking a key off an action in **Game → Controls** (pressing a key's × through `ui_invoke`) no longer fails; `RemoveBinding("Esc")` takes one off the selected action by its name.
 
 ## 0.1.0-alpha.19 - 2026-10-18
 

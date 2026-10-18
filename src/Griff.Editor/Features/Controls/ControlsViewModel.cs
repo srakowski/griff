@@ -203,6 +203,20 @@ public sealed partial class ControlsViewModel : ObservableObject
         Save($"{chip.Text} no longer does {row.Name}");
     }
 
+    /// <summary>
+    /// Takes a key or button off the selected action by its name as the window shows it or as project.griff saves it
+    /// ("Esc", "Escape", "Left Click", "Gamepad A"), as the × on its chip does.
+    /// </summary>
+    public void RemoveBinding(string binding)
+    {
+        if (Selected is not { } row)
+            throw new InvalidOperationException("Pick an action first.");
+        var parsed = InputBinding.TryParse(binding, out var b) ? b : (InputBinding?)null;
+        var chip = row.Keys.Concat(row.Pads).FirstOrDefault(c => c.Binding == parsed || c.Text.Equals(binding.Trim(), StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException($"{binding} isn't on {row.Name}; it has {row.Summary}.");
+        Remove(chip);
+    }
+
     /// <summary>Adds a key or button to the selected action (from listening, or the gamepad list), and stops listening.</summary>
     public void Add(InputBinding binding)
     {
@@ -374,12 +388,14 @@ public sealed partial class ActionRow : ObservableObject
 public sealed class BindingChip(InputBinding binding, IRelayCommand<BindingChip> remove) : ObservableObject
 {
     private string? _alsoDoes;
+    private IRelayCommand? _remove;
 
     public InputBinding Binding { get; } = binding;
 
     public string Text => Describe(Binding);
 
-    public IRelayCommand<BindingChip> RemoveCommand { get; } = remove;
+    /// <summary>Takes this key or button off its action (the × on it).</summary>
+    public IRelayCommand RemoveCommand => _remove ??= new RelayCommand(() => remove.Execute(this));
 
     /// <summary>"Also does Attack" when another action has it too.</summary>
     public string? AlsoDoes

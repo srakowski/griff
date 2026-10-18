@@ -1,0 +1,57 @@
+title: Conveyor belts
+intro: A Conveyor lays belts on a grid and carries items along them, into and out of machines, with a crossing for workers and no code.
+
+project: Empty | Belts
+
+chapter: The belt | A Conveyor and its cells
+create: Empty
+rename: Line
+add: Conveyor
+explain: component:Conveyor | Conveyor | A Conveyor lays belts on the cells of the scene's tilemap, or world units without one, and carries items along them.
+set: Conveyor.Belts = -4 0 right\n-3 0 right\n-2 0 right crossing\n-1 0 right\n0 0 right\n1 0 right\n2 0 right\n3 0 right
+explain: field:Conveyor.Belts | Belts | Each row is a cell: its column and row, the way it carries, and crossing for one workers step over. A script lays a whole line at once with Lay Path.
+set: Conveyor.Speed = 2
+explain: field:Conveyor.Speed | Speed | Items move two cells a second, one to a cell, and wait when the cell ahead is full, so a full end backs the line up.
+look: 0, 0, 5
+
+chapter: Machines | A port out of one and into the next
+deselect
+create: Empty
+rename: Maker
+set: Transform.Position.X = -5
+add: Inventory
+set: Inventory.Items = Deck
+editorset: Inventory.Items:count:1 = 6
+add: ConveyorPort
+set: ConveyorPort.Kind = Out
+explain: component:ConveyorPort | Conveyor Port | An Out port puts what its machine holds on the belt leading away from it: six decks.
+deselect
+create: Empty
+rename: Reader
+set: Transform.Position.X = 4
+add: Inventory
+add: ConveyorPort
+set: ConveyorPort.Items = Deck
+set: ConveyorPort.Holds = 2
+explain: field:ConveyorPort.Holds | Holds | An In port takes decks off the belt's end into the reader until it holds two, then leaves the next one waiting.
+
+chapter: A worker | Belts are walls, crossings aren't
+deselect
+create: Grid Player
+rename: Worker
+set: Transform.Position = 0, -2, 0
+set: GridMovement.Controllable = false
+set: GridMovement.Destination = 0 -2
+explain: field:GridMovement.Destination | Destination | The worker is sent across the line. The belts are solid, so it walks round to the crossing.
+
+chapter: Play | Items, back-pressure and the crossing
+play
+wait: 3
+expectat: Worker = 0, 2
+say: The worker went over at the crossing and back along the other side.
+wait: 4
+expectvalue: Reader.Inventory.Items = Deck 2
+expectvalue: Reader.ConveyorPort.Blocked = true
+say: The reader took its two decks, and the other four wait on the belt behind it, a cell apart: its port is blocked, which a machine's lamp can show.
+stop
+say: Belts that run into another's side merge, taking turns, a split cell hands items round, and every line plays out the same at sixteen times speed.

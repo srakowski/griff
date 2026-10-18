@@ -44,6 +44,13 @@ public sealed partial class FieldEditorAuditTests
         TableValues.SavedRow: Names:Saved
         TableValues.Sets: TableSets
         TableValues.Applied: Text
+        Conveyor.Map: Entity
+        Conveyor.Belts: Lines
+        Conveyor.Layer: Names:Layer
+        Conveyor.Items: Lines
+        Conveyor.ItemImages: Lines
+        ConveyorPort.Items: Names:Item*
+        ConveyorPort.Message: Names:Message
         Counter.Message: Names:Message
         Counter.Format: Format
         Counter.SaveBestAs: Names:Saved

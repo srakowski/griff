@@ -131,6 +131,9 @@ public static class Steps
     /// <summary>The "Movers" step of the Simulate phase.</summary>
     public static readonly StepId Movers = new(FramePhase.Simulate, "Movers");
 
+    /// <summary>The "Conveyors" step of the Simulate phase.</summary>
+    public static readonly StepId Conveyors = new(FramePhase.Simulate, "Conveyors");
+
     /// <summary>The "Animations" step of the Simulate phase.</summary>
     public static readonly StepId Animations = new(FramePhase.Simulate, "Animations");
 

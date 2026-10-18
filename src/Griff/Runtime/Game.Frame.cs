@@ -52,6 +52,7 @@ public sealed partial class Game
     private readonly SettingsSystem _settings = new();
     private readonly TableSystem _tableSystem = new();
     private readonly MinigameSystem _minigames = new();
+    private readonly ConveyorSystem _conveyors = new();
 
     internal LevelSystem LevelSystem => _levels;
 
@@ -126,6 +127,8 @@ public sealed partial class Game
     internal TableSystem TableSystem => _tableSystem;
 
     internal MinigameSystem MinigameSystem => _minigames;
+
+    internal ConveyorSystem ConveyorSystem => _conveyors;
 
     [NotState("the frame's steps: the same for the game's life")]
     private readonly List<FrameStep> _builtInSteps = [];
@@ -477,7 +480,7 @@ public sealed partial class Game
     {
         GameSystem[] core = [_levels, _movement, _gridMoves, _turns, _combat, _triggers, _switches, _itemUses, _drags, _selection, _panels, _clock, _inputSystem,
             _network, _scriptSystem, _timerSystem, _messageSystem, _lifetimes, _effects, _tilemaps, _hud, _physicsSystem, _scenes, _menuSystem,
-            _focusSystem, _pauses, _reading, _beat, _calibration, _atmosphere, _weather, _lobby, _views, _saves, _settings, _tableSystem, _minigames];
+            _focusSystem, _pauses, _reading, _beat, _calibration, _atmosphere, _weather, _lobby, _views, _saves, _settings, _tableSystem, _minigames, _conveyors];
 
         // Begin. Panels shown or hidden since last frame open or close first, so a pause starts straight away.
         Step(Steps.Panels, _panels.SyncPanels);
@@ -520,6 +523,7 @@ public sealed partial class Game
         Step(Steps.Spawners, _lifetimes.RunSpawners);
         Step(Steps.Shooters, _levels.RunShooters);
         Step(Steps.Movers, _levels.RunMovers);
+        Step(Steps.Conveyors, _conveyors.RunConveyors);
         Step(Steps.Animations, _effects.RunAnimations);
         Step(Steps.AnimatedTiles, _tilemaps.RunAnimatedTiles);
         Step(Steps.Particles, _effects.RunParticles);

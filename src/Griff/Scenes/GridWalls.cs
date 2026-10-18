@@ -4,8 +4,9 @@ namespace Griff.Scenes;
 
 /// <summary>
 /// Where a grid mover can't go, gathered once so a search can ask about many cells: off its map (when it has to stay on),
-/// solid tiles on any tilemap, solid colliders over a cell's middle, and the cells other grid movers are in or heading
-/// into. Layers either side passes through don't count. <see cref="FindWay"/> searches it for the shortest way somewhere.
+/// solid tiles on any tilemap, solid colliders over a cell's middle, a solid conveyor's belts (not its crossings), and the
+/// cells other grid movers are in or heading into. Layers either side passes through don't count. <see cref="FindWay"/>
+/// searches it for the shortest way somewhere.
 /// </summary>
 public sealed class GridWalls
 {
@@ -21,6 +22,7 @@ public sealed class GridWalls
     private readonly List<Box> _boxes = [];
     private readonly List<Circle> _circles = [];
     private readonly List<PolygonCollider> _polygons = [];
+    private readonly List<(Conveyor Conveyor, GridCells Grid)> _conveyors = [];
     private readonly Dictionary<(int X, int Y), Entity> _movers = [];
 
     private GridWalls(GridCells grid, bool stayOnMap)
@@ -110,6 +112,11 @@ public sealed class GridWalls
                     case PolygonCollider polygon when Blocks(polygon):
                         walls._polygons.Add(polygon);
                         break;
+                    // Its belts are solid on its layer, as a collider is; its crossings aren't.
+                    case Conveyor { Solid: true } conveyor when !PassesThrough(conveyor.Layer, null) &&
+                                                                (only is null || CollisionLayers.Contains(only, conveyor.Layer)):
+                        walls._conveyors.Add((conveyor, conveyor.Grid));
+                        break;
                 }
             }
         }
@@ -129,6 +136,12 @@ public sealed class GridWalls
         {
             var (x, y) = map.CellAt(Vector2.Transform(point, toLocal));
             if (map.IsBlocked(x, y))
+                return true;
+        }
+
+        foreach (var (conveyor, cells) in _conveyors)
+        {
+            if (conveyor.BlocksWalking(cells.CellAt(point)))
                 return true;
         }
 

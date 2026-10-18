@@ -29,7 +29,7 @@ public sealed class GameSystemsTests
         { "ItemUses", "Items" }, { "Scripts", "Scripts" }, { "HUD", "HUD" }, { "OtherPlayersTools", "Network" },
         { "Dragging", "Dragging" }, { "Selection", "Selection" }, { "Attacks", "Combat" }, { "IdleGridMovers", "Turns" }, { "Timers", "Timers" },
         { "Coroutines", "Timers" }, { "Tweens", "Timers" }, { "Lifetimes", "Lifetimes" }, { "Spawners", "Lifetimes" },
-        { "Shooters", "Levels" }, { "Movers", "Levels" }, { "Animations", "Effects" }, { "AnimatedTiles", "Tilemaps" },
+        { "Shooters", "Levels" }, { "Movers", "Levels" }, { "Conveyors", "Conveyors" }, { "Animations", "Effects" }, { "AnimatedTiles", "Tilemaps" },
         { "Particles", "Effects" }, { "CameraShake", "Effects" }, { "SpriteEffects", "Effects" }, { "SimulatePrompts", "Panels" },
         { "Typewriters", "HUD" }, { "PickupSpin", "Items" }, { "FixedScripts", "Scripts" }, { "BodyRoles", "Movement" }, { "Physics", "Physics" },
         { "Carrying", "Dragging" }, { "Pickups", "Items" }, { "Checkpoints", "Levels" }, { "Doors", "Levels" },
@@ -98,7 +98,7 @@ public sealed class GameSystemsTests
                 .Select(f => $"{type.Name}.{f.Name}"))
             .ToList();
 
-        Assert.Equal(37, systems.Count);
+        Assert.Equal(38, systems.Count);
         Assert.True(shown.Count == 0, "A system's state is private fields of its own:\n" + string.Join("\n", shown));
     }
 

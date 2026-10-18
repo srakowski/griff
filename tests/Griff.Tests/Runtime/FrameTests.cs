@@ -26,7 +26,7 @@ public class FrameTests
             "Simulate: Dragging", "Simulate: Cards", "Simulate: Match Boards", "Simulate: Slingshots", "Simulate: Flippers", "Simulate: Selection", "Simulate: Falling Boards",
             "Simulate: Strategy",
             "Simulate: Attacks", "Simulate: Idle Grid Movers", "Simulate: Timers", "Simulate: Coroutines",
-            "Simulate: Tweens", "Simulate: Lifetimes", "Simulate: Spawners", "Simulate: Shooters", "Simulate: Movers",
+            "Simulate: Tweens", "Simulate: Lifetimes", "Simulate: Spawners", "Simulate: Shooters", "Simulate: Movers", "Simulate: Conveyors",
             "Simulate: Animations", "Simulate: Animated Tiles", "Simulate: Particles", "Simulate: Camera Shake",
             "Simulate: Sprite Effects", "Simulate: Prompts", "Simulate: Typewriters", "Simulate: Pickup Spin",
             "Physics: Fixed Scripts", "Physics: Body Roles", "Physics: Thrusters", "Physics: Welds", "Physics: Physics",
@@ -64,7 +64,7 @@ public class FrameTests
         Assert.Equal(["Levels", "Movement", "Grid Movement", "Turns", "Combat", "Triggers", "Switches", "Items", "Dragging", "Selection",
             "Panels", "Time", "Input", "Network", "Scripts", "Timers", "Messages", "Lifetimes", "Effects",
             "Tilemaps", "HUD", "Physics", "Scenes", "Menus", "Focus", "Pauses", "Reading", "Beat", "Calibration",
-            "Atmosphere", "Weather", "Lobby", "Views", "Saves", "Settings", "Tables", "Minigames", "Adventures",
+            "Atmosphere", "Weather", "Lobby", "Views", "Saves", "Settings", "Tables", "Minigames", "Conveyors", "Adventures",
             "Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Boards", "Fighters",
             "Hitboxes", "Versus", "First Person", "Match Boards", "Slingshots", "Breakables", "Level Goals",
             "Pinball", "Puzzles", "Rhythm Settings", "Note Lanes", "Song Select", "Strategy", "Tactics",
@@ -153,7 +153,7 @@ public class FrameTests
 
         Assert.Empty(log);
         Assert.Null(game.GetSystem<Recorder>());
-        Assert.Equal(61, game.Systems.Count);
+        Assert.Equal(62, game.Systems.Count);
     }
 
     [Fact]

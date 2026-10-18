@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.16 - 2026-10-17
+
 - A Table Values line can set a list of names: a property that is an `IReadOnlyList<string>` (a script's `Priorities`, a Game Speed's `Speeds`) takes a text cell split on commas and line breaks, each name trimmed and empty ones dropped, and the Inspector marks it as set from the table like any other field. The data tables guide and its demo say so.
 
 - Fixed: dragging the view of a camera with **Camera Controls** no longer swings back and forth after the mouse moves (on a 60 Hz screen it kept rocking while the button was held, at two steps a frame or fast-forwarded it got worse, and the strategy camera's edge scroll and minimap drag stuttered the same way): the camera goes by where the mouse is on the screen and the camera as it is now, not the world point found through the camera as last drawn, so the view goes where the mouse takes it and stays. Dragged past a **Stay Inside** edge, dragging back moves it at once, and an agent's `game_input` drag moves the view as far as the drag. Scripts get `Input.MouseOnScreen`.

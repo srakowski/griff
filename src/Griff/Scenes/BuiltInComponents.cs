@@ -242,6 +242,19 @@ public sealed class Text : Component, IDrawable
     public float WrapWidth { get; set; }
 
     /// <summary>
+    /// The color of a box drawn just behind the text, fitted to its lines as they're drawn (as wide as the widest, as tall as
+    /// all of them) with <see cref="Padding"/> round them, so a label stays readable over a busy floor and the box grows and
+    /// shrinks with its words. It follows <see cref="Align"/>, <see cref="VerticalAlign"/> and <see cref="WrapWidth"/>, and
+    /// is drawn at the text's <see cref="Order"/>. Transparent (the default) draws none.
+    /// </summary>
+    [Group("Background")]
+    public Color Background { get; set; } = Color.Transparent;
+
+    /// <summary>With a <see cref="Background"/>: how far the box reaches past the text on every side, in world units before the transform's scale (like <see cref="Size"/>).</summary>
+    [ShownWhen(nameof(Background))]
+    public float Padding { get; set; }
+
+    /// <summary>
     /// An entity whose <see cref="Output"/> it shows, by name, e.g. "Board". Empty is this entity, or the nearest one it's
     /// inside with that output.
     /// </summary>
@@ -311,6 +324,8 @@ public sealed class Text : Component, IDrawable
             VerticalAlign = VerticalAlign,
             WrapWidth = WrapWidth > 0 && size > 0 ? WrapWidth / size : 0,
             Typed = typed < value.Length ? typed.Value : 0,
+            Background = Background.A > 0 ? drawing.Tint(this, Background) : Color.Transparent,
+            Padding = size > 0 ? Math.Max(0, Padding) / size : 0,
         });
     }
 }

@@ -1,0 +1,43 @@
+title: Labels that show up close
+intro: A Text can sit on a box fitted to its words, and a Show When can hide it when the camera pulls out.
+
+project: Empty | World Labels
+
+chapter: A box behind the words | Text > Background
+create: Text
+rename: Label
+set: Transform.Position = 0, -1, 0
+set: Text.Value = IDLE
+set: Text.Size = 0.5
+say: A label over a busy floor is hard to read. A Text can draw a box right behind its letters.
+set: Text.Background = #CC101018
+set: Text.Padding = 0.15
+expectvalue: Label.Text.Padding = 0.15
+explain: field:Text.Background | Background | Background is the color of a box fitted to the text's lines. Transparent, the default, draws none.
+explain: field:Text.Padding | Padding | Padding is how far the box reaches past the letters on every side, in world units.
+set: Text.Value = UNLOADING C05-1 3/4
+explain: scene | Scene view | The box grows with the words, and shrinks again with a shorter label.
+set: Text.Value = FEEDING C03\n2/4
+say: It is fitted to every line, and follows Align and Vertical Align too.
+
+chapter: Only when zoomed in | Show When > Zoom Below
+create: Sprite
+rename: Worker
+set: Transform.Position = 0, 0.5, 0
+select: Label
+add: ShowWhen
+set: ShowWhen.ZoomBelow = 7
+expectvalue: Label.ShowWhen.ZoomBelow = 7
+explain: field:ShowWhen.ZoomBelow | Zoom Below | With Zoom Below at seven, the label shows while the camera's Size is seven or less, and is hidden when the camera pulls out. Zero ignores the zoom.
+say: The worker's sprite has no Show When, so it stays at every zoom. No flag is needed for a zoom alone.
+select: Main Camera
+set: Camera.Size = 9
+play
+wait: 1
+say: The camera is at nine, so the label is gone and the worker shows.
+stop
+set: Camera.Size = 6
+play
+wait: 1
+say: Zoomed in to six, the label is back on its box.
+stop

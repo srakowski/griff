@@ -189,4 +189,85 @@ public sealed class ShowWhenTests
         // "or" inside a name isn't a join.
         Assert.False(game.FlagHolds("Ordered"));
     }
+
+    // A camera of this Size, a worker's label shown while it's at most 7 and an icon with no zoom to go by.
+    private static Scene Workers(float size, string? flag = null)
+    {
+        var scene = new Scene();
+        var camera = new Entity("Camera");
+        camera.AddComponent<Camera>().Size = size;
+        scene.Add(camera);
+        var label = new Entity("Label");
+        label.AddComponent<Text>();
+        var show = label.AddComponent<ShowWhen>();
+        show.ZoomBelow = 7;
+        show.NeedsFlag = flag;
+        scene.Add(label);
+        var icon = new Entity("Icon");
+        icon.AddComponent<Sprite>();
+        scene.Add(icon);
+        return scene;
+    }
+
+    [Theory]
+    [InlineData(6, true)]
+    [InlineData(7, true)]
+    [InlineData(9, false)]
+    public void ZoomBelow_ShowsTheLabelOnlyWhileTheCameraIsZoomedIn_AndNeverHidesAnIconWithoutIt(float size, bool shown)
+    {
+        var game = new Game(Workers(size), _input);
+
+        Tick(game);
+
+        Assert.Equal(shown, game.Find("Label")!.IsActive);
+        Assert.True(game.Find("Icon")!.IsActive);
+    }
+
+    [Fact]
+    public void ZoomBelow_FollowsTheCameraAsItZoomsOutAndIn_AndNeedsNoFlag()
+    {
+        var game = new Game(Workers(6), _input);
+        var camera = game.Find("Camera")!.GetComponent<Camera>()!;
+        Tick(game);
+        Assert.True(game.Find("Label")!.IsActive);
+
+        camera.Size = 9;
+        Tick(game);
+        Assert.False(game.Find("Label")!.IsActive);
+
+        camera.Size = 5;
+        Tick(game);
+        Assert.True(game.Find("Label")!.IsActive);
+    }
+
+    [Fact]
+    public void ZoomBelow_WithAFlag_NeedsBothToShow()
+    {
+        var game = new Game(Workers(6, "run.Labels"), _input);
+        var camera = game.Find("Camera")!.GetComponent<Camera>()!;
+        Tick(game);
+        Assert.False(game.Find("Label")!.IsActive);
+
+        game.SetFlag("run.Labels");
+        Tick(game);
+        Assert.True(game.Find("Label")!.IsActive);
+
+        camera.Size = 9;
+        Tick(game);
+        Assert.False(game.Find("Label")!.IsActive);
+        Assert.Equal("Shown only while run.Labels is set and the camera's Size is at most 7.", game.Find("Label")!.GetComponent<ShowWhen>()!.SetupNote());
+    }
+
+    [Fact]
+    public void ShowWhenWithNeitherAFlagNorAZoom_LeavesTheEntityAlone()
+    {
+        var scene = Workers(20);
+        scene.Entities.Single(e => e.Name == "Label").GetComponent<ShowWhen>()!.ZoomBelow = 0;
+        var game = new Game(scene, _input);
+
+        Tick(game);
+
+        Assert.True(game.Find("Label")!.IsActive);
+        Assert.Null(game.Find("Label")!.GetComponent<ShowWhen>()!.SetupNote());
+    }
 }

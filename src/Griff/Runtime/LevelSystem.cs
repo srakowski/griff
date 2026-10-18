@@ -675,11 +675,16 @@ internal sealed class LevelSystem : GameSystem, IVolleys, IDialogues, IFlags
     // Each Show When shows its entity while its flag holds and hides it otherwise, before menus look for buttons to click.
     internal void RunShowWhens()
     {
+        // The main camera's Size, found once for the Show Whens that go by zoom.
+        float? zoom = null;
         foreach (var show in Game.RunHere<ShowWhen>())
         {
-            if (string.IsNullOrWhiteSpace(show.NeedsFlag))
+            var byFlag = !string.IsNullOrWhiteSpace(show.NeedsFlag);
+            var byZoom = show.ZoomBelow > 0;
+            if (!byFlag && !byZoom)
                 continue;
-            var shown = FlagHolds(show.NeedsFlag);
+            var shown = (!byFlag || FlagHolds(show.NeedsFlag)) &&
+                (!byZoom || (zoom ??= Views.FindCamera(Game.Scene)?.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize) <= show.ZoomBelow);
             if (show.Entity!.IsEnabled != shown)
                 show.Entity.IsEnabled = shown;
         }

@@ -390,6 +390,20 @@ public sealed class DrawList
     {
         var tint = new Vector4(sprite.Tint.R, sprite.Tint.G, sprite.Tint.B, sprite.Tint.A);
         var flash = new Vector4(sprite.Flash.R, sprite.Flash.G, sprite.Flash.B, sprite.Flash.A);
+        if (sprite.Background.A > 0)
+        {
+            // A box fitted to the lines as laid out, under the letters (the run of glyph quads starts after it).
+            var (left, top, right, bottom) = Glyphs.Extent(sprite.Text!, sprite.Font, sprite.Align, sprite.VerticalAlign, sprite.WrapWidth);
+            if (right > left)
+            {
+                var pad = Math.Max(0, sprite.Padding);
+                ref var box = ref Next(DrawOp.Sprites, WhiteTexture);
+                box.Corners01 = Pair(ToClip(left - pad, top + pad, toClip), ToClip(right + pad, top + pad, toClip));
+                box.Corners23 = Pair(ToClip(right + pad, bottom - pad, toClip), ToClip(left - pad, bottom - pad, toClip));
+                Rest(ref box, new Vector4(0, 0, 1, 1), sprite.Background, Color.Transparent);
+            }
+        }
+
         foreach (ref readonly var glyph in Glyphs.Lay(sprite))
         {
             ref var quad = ref Next(DrawOp.Sprites, GlyphTexture(glyph.Page));

@@ -134,6 +134,30 @@ public sealed class GlyphAtlas : IDisposable
         return _quads.AsSpan(0, count);
     }
 
+    /// <summary>
+    /// The box <paramref name="text"/> takes up when laid out as <see cref="Lay(string, string?, TextAlign, TextVerticalAlign, float, int)"/>
+    /// does, in lines from the anchor (Y up): as wide as its widest line (to its last glyph that isn't white space) and a
+    /// line high for each, typed or not. An empty box (width 0) for text with nothing to measure.
+    /// </summary>
+    public (float Left, float Top, float Right, float Bottom) Extent(string text, string? font, TextAlign align,
+        TextVerticalAlign vertical = TextVerticalAlign.Middle, float wrapWidth = 0)
+    {
+        if (text.Length == 0)
+            return default;
+        var face = Fonts.FaceFor(font);
+        _lines.Clear();
+        (_measuring, _measuringText) = (face, text);
+        TextWrap.Break(text, wrapWidth * TextRaster.LinePixels, _measure, _lines);
+        _measuringText = null;
+        var widest = 0f;
+        foreach (var (start, stop) in _lines)
+            widest = Math.Max(widest, Measure(face, text, start, stop));
+        widest /= TextRaster.LinePixels;
+        var top = vertical switch { TextVerticalAlign.Top => 0, TextVerticalAlign.Bottom => _lines.Count, _ => _lines.Count / 2f };
+        var left = align switch { TextAlign.Left => 0f, TextAlign.Right => -widest, _ => -widest / 2 };
+        return (left, top, left + widest, top - _lines.Count);
+    }
+
     /// <summary>A <see cref="SpriteDraw"/> of text laid out as <see cref="Lay(string, string?, TextAlign, TextVerticalAlign, float, int)"/> does it.</summary>
     public ReadOnlySpan<GlyphQuad> Lay(in SpriteDraw text) =>
         Lay(text.Text ?? "", text.Font, text.Align, text.VerticalAlign, text.WrapWidth, text.Typed);

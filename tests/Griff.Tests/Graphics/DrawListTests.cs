@@ -107,6 +107,73 @@ public sealed partial class DrawListTests
         Assert.True(list.Glyphs.Pages[0].HasChanges);
     }
 
+    // The box a text with a background draws: the first quad, on the white texture, as (left, top, right, bottom) in clip space.
+    private static (Vector4 Box, int Quads) BackedText(string text, TextAlign align = TextAlign.Center,
+        TextVerticalAlign vertical = TextVerticalAlign.Middle, float padding = 0)
+    {
+        var list = new DrawList(_ => 1, new GlyphAtlas(null));
+        list.Build(new RenderFrame
+        {
+            ViewProjection = Matrix4x4.Identity,
+            Sprites = [new SpriteDraw(Matrix4x4.Identity, null, Color.White, Owner, Text: text)
+            {
+                Align = align, VerticalAlign = vertical, Background = new Color(0, 0, 0, 0.5f), Padding = padding,
+            }],
+        }, 100, 100);
+        var box = list.Quads[0];
+        Assert.Equal(new Vector4(0, 0, 0, 0.5f), box.Tint);
+        Assert.Equal(DrawList.WhiteTexture, list.Commands.ToArray().First(c => c.Op == DrawOp.Sprites).Texture);
+        return (new Vector4(box.Corners01.X, box.Corners01.Y, box.Corners23.X, box.Corners23.Y), list.QuadCount);
+    }
+
+    [Fact]
+    public void ATextBackground_IsABoxUnderTheLetters_FittedToItsWidthAndLines()
+    {
+        var (idle, _) = BackedText("IDLE");
+        var (long_, quads) = BackedText("UNLOADING C05-1 3/4");
+        var (two, _) = BackedText("IDLE\nIDLE");
+
+        // Wider text, a wider box, around the middle; a second line, a taller one.
+        Assert.True(long_.Z - long_.X > (idle.Z - idle.X) * 3);
+        Assert.Equal(0, long_.X + long_.Z, 2);
+        Assert.Equal(1, idle.Y - idle.W, 3);
+        Assert.Equal(2, two.Y - two.W, 3);
+        // The box and then the glyphs: a quad each (the spaces and the slash have none to draw).
+        Assert.True(quads > 10);
+    }
+
+    [Fact]
+    public void ATextBackground_FollowsAlignmentAndAddsItsPaddingOnEverySide()
+    {
+        var (centered, _) = BackedText("Hello");
+        var (left, _) = BackedText("Hello", TextAlign.Left);
+        var (right, _) = BackedText("Hello", TextAlign.Right);
+        var (top, _) = BackedText("Hello", vertical: TextVerticalAlign.Top);
+        var (bottom, _) = BackedText("Hello", vertical: TextVerticalAlign.Bottom);
+        var (padded, _) = BackedText("Hello", padding: 0.25f);
+
+        Assert.Equal(0, left.X, 3);
+        Assert.Equal(0, right.Z, 3);
+        Assert.Equal(0.5f, centered.Y, 3);
+        Assert.Equal(0, top.Y, 3);
+        Assert.Equal(0, bottom.W, 3);
+        Assert.Equal(centered.X - 0.25f, padded.X, 3);
+        Assert.Equal(centered.Z + 0.25f, padded.Z, 3);
+        Assert.Equal(centered.Y + 0.25f, padded.Y, 3);
+        Assert.Equal(centered.W - 0.25f, padded.W, 3);
+    }
+
+    [Fact]
+    public void AWrappedTextsBackground_IsAsTallAsItsLines()
+    {
+        var atlas = new GlyphAtlas(null);
+        var one = atlas.Extent("one two three four", null, TextAlign.Left);
+        var wrapped = atlas.Extent("one two three four", null, TextAlign.Left, wrapWidth: 4);
+
+        Assert.True(wrapped.Top - wrapped.Bottom > one.Top - one.Bottom);
+        Assert.True(wrapped.Right - wrapped.Left <= 4.2f);
+    }
+
     [Fact]
     public void ADarkScene_AddsItsLightsUpInALightMap_ThatDarkensAllButTheHud()
     {

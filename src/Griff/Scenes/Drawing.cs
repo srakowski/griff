@@ -33,6 +33,15 @@ public readonly record struct SpriteDraw(Matrix4x4 World, string? Image, Color T
     /// </summary>
     public int Typed { get; init; }
 
+    /// <summary>
+    /// For text: the color of a box fitted behind its lines by the renderer, which knows how wide they are; transparent
+    /// draws none (see <see cref="Scenes.Text.Background"/>).
+    /// </summary>
+    public Color Background { get; init; } = Color.Transparent;
+
+    /// <summary>For text with a <see cref="Background"/>: how far the box reaches past the lines, in lines (the quad's own units: a <see cref="Scenes.Text.Padding"/> over its size).</summary>
+    public float Padding { get; init; }
+
     /// <summary>A color painted over the quad (keeping its shape), with alpha saying how much; see <see cref="Sprite.Flash"/>.</summary>
     public Color Flash { get; init; } = Color.Transparent;
 

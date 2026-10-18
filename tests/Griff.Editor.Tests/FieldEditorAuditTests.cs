@@ -164,6 +164,9 @@ public sealed partial class FieldEditorAuditTests
         Switch.OffMessage: Names:Message
         Switch.Prompt: Entity
         Switch.Clock: Entity
+        WallRooms.WallTiles: TileNumbers
+        WallRooms.WallLayers: Names:Layer*
+        WallRooms.Message: Names:Message
         CameraControls.StayInside: Entity
         Chase.Target: Entity
         Chase.Around: Entity

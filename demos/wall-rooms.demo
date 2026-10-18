@@ -1,0 +1,45 @@
+title: Rooms from walls
+intro: Wall Rooms finds the rooms a tilemap's walls close off, keeps them up to date as walls change, and says which room anything is in.
+
+project: Empty | Wall Rooms
+
+chapter: Walls make rooms | Wall Rooms on a tilemap
+create: Tilemap
+rename: Floor
+set: Transform.Position = -6, 3.5, 0
+set: Tilemap.Tiles = ............\n.1111111111.\n.1....1...1.\n.1....2...1.\n.1....1...1.\n.1111111111.\n............
+say: Here is a little building: an outer wall, a wall down the middle and a door in it, tile two.
+add: WallRooms
+set: WallRooms.Show = true
+explain: field:WallRooms.Show | Show | Show tints each closed room a color of its own, so you can see where the walls close rooms off.
+expectvalue: Floor.WallRooms.Closed = 2
+explain: scene | Scene view | Two closed rooms. The ring of floor outside reaches the map's edge, so it is open to the outside and not tinted.
+explain: field:WallRooms.SolidTiles | Solid Tiles | Solid tiles are walls, the same ones grid movers walk round.
+
+chapter: Doors count as shut | Wall Tiles
+set: Tilemap.BackgroundTiles = 2
+expectvalue: Floor.WallRooms.Closed = 1
+say: Make the door a background tile, so people can walk through it, and the two rooms become one.
+set: WallRooms.WallTiles = 2
+expectvalue: Floor.WallRooms.Closed = 2
+explain: field:WallRooms.WallTiles | Wall Tiles | Wall Tiles are walls to rooms even where they can be walked through. List the door's tiles and a door counts as shut, so heat stays in its room.
+explain: field:WallRooms.WallLayers | Wall Layers | Walls built as entities count too: solid colliders on these collision layers, over a cell's middle.
+
+chapter: Kept up to date | As walls change
+create: Text
+rename: Room Count
+set: Transform.Position = 0, 4.4, 0
+set: Text.Track = Floor
+set: Text.Output = Closed
+set: Text.Value = {0} closed rooms
+explain: field:Text.Output | Output | A text shows Closed, how many rooms the walls close off. RoomArea and RoomId read the room a named entity stands in.
+play
+wait: 1
+say: Now knock a hole in the left room's outer wall while the game runs.
+select: Floor
+set: Tilemap.Tiles = ............\n.1111111111.\n.1....1...1.\n......2...1.\n.1....1...1.\n.1111111111.\n............
+wait: 1
+expectvalue: Floor.WallRooms.Closed = 1
+say: The left room is open to the outside now, and the count says so. Rooms are worked out again only when the walls change, not every frame, and Changed tells scripts when they have.
+stop
+say: Each room keeps its id as walls go up and come down, and scripts ask which room a cell, a point or an entity is in, and what is in a room.

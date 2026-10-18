@@ -34,7 +34,7 @@ public class FrameTests
             "Resolve: Pickups", "Resolve: Checkpoints", "Resolve: Doors", "Resolve: Stage Input", "Resolve: Dialogues", "Resolve: Stages", "Resolve: Switches",
             "Resolve: Goals", "Resolve: Wiring", "Resolve: Bouncers", "Resolve: Crumbles", "Resolve: Hitboxes", "Resolve: Touch Damage",
             "Resolve: Health", "Resolve: Respawns", "Resolve: Bars", "Resolve: Stars", "Resolve: Counters", "Resolve: Tooltips", "Resolve: Text Outputs", "Resolve: Fade",
-            "Resolve: Screen Flash", "Resolve: Destroys", "Resolve: Scene Change",
+            "Resolve: Screen Flash", "Resolve: Destroys", "Resolve: Wall Rooms", "Resolve: Scene Change",
             "Present: Rooms", "Present: Camera Controls", "Present: Followers", "Present: Late Scripts", "Present: Layouts", "Present: Screen Anchors", "Present: Trails",
             "Present: Lights", "Present: Weather", "Present: Prompts", "Present: Sound Sources", "Present: Sound Players",
             "Present: Patrol Walks",

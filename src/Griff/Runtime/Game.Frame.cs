@@ -554,6 +554,7 @@ public sealed partial class Game
         Step(Steps.Fade, _scenes.AdvanceFade);
         Step(Steps.ScreenFlash, _effects.RunScreenFlash);
         Step(Steps.Destroys, _lifetimes.FlushDestroys);
+        Step(Steps.WallRooms, _tilemaps.RunWallRooms);
         Step(Steps.SceneChange, _scenes.SwitchSceneIfRequested);
 
         Step(Steps.Rooms, _atmosphere.RunRooms);

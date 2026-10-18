@@ -58,6 +58,9 @@ public sealed partial class Tilemap : Component, ISortsInParts
 
     // Bumped when a tile setting the collision caches depend on changes, so a layer's caches see its base map's changes.
     private int _settingsVersion;
+
+    // Changes whenever a tile setting does (what collides, ladders, slopes...), so what's worked out from them knows to look again.
+    internal int SettingsVersion => _settingsVersion;
     private (Tilemap Base, int Version)? _cachedFor;
 
     /// <summary>

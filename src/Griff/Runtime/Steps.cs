@@ -221,6 +221,9 @@ public static class Steps
     /// <summary>The "Destroys" step of the Resolve phase.</summary>
     public static readonly StepId Destroys = new(FramePhase.Resolve, "Destroys");
 
+    /// <summary>The "Wall Rooms" step of the Resolve phase.</summary>
+    public static readonly StepId WallRooms = new(FramePhase.Resolve, "Wall Rooms");
+
     /// <summary>The "Scene Change" step of the Resolve phase.</summary>
     public static readonly StepId SceneChange = new(FramePhase.Resolve, "Scene Change");
 

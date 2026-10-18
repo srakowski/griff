@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+- Rooms found from walls: a **Wall Rooms** on a tilemap finds the closed rooms and open areas its walls make (solid tiles, **Wall Tiles** such as doors counted as shut, and colliders on **Wall Layers**), each with an id it keeps as walls change, its cells and area and whether it's open to the outside. It works them out again only when the walls change, raises **Changed** and sends its **Message**, answers which room a cell, point or entity is in and what's in a room, shows `Closed`, `RoomArea:<name>` and `RoomId:<name>` as outputs, and tints each room with **Show**.
+
 ## 0.1.0-alpha.17 - 2026-10-17
 
 - Show a label only while the camera is zoomed in, on a backing box fitted to its words: a **Show When**'s **Zoom Below** (for example 7) shows its entity while the main camera's Size is that or less and hides it when the camera pulls out (0 ignores the zoom, it needs no flag, and with a **Needs Flag** both must hold), and a **Text**'s **Background** (a color, transparent by default) and **Padding** (world units) draw a box just behind the letters, as wide as the widest line and as tall as all of them with wrapping, alignment, Vertical Align, a HUD's scale and Order. The UI and text guides and the world-labels demo say so.

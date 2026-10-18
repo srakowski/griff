@@ -3,7 +3,8 @@ using Griff.Scenes;
 namespace Griff.Runtime;
 
 /// <summary>
-/// Keeps tilemaps lined up with another's cells (Tilemap.LinesUpWith) and plays their animated tiles.
+/// Keeps tilemaps lined up with another's cells (Tilemap.LinesUpWith), plays their animated tiles, and finds the rooms
+/// their walls make again when the walls change (WallRooms).
 /// </summary>
 internal sealed class TilemapSystem : GameSystem
 {
@@ -25,6 +26,16 @@ internal sealed class TilemapSystem : GameSystem
         {
             if (!string.IsNullOrWhiteSpace(tilemap.AnimatedTiles))
                 tilemap.AnimationTime += Game.Time.Delta;
+        }
+    }
+
+    // Once the step's walls are built and knocked down (destroys done), rooms that changed say so.
+    internal void RunWallRooms()
+    {
+        foreach (var rooms in Game.Scene.ActiveNow<WallRooms>())
+        {
+            if (rooms.Commit() && !string.IsNullOrWhiteSpace(rooms.Message))
+                Game.Send(rooms.Message.Trim(), rooms.Entity, from: rooms.Entity);
         }
     }
 }

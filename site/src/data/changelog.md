@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.15 - 2026-10-17
+
 - A value saved under a name starting `settings.` (a Toggle's or Slider's **Save As** `settings.difficulty`, a Toggles List's `settings.fire.{row}`) is the player's setting: a **New Game** keeps it, as it keeps volumes and controls.
 - A **Toggles List** makes an on/off switch for each row of a data table: put it on an entity with a Layout (an options panel), name its **Table**, and while the game runs it makes a row for each table row with its label (**Label Column**, else the row's name) and a real Toggle kept in the save data as **Save As** says (`fire.{row}`), starting as the **Default Column** says until the player flips it or the game has one saved. **Hide** leaves rows out, and a **Template** entity styles the rows. Scripts read the switches with `Game.SaveData.GetBool("fire.Rain")`.
 - Fast-forward that stays exact: a **Game Speed** (Gameplay) runs the game at its **Speed** (speed buttons set it with **Do** `Set Speed`, `Faster` or `Slower`), and while it's **Exact** a faster game takes more steps of the usual length rather than longer ones (`Time.FastForward` from a script), so a sim plays out the same at 16x as at 1x. With a plain high `Time.Scale`, a **Grid Movement** now takes every cell a long step covers, so walkers no longer fall behind in game time.

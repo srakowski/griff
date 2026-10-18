@@ -80,6 +80,7 @@ internal sealed class MenuSystem : GameSystem
         // A press off a pop-up only closes it.
         if (Game.PanelSystem.ClickAway(top))
             return;
+        Game.HudSystem.DragRows(top);
         var allButtons = OnTop(_menus.AllButtons, Game.Scene.ActiveNow<Button>(), top);
         foreach (var button in allButtons)
         {
@@ -139,6 +140,9 @@ internal sealed class MenuSystem : GameSystem
         // With a controller in hand there's always something picked, so A works straight away.
         if (_focus is null && controls.Count > 0 && Game.Input.UsingGamepad)
             _focus = First(controls);
+        // A row lifted with keys takes the arrows, moving it along its list rather than the pick.
+        if (Game.HudSystem.MoveRowsByKeys(top, _focus, direction))
+            direction = default;
         if (direction != default && controls.Count > 0)
             Navigate(direction, controls);
 

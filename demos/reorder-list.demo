@@ -1,0 +1,35 @@
+title: Rows the player puts in order
+intro: A Layout with Reorderable ticked lets the player drag a row up or down its list, the other rows sliding out of the way, and tells scripts which row moved from where to where: a build queue, a research queue, the batches waiting for a machine.
+project: Empty | Build Queue
+
+chapter: A queue of jobs | Laid out by a Layout
+agent: entity_create {"entity": {"name": "Queue", "components": {"Sprite": {"tint": "#2E3440", "size": [5, 5.6]}, "Layout": {"size": [5, 5.6], "padding": 0.3, "spacing": 0.2}}}}
+agent: entity_create {"parent": "Queue", "entities": [{"name": "Smelter", "components": {"Sprite": {"tint": "#E0B040", "size": [4.4, 0.8], "order": 1}, "Text": {"value": "Smelter", "size": 0.45, "order": 2, "color": "#1B1F27"}}}, {"name": "Press", "components": {"Sprite": {"tint": "#D08A50", "size": [4.4, 0.8], "order": 1}, "Text": {"value": "Press", "size": 0.45, "order": 2, "color": "#1B1F27"}}}, {"name": "Lathe", "components": {"Sprite": {"tint": "#C06A70", "size": [4.4, 0.8], "order": 1}, "Text": {"value": "Lathe", "size": 0.45, "order": 2, "color": "#1B1F27"}}}, {"name": "Walk-in", "components": {"Sprite": {"tint": "#8A7AC0", "size": [4.4, 0.8], "order": 1}, "Text": {"value": "Walk-in", "size": 0.45, "order": 2, "color": "#1B1F27"}}}, {"name": "Kiln", "components": {"Sprite": {"tint": "#5A9AB0", "size": [4.4, 0.8], "order": 1}, "Text": {"value": "Kiln", "size": 0.45, "order": 2, "color": "#1B1F27"}}}]}
+agent: entity_create {"entity": {"name": "Report", "position": [0, -3.6], "components": {"Text": {"value": "Drag a job to change the order", "size": 0.4}}}}
+look: 0, -0.4, 4.2
+expectat: Smelter = 0, 2.1
+expectat: Walk-in = 0, -0.9
+say: Here's a factory game's queue of jobs, five rows lined up by a Layout. The machines take them from the top.
+select: Queue
+set: Layout.Reorderable = true
+explain: label:Layout.Reorderable | Reorderable | Tick Reorderable and the player can put the rows in a new order. A press that doesn't move still clicks a button on a row; Esc, or letting go off the list, puts the row back.
+explain: label:Layout.GrabAction | Keys and controllers | With keys or a controller, the grab action lifts the picked button's row, the arrows move it, and a second press puts it down.
+
+chapter: In the game | Drag a row to the top
+write: Scripts/QueueReport.cs | reorder-list/QueueReport.cs
+code: Assets/Scripts/QueueReport.cs | QueueReport.cs
+say: This script listens for the layout's Reordered event, which says which row moved, from where to where, and writes it under the list.
+hidecode
+select: Queue
+add: QueueReport
+play
+wait: 1
+gamedrag: Queue/Walk-in > Queue/Smelter + 0, 0.3
+wait: 0.5
+expectvalue: Report.Text.Value = Walk-in moved from 3 to 0
+explain: game | First in line now | The walk-in job was dragged above the smelter. As it passed, the rows above it slid down to make room, and letting go put it at the top: the event says it went from place 3 to place 0.
+gamedrag: Queue/Kiln > Queue/Lathe
+wait: 0.5
+expectvalue: Report.Text.Value = Kiln moved from 4 to 3
+stop
+say: A script keeping its own list moves its item with Layout.MoveIn, Save Order As keeps the order in the save data, and Move puts a row in place for up and down buttons.

@@ -16,7 +16,7 @@ internal sealed partial class HudSystem
     private Text? _writtenInto;
     private string? _before;
 
-    protected override void SceneChanged() => (_writtenInto, _before) = (null, null);
+    protected override void SceneChanged() => (_writtenInto, _before, _rowPress, _lifted) = (null, null, null, null);
 
     // The topmost tooltip under the mouse counts the time it's rested there and fills in the output it shows (only that one:
     // the others aren't read, so a prefab just spawned with one costs nothing), and the one showing with a Text to write

@@ -188,6 +188,12 @@ public interface IDrawEffect
     bool DrawsOnTop => false;
 
     /// <summary>
+    /// True to draw <paramref name="child"/>, one of the entity's own children, and what's inside it, over everything that
+    /// isn't (a row being dragged in a list).
+    /// </summary>
+    bool LiftsChild(Entity child) => false;
+
+    /// <summary>
     /// Moves, turns or scales everything the entity and what's inside it draw this frame, after it's placed (a platform
     /// shaking, something bopping to the beat); null for nothing. What changes once a step is drawn between steps with
     /// <see cref="StepBlend.For(Entity)"/>.

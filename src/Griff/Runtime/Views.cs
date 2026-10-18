@@ -317,16 +317,18 @@ public static class Views
         return order;
     }
 
-    // Drawn over everything else: something it's in (or it) says so, like a card being dragged.
+    // Drawn over everything else: something it's in (or it) says so, like a card being dragged, or what it's in lifts it
+    // (or what it's in) out of the rest, like a row dragged in a list.
     private static bool IsLifted(Entity entity)
     {
-        for (var e = entity; e is not null; e = e.Parent)
+        Entity? child = null;
+        for (var e = entity; e is not null; child = e, e = e.Parent)
         {
             if ((e.Roles & ComponentRoles.DrawEffect) == 0)
                 continue;
             foreach (var component in e.ComponentList)
             {
-                if (component is IDrawEffect { DrawsOnTop: true })
+                if (component is IDrawEffect effect && (effect.DrawsOnTop || (child is not null && effect.LiftsChild(child))))
                     return true;
             }
         }

@@ -7,6 +7,7 @@
 
 ## Unreleased
 
+- Lists the player puts in order: a **Layout** with **Reorderable** ticked lets a row be dragged up or down (or about a grid) with the mouse or a finger, the other rows sliding out of the way and the list scrolling near its end, or lifted with keys or a controller (**Grab Action**) and moved with the arrows. A plain click still clicks the row's Button, Esc or a drop off the list puts it back, and each move raises `Reordered(row, from, to)` and sends a **Reorder Message**; `Move` and `Layout.MoveIn` serve scripts with ▲ ▼ buttons or a list of their own, and **Save Order As** keeps the order in the save data.
 - An arrow on the HUD pointing the way to something off the screen: **Entity → UI → Edge Pointer** (an **EdgePointer**) sits on the screen's edge toward its **Target**, turned to point at it and sliding along the edge as the camera pans and zooms, hides once the target is in view (or sits over it), shows how far off it is, and glides the camera there when it's clicked.
 - A **Selectable**'s area turns with its entity, so a parked truck turned 90 degrees is clicked, boxed and marked as it lies, and a Button on a Selectable or inside one (a worker's own button) no longer stops **Selection Controls** selecting it: the click selects and the button still fires.
 

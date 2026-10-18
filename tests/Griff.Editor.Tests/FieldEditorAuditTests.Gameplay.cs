@@ -215,6 +215,9 @@ public sealed partial class FieldEditorAuditTests
         ControlsList.Template: Entity
         ControlsList.Font: Names:Font
         Layout.Size: Resizable
+        Layout.GrabAction: Names:Action
+        Layout.SaveOrderAs: Names:Saved
+        Layout.ReorderMessage: Names:Message
         Panel.Pauses: Entity
         Panel.OpenOn: Names:Action
         Panel.OpenMessage: Names:Message

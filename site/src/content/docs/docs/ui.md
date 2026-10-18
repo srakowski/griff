@@ -72,6 +72,20 @@ A child takes the room of its Button's clickable area, its Sprite's **Size** or 
 
 Tick **Clip** and what doesn't fit its **Size** is cut off at its edges, and the mouse wheel over it scrolls it a row at a time (a click or the wheel there isn't the world's, as on a button). Scripts read how far it can go in **Most Scroll** and set **Scroll** themselves; `layout.Arrange()` places the children straight away, for a script that wants to know where one it just spawned went (otherwise they're placed after LateUpdate, before the frame is drawn).
 
+### Rows the player puts in order
+
+Tick **Reorderable** and the player sets the order of its children: a build queue, a research queue, the batches waiting for a machine. Press on a row and drag it up or down the list (about the grid, for a grid): it follows the mouse (or a finger), drawn over the rest, while the other rows slide out of the way (over **Slide Time**) to show where it would land, and letting go puts it there. A press that doesn't move is a click, so a Button on the row still works; Esc, or letting go off the list, puts the row back. Dragged near the end of a layout that clips, the list scrolls. With keys or a controller, pick a row's button with the arrows and press the layout's **Grab Action** ("Interact": E or Y) to lift it; the arrows then move it, and a second press (or Enter or A) puts it down, Esc or B back where it was.
+
+Each move raises the layout's `Reordered(row, from, to)` event, the places counted from 0 among its **Rows** (the children it shows), and sends its **Reorder Message** with the row. A script that keeps its own list in the same order moves its item with `Layout.MoveIn`, and moves a row itself (for ▲ and ▼ buttons) with `Move`:
+
+```csharp
+var tray = Game.Find("Tray").GetComponent<Layout>();
+tray.Reordered += (row, from, to) => Layout.MoveIn(batches, from, to);
+tray.Move(walkIn, 0);   // to the top: Reordered fires as if the player had dragged it there
+```
+
+Set **Save Order As** to keep the order in the save data (the rows' names, separated by commas): it's saved as the player changes it and put back whenever rows with those names are in the list, such as a Toggles List's rows made again from its table, or a game loaded. Rows it doesn't name keep their places, so give each row its own name.
+
 ## HUD bars
 
 **Entity → UI → Bar** makes a bar that fills to its **Value** out of **Max**, which way its **Direction** says. Set its **Track** to an entity's name (`Player`, `Boss`) and it shows that entity's health with no code; give it an **Output** too and it shows any of that entity's outputs (see [Outputs](/docs/story/#outputs)), out of what the output says it's out of (a match board's **Score** fills towards its **Target Score**) or the bar's own **Max**: a turn's **Time Left**, a faction's **Amount:Gold**. When it goes down, the part just lost lingers in the **Trail** color for a moment before draining away.

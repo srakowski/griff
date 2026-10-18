@@ -12,14 +12,14 @@ rename: Greeter
 add: Greeter
 play
 wait: 1
-expectcount: Sign = 1
+expectcount: Greeting = 1
 explain: game | One sign | The game starts, and the sign goes up once.
 
 chapter: Change it mid-playtest | The game starts over
 say: Now the script changes while the game plays, the way you'd tweak it mid-playtest.
 write: Scripts/Greeter.cs | script-reload-while-playing/Greeter2.cs
 wait: 1
-expectcount: Sign = 1
+expectcount: Greeting = 1
 explain: game | Started over | The game started again from the scene as it was when you pressed Play, running the new version. Still one sign, with the new greeting, and nothing half old and half new.
 say: Swapping the scripts into the game as it stood would have started each one again, putting up a second sign, without what each had kept in its own fields. Starting over is the same clean game a fresh Play gives.
 stop

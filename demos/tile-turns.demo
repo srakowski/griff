@@ -56,6 +56,6 @@ click: editor:Tilemap.Animated Tiles:add
 expectvalue: Tilemap.Tilemap.AnimatedTiles = 0-3 @4
 play
 wait: 2
-explain: world:-3, 2, 3, -3 | Round the loop | Animated tiles turn with their cells, so the belt runs round the whole loop. Slope tiles collide turned as well.
+explain: gameworld:-3, 2, 3, -3 | Round the loop | Animated tiles turn with their cells, so the belt runs round the whole loop. Slope tiles collide turned as well.
 stop
 say: Scripts lay tiles turned with SetTile and a TileTurn, read a cell's turn with GetTurn and change it with SetTurn, and agents set a map's Turns like any other property.

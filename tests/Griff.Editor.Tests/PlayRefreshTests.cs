@@ -96,4 +96,42 @@ public class PlayRefreshTests
         document.NotifyRuntimeRefresh();
         Assert.True(updates > 0);
     });
+
+    [Fact]
+    public void A_text_field_that_hasnt_changed_is_left_alone_on_a_refresh_so_what_is_typed_in_it_stays() => EditorHost.Run(services =>
+    {
+        var document = Play(services);
+        var player = document.Scene.Roots[0];
+        var text = new Text { Value = "Hello" };
+        player.AddComponent(text);
+        services.GetRequiredService<ISelection>().Select(player);
+        var inspector = services.GetRequiredService<InspectorPanel>();
+        var field = inspector.Components.Single(c => c.IsNamed("Text")).Properties.Single(p => p.PropertyName == "Value");
+        document.NotifyRuntimeRefresh();
+        var updates = 0;
+        field.PropertyChanged += (_, _) => updates++;
+
+        document.NotifyRuntimeRefresh();
+        Assert.Equal(0, updates);
+
+        text.Value = "Goodbye";
+        document.NotifyRuntimeRefresh();
+        Assert.True(updates > 0);
+        Assert.Equal("Goodbye", field.TextValue);
+
+        // A list of lines (a tilemap's rows) is the same: a new list with the same lines leaves the box alone.
+        var map = new Tilemap { Tiles = ["11", "1."] };
+        player.AddComponent(map);
+        document.NotifyRuntimeRefresh();
+        var rows = inspector.Components.Single(c => c.IsNamed("Tilemap")).Properties.Single(p => p.PropertyName == "Tiles");
+        document.NotifyRuntimeRefresh();
+        var rowUpdates = 0;
+        rows.PropertyChanged += (_, _) => rowUpdates++;
+        map.Tiles = ["11", "1."];
+        document.NotifyRuntimeRefresh();
+        Assert.Equal(0, rowUpdates);
+        map.Tiles = ["11", "11"];
+        document.NotifyRuntimeRefresh();
+        Assert.True(rowUpdates > 0);
+    });
 }

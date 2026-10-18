@@ -295,7 +295,12 @@ public sealed class ComponentSection : ObservableObject
         set => _owner.SetCollapsed(TypeKey, !value);
     }
 
-    public void Refresh()
+    public void Refresh() => Refresh(live: false);
+
+    /// <summary>Shows the live values while the game runs, leaving text fields that haven't changed as they are.</summary>
+    public void RefreshLive() => Refresh(live: true);
+
+    private void Refresh(bool live)
     {
         RefreshRunProblems();
         OnPropertyChanged(nameof(IsExpanded));
@@ -303,7 +308,12 @@ public sealed class ComponentSection : ObservableObject
         foreach (var group in Groups)
             group.Refresh();
         foreach (var property in Properties)
-            property.Refresh();
+        {
+            if (live)
+                property.RefreshLive();
+            else
+                property.Refresh();
+        }
         if (IsTransform)
         {
             OnPropertyChanged(nameof(Is3D));

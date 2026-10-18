@@ -816,6 +816,7 @@ public sealed class PropertyField : ObservableObject
 
     public void Refresh()
     {
+        _liveText = null;
         _unmatched = null;
         _ambiguous = null;
         OnPropertyChanged(string.Empty);
@@ -823,6 +824,31 @@ public sealed class PropertyField : ObservableObject
             axis.Refresh();
         ColorPicker?.Sync();
         Editor?.Refresh();
+    }
+
+    private string?[]? _liveText;
+
+    /// <summary>
+    /// Shows the live value while the game runs. A text field is left as it is while its value hasn't changed, so what's
+    /// being typed in it (a tilemap's rows, a long text, kept until the box is left) isn't put back on every refresh.
+    /// </summary>
+    public void RefreshLive()
+    {
+        if (_property.Type != typeof(string) && !typeof(IReadOnlyList<string>).IsAssignableFrom(_property.Type))
+        {
+            Refresh();
+            return;
+        }
+
+        var now = _components.Select(c => _property.GetValue(c) switch
+        {
+            IReadOnlyList<string> lines => string.Join('\n', lines),
+            var value => value as string,
+        }).ToArray();
+        if (_liveText is not null && now.SequenceEqual(_liveText))
+            return;
+        Refresh();
+        _liveText = now;
     }
 
     // ----- Filtering

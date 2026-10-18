@@ -419,9 +419,15 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     private void OnRuntimeRefreshed(object? sender, EventArgs e)
     {
         if (_entities.Where((entity, i) => entity.Components.Count != _componentCounts[i]).Any() || PrefabsChanged())
+        {
             Rebuild();
-        else
-            Refresh();
+            return;
+        }
+
+        _overrideCount = null;
+        Header?.Refresh();
+        foreach (var section in Components)
+            section.RefreshLive();
     }
 
     private static bool ChangesComponents(IEdit edit) => edit switch

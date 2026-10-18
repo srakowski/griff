@@ -28,7 +28,15 @@ internal sealed class SaveSystem : GameSystem
     // A saved game read back, waiting to be switched to, with the scenes it remembers (as the save data keeps them). Never
     // changed once made, so a snapshot keeps the same one.
     [NotState("read back from a save, and never changed")]
-    private sealed record PendingLoad(Scene Scene, string? Name, IReadOnlyList<string> Flags, string Slot, JsonObject? Header, string? Scenes);
+    private sealed record PendingLoad(Scene Scene, string? Name, IReadOnlyList<string> Flags, string Slot, JsonObject? Header, string? Scenes, JsonObject? Model);
+
+    // A saved game just switched to, whose scripts' fields go back once its scripts have started: the objects they hold,
+    // the scripts' systems', and each script component's.
+    [NotState("a loaded game's, put back once as its scripts start")]
+    private sealed record LoadedFields(string Slot, JsonObject? Model, List<(Component Script, JsonObject Fields)> Scripts);
+
+    [NotState("a loaded game's, put back once as its scripts start")]
+    private LoadedFields? _loadedFields;
 
     // The game's own version of its saves (see Game.SaveVersion).
     [NotState("the game's, set as it starts")]
@@ -120,8 +128,10 @@ internal sealed class SaveSystem : GameSystem
         if (!CanSave())
             return false;
 
-        var serializer = new SceneSerializer(Game.Components ?? ComponentRegistry.CreateDefault());
-        var scene = ClosingPanels(serializer, serializer.SaveToString(Game.Scene));
+        // The scene with each script's own fields, and the objects they hold and the scripts' systems beside it.
+        var registry = Game.Components ?? ComponentRegistry.CreateDefault();
+        var model = new ModelWriter(Game);
+        var scene = model.Finish(ClosingPanels(new SceneSerializer(registry), new SceneSerializer(registry) { Fields = model.FieldsOf }.SaveToString(Game.Scene)));
         var header = new JsonObject
         {
             ["format"] = Game.SaveFormat,
@@ -211,7 +221,23 @@ internal sealed class SaveSystem : GameSystem
 
         foreach (var problem in warnings.Problems)
             Game.Problems.Report(problem with { Message = $"Loading the game saved in \"{slot}\": {problem.Message}" });
-        return new PendingLoad(scene, TextIn(header, "scene") ?? Game.SceneName, flags, slot, header, scenes);
+        return new PendingLoad(scene, TextIn(header, "scene") ?? Game.SceneName, flags, slot, header, scenes, ModelIn(json));
+    }
+
+    // The objects scripts' fields hold and the scripts' systems, beside a saved game's scene, if it has any.
+    private static JsonObject? ModelIn(string json)
+    {
+        if (!json.Contains($"\"{ModelReader.ObjectsKey}\"", StringComparison.Ordinal) && !json.Contains($"\"{ModelReader.SystemsKey}\"", StringComparison.Ordinal))
+            return null;
+        var root = JsonNode.Parse(json)!.AsObject();
+        var model = new JsonObject();
+        foreach (var key in (ReadOnlySpan<string>)[ModelReader.ObjectsKey, ModelReader.SystemsKey])
+        {
+            if (root.Remove(key, out var value))
+                model[key] = value;
+        }
+
+        return model;
     }
 
     // The scene and the scenes it remembers, as each system that upgrades saves (ISaveUpgrader) changes them. If one fails,
@@ -455,11 +481,75 @@ internal sealed class SaveSystem : GameSystem
         PutFlagsBack(load.Flags);
         Game.SceneSystem.SwitchScene(load.Name ?? Game.SceneName ?? "", load.Scene);
         Game.SceneSystem.LoadFlow(load.Slot, load.Header, load.Scenes);
+        _loadedFields = new LoadedFields(load.Slot, load.Model, ScriptFieldsIn(load.Scene));
         // A game just loaded is as saved: its autosaves wait for their time rather than saving it again as it starts.
         foreach (var autosave in Game.Scene.AllNow<Autosave>())
             autosave.Arrive();
         GameLoaded?.Invoke(load.Slot);
         return true;
+    }
+
+    // Each component's saved fields in a loaded scene, taken from what it kept of its saved data (so they're not saved again
+    // as they were).
+    private static List<(Component, JsonObject)> ScriptFieldsIn(Scene scene)
+    {
+        var scripts = new List<(Component, JsonObject)>();
+        foreach (var entity in scene.Entities)
+        {
+            foreach (var component in entity.Components)
+            {
+                if (component is MissingComponent || component.Kept is not { } kept || !kept.Any(k => k.Key == SavedData.FieldsKey))
+                    continue;
+                var fields = kept.First(k => k.Key == SavedData.FieldsKey).Value;
+                var rest = kept.Where(k => k.Key != SavedData.FieldsKey).ToList();
+                component.Kept = rest.Count > 0 ? rest : null;
+                if (fields.ValueKind == System.Text.Json.JsonValueKind.Object)
+                    scripts.Add((component, JsonObject.Create(fields)!));
+            }
+        }
+
+        return scripts;
+    }
+
+    // Once a loaded game's scripts have started (so what Start sets up is there), every script's saved fields go back over
+    // what Start made: the scripts' systems', then each script's (one that hasn't started yet, on a disabled entity, as it
+    // starts). Then each script and system hears OnLoaded, to start again what couldn't be saved.
+    internal void PutBackLoadedGame()
+    {
+        if (_loadedFields is not { } loaded)
+            return;
+        _loadedFields = null;
+        var reader = new ModelReader(Game, loaded.Model?[ModelReader.ObjectsKey] as JsonArray, loaded.Slot);
+        var systems = loaded.Model?[ModelReader.SystemsKey] as JsonArray;
+        var running = Game.Systems.Where(s => !s.IsRemoved).ToList();
+        foreach (var system in running)
+        {
+            var type = system.GetType();
+            if (SavePlan.IsScript(type) && systems?.OfType<JsonObject>().FirstOrDefault(s => SavePlan.Matches(type, s["type"]?.GetValue<string>())) is { } saved &&
+                saved["fields"] is JsonObject fields)
+                reader.Read(system, SavePlan.OfScript(type, null), fields, type.Name)();
+        }
+
+        foreach (var (script, fields) in loaded.Scripts)
+        {
+            if (script.Entity?.Scene != Game.Scene || !SavePlan.IsScript(script.GetType()))
+                continue;
+            var putBack = reader.Read(script, SavePlan.OfScript(script.GetType(), Game.Components), fields, script.GetType().Name);
+            if (script is Behavior { IsStarted: false } waiting)
+                waiting.FieldsToPutBack = putBack;
+            else
+                putBack();
+        }
+
+        foreach (var system in running.Where(s => !s.IsRemoved))
+            system.RunLoaded();
+        foreach (var script in Game.Scene.AllNow<Behavior>())
+        {
+            if (script.IsStarted)
+                script.RunLoaded();
+            else
+                script.FieldsToPutBack ??= static () => { };
+        }
     }
 
     // A scene's JSON, squeezed (it's mostly the same words over and over) and kept as text.

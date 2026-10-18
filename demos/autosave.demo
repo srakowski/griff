@@ -1,5 +1,5 @@
 title: Autosave and lasting saves
-intro: An Autosave saves the game by itself, a Continue button picks it up, and saved games load in the next version of the game.
+intro: An Autosave saves the game by itself, a Continue button picks it up, a saved game keeps the scripts' own model, and saved games load in the next version of the game.
 
 project: Empty | Autosave
 
@@ -25,8 +25,38 @@ wait: 2
 say: As the scene started it saved, so the slot shows the game's picture and the time. A Continue button loads the game saved last, so it picks the autosave up.
 stop
 
+chapter: Scripts keep their model | What scripts keep
+write: Scripts/Workshop.cs | autosave/Workshop.cs
+create: Text
+rename: Workshop
+add: Workshop
+add: ScreenAnchor
+code: Assets/Scripts/Workshop.cs | Workshop.cs
+say: A game's model is mostly in its scripts' fields. This workshop keeps its orders as plain objects in a private list, and the one it's making in another field: the same object. S saves, X ships everything, L loads.
+hidecode
+play
+tap: Space
+tap: Space
+tap: Space
+wait: 2
+expectvalue: Workshop.Workshop.Orders = 3
+expectvalue: Workshop.Workshop.Making = 1
+say: Three orders, and the first is under way. Save the game.
+tap: S
+wait: 1
+tap: X
+wait: 0.5
+expectvalue: Workshop.Workshop.Orders = 0
+say: The game goes on, and every order is shipped. Now load the saved game.
+tap: L
+wait: 1.5
+expectvalue: Workshop.Workshop.Orders = 3
+expectvalue: Workshop.Workshop.Making = 1
+say: The orders are back, and the first is still the one being made, carrying on from where it had got to. A saved game keeps scripts' private fields and the objects they hold. A coroutine isn't saved, so the script starts its work again in On Loaded, from its fields; Not Saved leaves a field out.
+stop
+
 chapter: Saves that outlast updates | Save Version
-say: Saved games are read back by name: entities, their components and their properties. So the next version of the game loads them even though its scripts changed. A property added keeps its default, one removed is ignored, and a component that's gone is kept as saved, with a warning.
+say: Saved games are read back by name: entities, their components and their properties, and scripts' fields. So the next version of the game loads them even though its scripts changed. A property added keeps its default, one removed is ignored, and a component that's gone is kept as saved, with a warning.
 menu: Game > Save Version
 prompt: 2
 say: For bigger changes, Save Version numbers the game's saves. Each saved game keeps the version it was saved by, and a system of the game's own, a Save Upgrader, brings older ones up to date as they load.

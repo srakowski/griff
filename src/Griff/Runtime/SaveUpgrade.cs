@@ -20,6 +20,11 @@ namespace Griff.Runtime;
 ///             foreach (var belt in save.Components("Belt"))
 ///                 belt.Rename("Speed", "ItemsPerSecond");
 ///         }
+///         if (save.Version &lt; 4)
+///         {
+///             foreach (var contract in save.Objects("Contract"))
+///                 contract.Rename("_pay", "_reward");
+///         }
 ///     }
 /// }
 /// </code></example>
@@ -32,9 +37,11 @@ public interface ISaveUpgrader
 /// <summary>
 /// A game saved by an earlier version of the game, as an <see cref="ISaveUpgrader"/> is handed it before it's read: its
 /// scene and the scenes it remembers as the scene file has them (entities by name, components by their saved type name,
-/// values by property name), and its flags, to change as this version needs. What's left as it was is read as usual:
-/// values of properties that are gone are ignored, new properties keep their defaults, and a component whose type is
-/// gone is kept as it was saved, with a warning.
+/// values by property name), and its flags, to change as this version needs. Scripts' own fields are there too, by name:
+/// a component's in its <see cref="SavedData.Fields"/>, the plain objects they hold in <see cref="Objects"/> and the
+/// systems scripts added in <see cref="Systems"/>. What's left as it was is read as usual: values of properties and fields
+/// that are gone are ignored, new ones keep their defaults, and a component whose type is gone is kept as it was saved,
+/// with a warning.
 /// </summary>
 public sealed class SaveUpgrade
 {
@@ -99,6 +106,38 @@ public sealed class SaveUpgrade
 
         return count;
     }
+
+    /// <summary>
+    /// The plain objects of class <paramref name="type"/> (its full name: "Contract", or "Factory.Contract" in a
+    /// namespace) that scripts' fields hold, each's fields to read and change by name (see <see cref="SavedData.Fields"/>).
+    /// </summary>
+    public IReadOnlyList<SavedData> Objects(string type) =>
+        [.. SavedObjects().Where(o => TypeOf(o) == type).Select(o => new SavedData(o["fields"] as JsonObject ?? (JsonObject)(o["fields"] = new JsonObject())))];
+
+    /// <summary>The fields of the system of class <paramref name="type"/> a script added (one at most), to read and change by name.</summary>
+    public IReadOnlyList<SavedData> Systems(string type) =>
+        [.. SavedSystems().Where(s => TypeOf(s) == type).Select(s => new SavedData(s["fields"] as JsonObject ?? (JsonObject)(s["fields"] = new JsonObject())))];
+
+    /// <summary>
+    /// Saves every plain object and system of class <paramref name="from"/> as <paramref name="to"/> instead: a class
+    /// renamed in code (a <see cref="FormerNameAttribute"/> on the class does this too). How many there were.
+    /// </summary>
+    public int RenameClass(string from, string to)
+    {
+        var count = 0;
+        foreach (var saved in SavedObjects().Concat(SavedSystems()).Where(o => TypeOf(o) == from))
+        {
+            saved["type"] = to;
+            count++;
+        }
+
+        return count;
+    }
+
+    private IEnumerable<JsonObject> SavedObjects() =>
+        _scenes.SelectMany(s => s[ModelReader.ObjectsKey] is JsonArray objects ? objects.OfType<JsonObject>() : []);
+
+    private IEnumerable<JsonObject> SavedSystems() => Scene[ModelReader.SystemsKey] is JsonArray systems ? systems.OfType<JsonObject>() : [];
 
     /// <summary>Renames every entity called <paramref name="from"/>. How many there were.</summary>
     public int RenameEntity(string from, string to)

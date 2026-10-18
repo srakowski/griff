@@ -70,13 +70,39 @@ A **Backlog** keeps the lines said so far, each with who said it (a narrator's a
 
 ## Saving and loading
 
-A game is saved in a slot of its own name ("1", "2"... "Quick" for quick saves) with the scene as it is (every component's properties, a script's public ones too, as a scene file keeps them), so the stage (the background, who's on, where and how they look), where the talk has got to and the log come back exactly, and the flags set then, which loading puts back as they were (clearing those set since). The panels open over the game (the save screen it's saved from) are closed in it. A screenshot of the game without them is taken as it's next drawn, and kept with it, with when it was saved and the line being said. Saved games are kept in the save data, so they're there the next time the game runs, on the desktop and in a browser alike.
+A game is saved in a slot of its own name ("1", "2"... "Quick" for quick saves) with the scene as it is (every component's properties, a script's public ones too, as a scene file keeps them, and the scripts' own fields: see [What scripts keep](#what-scripts-keep)), so the stage (the background, who's on, where and how they look), where the talk has got to and the log come back exactly, and the flags set then, which loading puts back as they were (clearing those set since). The panels open over the game (the save screen it's saved from) are closed in it. A screenshot of the game without them is taken as it's next drawn, and kept with it, with when it was saved and the line being said. Saved games are kept in the save data, so they're there the next time the game runs, on the desktop and in a browser alike.
 
 A **Save Slot** shows a slot on a save or load screen: its screenshot, and what its **Format** says (`{date}  {time}` and `{line}` to begin with; `{slot}` and `{scene}` too), or its **Empty Text**. Put it on a **Button** whose **Action** is **Save Game**, **Load Game** or **Delete Save**: such a button with no **Slot** of its own uses the save slot it's on or inside, so a delete X inside a card deletes the card's. **Quick Save** and **Quick Load** buttons use the Quick slot, and a **Continue** button (a title screen's) loads the game saved last, in any slot. Load Game, Delete Save, Quick Load and Continue buttons are faded while there's nothing to load; a Load Game, Quick Load or Continue button's **Fade** fades out and back in around it. Scripts call `Game.SaveGame(slot)`, `LoadGame(slot)`, `DeleteSave(slot)`, `QuickSave()`, `QuickLoad()` and `ContinueGame()`, and read `SavedGames`, `SavedGameIn(slot)` and `LatestSave` (each with its `Saved` time, `SceneName`, `Line`, `Version` and `Describe(format)`), with `GameSaved` and `GameLoaded` events. A network game can't be saved or loaded: it isn't one machine's alone.
 
+### What scripts keep
+
+A game's model is mostly in its scripts' fields: a factory game's contracts and jobs, its task board, what's on each rack, the goals reached. A saved game keeps them as a rewind does: every field of a script (a `Behavior`, or a `GameSystem` a script added), private ones and auto properties too, with the plain objects, records and structs they hold, and their lists, arrays, queues, sets and dictionaries, each object once, so one shared by two scripts is shared again after a load and a cycle (a job pointing to the next, which points back) closes. A field pointing to an entity, a component or a system keeps pointing to it (the loaded scene's), and the game's random numbers are kept in a `GameRandom` field. What a scene file keeps already (a public property in the Inspector) isn't written twice.
+
+Loading puts the fields back once the loaded scene's scripts have started: `Start` runs as in any scene (setting up listeners, timers, what it finds), then every script's saved fields go back over what it made, then each script and system hears `OnLoaded`. A field that wasn't saved keeps what `Start` (or its class) made it: one marked `[NotSaved]` (a cache, a list kept only to reuse; `[field: NotSaved]` on an auto property), one marked `[NotState]` (left out of rewinds too), and one that can't be saved, which the problems name once: a delegate, a `Coroutine`, timer, tween or listener, an `IEnumerator`, a `Task`, a `Random` of .NET's. A link to a part of the game (the `Game`, the scene, the input) is set again by `Start` too. A script on an entity that's disabled as the game loads gets its fields and `OnLoaded` when it starts.
+
+A running coroutine isn't saved: the next build of the scripts couldn't carry it on from where it was. So a script restarts its work in `OnLoaded`, from its fields: keep the model in fields (the task a worker holds, how far along it is), and the coroutine does what they say.
+
+```csharp
+public class Worker : Behavior
+{
+    private WorkTask? _task;            // saved, with the job it points to
+    private float _done;                // how far along it is
+
+    [NotSaved] private Coroutine? _work; // set up again below
+
+    protected override void OnLoaded()
+    {
+        if (_task is not null)
+            _work = StartCoroutine(Carry(_task)); // picks the task up from _done
+    }
+}
+```
+
+A script can write its own model instead: implement `ISavesState`, and its `SaveState(SaveWriter save)` writes what it wants kept by name (`save.Set("Reached", _reached)`, anything a field can be), and `LoadState(SaveReader save)` reads it back after `Start` (`save.Get("Reached", 0)`, with `Has`); none of its fields are saved then.
+
 ### Saves that outlast updates
 
-A saved game is read back by name: its entities, their components by type and their values by property. So the next version of the game loads it even though its scripts changed: a property added keeps its default, one removed is ignored, one that's now another kind (a name become a number) keeps its default, and a script class renamed with `[FormerName("Belt")]` on it carries on as itself. A component whose type is gone altogether is kept as it was saved, and the game's problems say so (`Loading the game saved in "1": "Rig" uses unknown component "Drill"`); nothing breaks. A component's own `[ComponentVersion]` and `[UpgradeFrom]` steps bring its older values up to date as they do in a scene file.
+A saved game is read back by name: its entities, their components by type and their values by property, and scripts' fields and the objects they hold by field. So the next version of the game loads it even though its scripts changed: a property or field added keeps its default (what the script or class makes it), one removed is ignored, one that's now another kind (a name become a number) keeps its default and says so, and a script class or a class its fields hold renamed with `[FormerName("Belt")]` on it carries on as itself (a field renamed takes a `[FormerName("_old")]` too). A class a field held that's gone leaves the field as the script made it, saying so. A component whose type is gone altogether is kept as it was saved, and the game's problems say so (`Loading the game saved in "1": "Rig" uses unknown component "Drill"`); nothing breaks. A component's own `[ComponentVersion]` and `[UpgradeFrom]` steps bring its older values up to date as they do in a scene file.
 
 For bigger changes, give the game's saves a version: **Game → Save Version** sets it for the project (0 to begin with), and each saved game keeps the one it was saved by (`SavedGame.Version`; `Game.SaveVersion` is the game's now). Raise it with an update that needs older saves changed, and add a system that changes them: every `GameSystem` that is an `ISaveUpgrader` is handed each saved game of a lower version as it's loaded, before it's read, with the version it was saved by, the version now, its scene and the scenes it remembers as JSON, and its flags.
 
@@ -101,7 +127,7 @@ public class SaveUpgrades : GameSystem, ISaveUpgrader
 // In the title screen's script (or wherever games are loaded): Game.AddSystem(new SaveUpgrades());
 ```
 
-`Components(type)` gives each saved component of a type to read and change (`Get`, `Set`, `Rename`, `Remove`), and `RemoveComponent`, `Scene` and `RememberedScenes` cover the rest. If an upgrader throws, the save is loaded as it was saved and the problems say why. A save from a later version of the game loads as it is, saying so. One that's damaged, or saved by a newer Griff, isn't loaded: the problems say which (`The game saved in "1" can't be loaded: it's damaged`), and the game goes on.
+`Components(type)` gives each saved component of a type to read and change (`Get`, `Set`, `Rename`, `Remove`), and its `Fields` a script's own fields the same way (`belt.Fields?.Rename("_speed", "_rate")`); `Objects("Contract")` gives the fields of each plain object of a class the scripts held, `Systems("TaskBoard")` a script's system's, and `RenameClass` renames a class they held. `RemoveComponent`, `Scene` and `RememberedScenes` cover the rest. If an upgrader throws, the save is loaded as it was saved and the problems say why. A save from a later version of the game loads as it is, saying so. One that's damaged, or saved by a newer Griff, isn't loaded: the problems say which (`The game saved in "1" can't be loaded: it's damaged`), and the game goes on.
 
 ### Autosave
 

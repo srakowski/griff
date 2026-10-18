@@ -272,12 +272,35 @@ public abstract class Behavior : Component
     protected Tween FadeTo(float alpha, float seconds, Func<float, float>? ease = null) =>
         Game.FadeTo(Entity!, alpha, seconds, ease);
 
+    /// <summary>
+    /// Called once a saved game has been loaded (<see cref="Runtime.Game.LoadGame"/>, a Continue), after this script's
+    /// <see cref="Start"/> and once every script's saved fields are back: its private fields, the plain objects and lists
+    /// they hold and the entities they point to. A coroutine that was running isn't saved (the next build of the scripts
+    /// couldn't carry it on), so restart the work here from what the fields say: a worker picks up the task it holds.
+    /// Nothing by default.
+    /// </summary>
+    protected virtual void OnLoaded()
+    {
+    }
+
+    // A loaded game's fields for a script that hadn't started as it was loaded, put back once it starts (then OnLoaded).
+    [NotState("a loaded game's, put back once as the script starts")]
+    internal Action? FieldsToPutBack;
+
     internal void RunStart(Game game)
     {
         _game = game;
         IsStarted = true;
         Start();
+        if (FieldsToPutBack is { } putBack)
+        {
+            FieldsToPutBack = null;
+            putBack();
+            OnLoaded();
+        }
     }
+
+    internal void RunLoaded() => OnLoaded();
 
     // Put back by a rewind as having started (it had, at the snapshot): it goes on without starting again.
     internal void PutBack(Game game)

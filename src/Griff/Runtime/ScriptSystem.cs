@@ -280,8 +280,15 @@ internal sealed class ScriptSystem : GameSystem, IHealthNews
         }
     }
 
-    // Snapshot first: behaviors may spawn or destroy while we iterate. In a network game, the host runs scripts.
+    // New scripts start; a saved game just loaded then has its scripts' fields put back (over what Start made).
     internal void StartScripts()
+    {
+        StartNew();
+        Game.SaveSystem.PutBackLoadedGame();
+    }
+
+    // Snapshot first: behaviors may spawn or destroy while we iterate. In a network game, the host runs scripts.
+    private void StartNew()
     {
         _running = Game.Active<Behavior>();
         var running = _running.Items;

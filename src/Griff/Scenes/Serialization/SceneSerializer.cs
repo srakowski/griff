@@ -25,6 +25,9 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Create(System.Text.Unicode.UnicodeRanges.All),
     };
 
+    /// <summary>For a saved game: what's written with each component besides its properties (a script's own fields), if anything.</summary>
+    internal Func<Component, System.Text.Json.Nodes.JsonObject?>? Fields { get; init; }
+
     public void Save(Scene scene, Stream stream)
     {
         using var writer = new Utf8JsonWriter(stream, WriterOptions);
@@ -316,12 +319,20 @@ public sealed class SceneSerializer(ComponentRegistry registry)
             ValueCodec.Write(writer, value);
         }
 
+        // A saved game's: a script's own fields.
+        var fields = Fields?.Invoke(component);
+        if (fields is not null)
+        {
+            writer.WritePropertyName(SavedData.FieldsKey);
+            fields.WriteTo(writer);
+        }
+
         // Values it has no property for go back as they came, after its own (unless it has gained one of that name since).
         if (component.Kept is { } kept)
         {
             foreach (var (key, value) in kept)
             {
-                if (key is "type" or "version" || descriptor.Properties.Any(p => p.SerializedName == key))
+                if (key is "type" or "version" || descriptor.Properties.Any(p => p.SerializedName == key) || fields is not null && key == SavedData.FieldsKey)
                     continue;
                 writer.WritePropertyName(key);
                 ValueCodec.WriteKept(writer, value);

@@ -55,5 +55,17 @@ public sealed class SavedData
     /// <summary>Forgets the value of <paramref name="property"/>.</summary>
     public void Remove(string property) => Json.Remove(Key(property));
 
+    /// <summary>
+    /// In a saved game (as an <see cref="Runtime.ISaveUpgrader"/> sees it), a script's own fields: its private fields and
+    /// the rest a saved game keeps besides its properties, or what it saves itself (<see cref="Runtime.ISavesState"/>),
+    /// to read and change by name as properties are ("_wave" for a field called _wave, "Day" for an auto property's).
+    /// Null if none were saved. A field holding an object or a list points to it in the save's objects (see
+    /// <see cref="Runtime.SaveUpgrade.Objects"/>).
+    /// </summary>
+    public SavedData? Fields => Json[FieldsKey] is JsonObject fields ? new SavedData(fields) : null;
+
+    // Where a component's fields are, in a saved game's scene.
+    internal const string FieldsKey = "$fields";
+
     internal static string Key(string property) => JsonNamingPolicy.CamelCase.ConvertName(property);
 }

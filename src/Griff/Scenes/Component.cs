@@ -106,10 +106,11 @@ public sealed class ComponentNameAttribute(string name) : Attribute
 /// e.g. <c>[FormerName("Enemy")]</c> on a class renamed to Foe (a name without a namespace also matches one in the
 /// class's own namespace). On a property: its earlier name in code, e.g. <c>[FormerName("Speed")]</c> on MoveSpeed.
 /// On an <c>[Action]</c> method or an <c>[Output]</c>: the name it had, so every trigger, button, counter, wire and
-/// condition that still names it keeps working. Scenes load under either name and save under the new one. A component,
-/// property, action or output can have several.
+/// condition that still names it keeps working. On a script's field, or on a class its fields hold: the name it had, so
+/// saved games keep its value (see <see cref="Runtime.ISavesState"/>). Scenes load under either name and save under the
+/// new one. A component, property, action or output can have several.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Method | AttributeTargets.Field, AllowMultiple = true, Inherited = false)]
 public sealed class FormerNameAttribute(string name) : Attribute
 {
     public string Name { get; } = name;

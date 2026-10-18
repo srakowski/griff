@@ -117,6 +117,17 @@ public abstract class GameSystem : IKeepsState
 
     void IKeepsState.Restored() => Restored();
 
+    /// <summary>
+    /// Called once a saved game has been loaded (<see cref="Runtime.Game.LoadGame"/>), after the scene's scripts have
+    /// started and every script's saved fields are back (a system of a script's has its fields saved as a script's are),
+    /// to start again what can't be saved: a coroutine, a timer. Nothing by default.
+    /// </summary>
+    protected virtual void OnLoaded()
+    {
+    }
+
+    internal void RunLoaded() => OnLoaded();
+
     /// <summary>The script whose entity the system goes away with, if a script added it.</summary>
     public Behavior? Owner { get; internal set; }
 

@@ -309,8 +309,11 @@ public sealed class SceneSerializer(ComponentRegistry registry)
             writer.WriteNumber("version", descriptor.Version);
         foreach (var property in descriptor.Properties)
         {
+            var value = property.GetValue(component);
+            if (property.IsOmitted(value))
+                continue;
             writer.WritePropertyName(property.SerializedName);
-            ValueCodec.Write(writer, property.GetValue(component));
+            ValueCodec.Write(writer, value);
         }
 
         // Values it has no property for go back as they came, after its own (unless it has gained one of that name since).

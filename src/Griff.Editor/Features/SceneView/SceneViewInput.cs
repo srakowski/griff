@@ -578,6 +578,16 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
                         selection.Select(null);
                     e.Handled = true;
                     return;
+                case Key.Z or Key.X when Keyboard.Modifiers is ModifierKeys.None or ModifierKeys.Shift:
+                    // Z turns the brush a quarter clockwise (Shift+Z back), X flips it left to right (Shift+X upside down).
+                    var shift = Keyboard.Modifiers == ModifierKeys.Shift;
+                    if (e.Key == Key.Z)
+                        model.TurnBrush(shift ? -1 : 1);
+                    else
+                        model.FlipBrush(upsideDown: shift);
+                    view.InvalidateVisual();
+                    e.Handled = true;
+                    return;
                 case Key.OemOpenBrackets or Key.OemCloseBrackets:
                     // Steps through the tiles of the tileset the palette shows.
                     palette.Step(e.Key == Key.OemCloseBrackets ? 1 : -1);

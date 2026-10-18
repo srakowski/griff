@@ -54,7 +54,8 @@ internal static partial class GameFingerprint
 
                 var descriptor = registry.Get(component.GetType());
                 text.Append(descriptor.Name).Append(']');
-                foreach (var property in descriptor.Properties)
+                // What scene files leave out while it's empty (a newer property a game doesn't use) leaves it as it was.
+                foreach (var property in descriptor.Properties.Where(p => !p.IsOmitted(p.GetValue(component))))
                     text.Append(' ').Append(property.Name).Append('=').Append(Value(property.GetValue(component)));
                 text.Append('\n');
             }

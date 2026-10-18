@@ -105,6 +105,21 @@ public sealed class TilePalette : ObservableObject
         set => _model.BrushTile = value;
     }
 
+    /// <summary>
+    /// How the brush turns or flips its tile as it paints (see <see cref="SceneViewModel.BrushTurn"/>): Z turns it, X
+    /// flips it. The palette draws the brush's tile turned, and the cell under the cursor shows it.
+    /// </summary>
+    public TileTurn Turn
+    {
+        get => _model.BrushTurn;
+        set => _model.BrushTurn = value;
+    }
+
+    /// <summary>The brush's turn in words for the hint, "turned 90°", "flipped" or "flipped, turned 90°"; empty for none.</summary>
+    public string TurnText => Turn == TileTurn.None ? ""
+        : Turn == TileTurn.FlipY ? "flipped upside down"
+        : string.Join(", ", new[] { Turn.IsFlipped() ? "flipped" : "", Turn.Quarters() > 0 ? $"turned {Turn.Quarters() * 90}°" : "" }.Where(t => t.Length > 0));
+
     /// <summary>The tools under the tiles, in order: Select (V), Brush (B), Rectangle (R) and Fill (G).</summary>
     public IReadOnlyList<TileTool> Tools => Enum.GetValues<TileTool>();
 
@@ -124,11 +139,14 @@ public sealed class TilePalette : ObservableObject
     /// <summary>The line under the palette saying what the tool does and the keys that help.</summary>
     public string Hint => Tool switch
     {
-        TileTool.Rectangle => "Rectangle: drag a box to fill · Shift erase · Ctrl pick · [ ] tile · Esc done",
-        TileTool.Fill => "Fill: click an area to fill it · Shift erase · Ctrl pick · [ ] tile · Esc done",
+        TileTool.Rectangle => $"Rectangle{Turned}: drag a box to fill · Shift erase · Ctrl pick · [ ] tile · Z X turn · Esc done",
+        TileTool.Fill => $"Fill{Turned}: click an area to fill it · Shift erase · Ctrl pick · [ ] tile · Z X turn · Esc done",
         TileTool.Select => "Select: click or drag to select and move · B R G paint again · Esc done",
-        _ => "Brush: drag to paint · Shift erase · Ctrl pick · [ ] tile · Esc done",
+        _ => $"Brush{Turned}: drag to paint · Shift erase · Ctrl pick · [ ] tile · Z X turn · Esc done",
     };
+
+    // The brush's turn after the tool's name in the hint: " (turned 90°)".
+    private string Turned => Turn == TileTurn.None ? "" : $" ({TurnText})";
 
     /// <summary>The tilemap being painted (see <see cref="SceneViewModel.PaintTarget"/>).</summary>
     internal Tilemap? Target => _model.PaintTarget;
@@ -210,6 +228,11 @@ public sealed class TilePalette : ObservableObject
                 break;
             case nameof(SceneViewModel.BrushTile):
                 OnPropertyChanged(nameof(BrushTile));
+                break;
+            case nameof(SceneViewModel.BrushTurn):
+                OnPropertyChanged(nameof(Turn));
+                OnPropertyChanged(nameof(TurnText));
+                OnPropertyChanged(nameof(Hint));
                 break;
             case nameof(SceneViewModel.PaletteTileset):
                 OnPropertyChanged(nameof(Shown));

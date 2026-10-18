@@ -9,6 +9,7 @@ description: "Painting tilemaps in the Scene view, tilesets, layers, autotiles a
 - Pick a tool under the palette, or with a key: the **Brush** (B) paints the cells you drag over, the **Rectangle** (R) fills the box you drag out (shown as you drag; Esc lets go of it), and **Fill** (G) fills the area you click, like a paint bucket: the cell and every cell joined to it side by side holding the same tile, or all empty, within the map's grid. Hovering with Fill shows the area it would fill.
 - Hold Shift with any of them to erase instead. Each stroke, rectangle or fill is one undo step.
 - Pick a tile from the palette at the top left, with `[` and `]`, or Ctrl-click a painted tile. The mouse wheel scrolls a palette with more tiles than fit.
+- Turn the tile you paint with Z (a quarter clockwise; Shift+Z back), and flip it with X (left to right; Shift+X upside down): see [Turned and flipped tiles](/docs/tilemaps/#turned-and-flipped-tiles).
 - The tabs along the palette's top switch between the map's tilesets. Its **+** tab (or **Art → Add Tileset to Tilemap**) adds another from the project's images: a picture painted in Griff keeps its own tiles across and down, and any other is cut into tiles the size of the first tileset's.
 - The buttons under the tools switch between the map's layers, and **+ Layer** adds one (see [Layers](/docs/tilemaps/#layers)). The layers not being painted fade back.
 - Paint (or drag a rectangle) past the left or top edge and the map grows that way; its layers (and anything else inside it) stay where they are.
@@ -74,3 +75,11 @@ The rooms are worked out again only when the walls change (a tile painted or cle
 ## Animated tiles
 
 Set a tilemap's **Animated Tiles** to runs of tiles side by side in its tileset and how many frames a second, `16-19 @6`, and every cell painted with one of them plays through the run while the game runs: water, lava, torches. Paint neighbors with different frames of the run and they won't move in step.
+
+## Turned and flipped tiles
+
+A cell can hold its tile turned by a quarter, a half or three quarters, or flipped, so a conveyor belt, an arrow, a pipe or a cliff edge is drawn once, pointing one way, and painted pointing any way (an animated belt's frames turn with it).
+- While painting, Z turns the brush a quarter clockwise (Shift+Z turns it back), X flips it left to right and Shift+X upside down. The palette shows the brush's tile turned, the cell under the cursor shows it faintly where it will go, and the hint under the palette says how it's turned ("Brush (turned 90°)"). Ctrl-clicking a painted cell picks up its turn with its tile. The Brush, Rectangle and Fill all paint turned, and undo takes turns back with the tiles.
+- The turns are a grid of their own, the tilemap's **Turns**, a line a row lined up with **Tiles**: `.` as drawn, `1`, `2` and `3` turned a quarter, a half and three quarters clockwise, and `4` to `7` the same mirrored left to right first (`4` mirrored, `6` upside down). A map that turns nothing has no Turns at all, and saves as it did before turns.
+- From scripts, `SetTile(x, y, tile, TileTurn.Turn90)` lays a tile turned (plain `SetTile` lays it as drawn), `GetTurn(x, y)` says how a cell is turned, `SetTurn(x, y, turn)` turns the tile already there, and `FillRect` and `FloodFill` take a turn too. A `TileTurn` turns further with `Turned()` and flips with `FlippedX()` and `FlippedY()`, and `turn.Apply(direction)` turns a direction as the tile is turned: a belt drawn moving right, `(1, 0)`, turned `Turn90` moves down, `(0, -1)`.
+- Slope tiles collide turned: flipped left to right (or turned a quarter) a rising slope falls, and one turned so its solid corner is at the top is a solid block. A one-way tile stays open from below whichever way it's turned. Quarter turns suit square maps; flips and half turns suit every shape.

@@ -30,6 +30,7 @@ public sealed partial class SceneViewModel
 {
     private TileTool _tileTool = TileTool.Brush;
     private int _brushTile;
+    private TileTurn _brushTurn;
 
     /// <summary>
     /// What clicking and dragging on the selected tilemap in the Scene view does: paint cell by cell (Brush, the
@@ -72,6 +73,24 @@ public sealed partial class SceneViewModel
             }
         }
     }
+
+    /// <summary>
+    /// How painting turns or flips the <see cref="BrushTile"/> as it lays it (see <see cref="Tilemap.Turns"/>): None,
+    /// the default, lays tiles as they're drawn. Z in the Scene view turns it a quarter clockwise (Shift+Z back), X
+    /// flips it left to right and Shift+X upside down, and Ctrl-clicking a painted cell picks its turn with its tile. The
+    /// cell under the cursor shows the tile turned.
+    /// </summary>
+    public TileTurn BrushTurn
+    {
+        get => _brushTurn;
+        set => SetProperty(ref _brushTurn, (TileTurn)((int)value & 7));
+    }
+
+    /// <summary>Turns the <see cref="BrushTurn"/> a quarter clockwise, or with a negative <paramref name="quarters"/> back: what Z (Shift+Z) does.</summary>
+    public void TurnBrush(int quarters = 1) => BrushTurn = BrushTurn.Turned(quarters);
+
+    /// <summary>Flips the <see cref="BrushTurn"/> left to right, or upside down with <paramref name="upsideDown"/>, as it looks: what X (Shift+X) does.</summary>
+    public void FlipBrush(bool upsideDown = false) => BrushTurn = upsideDown ? BrushTurn.FlippedY() : BrushTurn.FlippedX();
 
     // The tile last picked from each tileset (by its first tile), so switching back to one picks it again.
     private readonly Dictionary<int, int> _lastPicked = [];
@@ -232,8 +251,8 @@ public sealed partial class SceneViewModel
     }
 
     /// <summary>
-    /// Paints the <see cref="BrushTile"/> (or clears, with <paramref name="erase"/>) into one cell of the selected
-    /// tilemap, as one undo step. Cells left of or above the grid grow it, moving the entity so its tiles stay put.
+    /// Paints the <see cref="BrushTile"/>, turned by the <see cref="BrushTurn"/> (or clears, with <paramref name="erase"/>),
+    /// into one cell of the selected tilemap, as one undo step. Cells left of or above the grid grow it, moving the entity so its tiles stay put.
     /// </summary>
     public void PaintTile(int x, int y, bool erase = false)
     {
@@ -244,39 +263,45 @@ public sealed partial class SceneViewModel
 
     /// <summary>
     /// Fills the rectangle between two corner cells of the selected tilemap (either way round) with the
-    /// <see cref="BrushTile"/>, or clears it with <paramref name="erase"/>, as one undo step. Like painting, a rectangle
+    /// <see cref="BrushTile"/> turned by the <see cref="BrushTurn"/>, or clears it with <paramref name="erase"/>, as one undo step. Like painting, a rectangle
     /// reaching past the left or top edge grows the grid that way.
     /// </summary>
     public void PaintRectangle(int fromX, int fromY, int toX, int toY, bool erase = false)
     {
         var tilemap = PaintTarget ?? throw NothingToPaint();
-        var (tiles, shiftX, shiftY) = tilemap.PaintedRect(fromX, fromY, toX, toY, erase ? -1 : BrushTile);
-        Apply(tilemap, tiles, shiftX, shiftY, erase ? "Erase Tiles" : "Fill Rectangle");
+        var (tiles, turns, shiftX, shiftY) = tilemap.PaintedRect(fromX, fromY, toX, toY, erase ? -1 : BrushTile, BrushTurn);
+        Apply(tilemap, tiles, turns, shiftX, shiftY, erase ? "Erase Tiles" : "Fill Rectangle");
     }
 
     /// <summary>
-    /// Fills the area around a cell of the selected tilemap with the <see cref="BrushTile"/>, or clears it with
+    /// Fills the area around a cell of the selected tilemap with the <see cref="BrushTile"/> turned by the
+    /// <see cref="BrushTurn"/>, or clears it with
     /// <paramref name="erase"/>, as one undo step: the cell and every cell joined to it side by side holding the same
     /// tile (or all empty), within the grid. Returns how many cells changed; nothing does outside the grid.
     /// </summary>
     public int FillTiles(int x, int y, bool erase = false)
     {
         var tilemap = PaintTarget ?? throw NothingToPaint();
-        var tile = erase ? -1 : BrushTile;
-        if (tilemap.GetTile(x, y) == tile)
+        var (tile, turn) = erase ? (-1, TileTurn.None) : (BrushTile, BrushTurn);
+        if (tilemap.GetTile(x, y) == tile && tilemap.GetTurn(x, y) == turn)
             return 0;
         var count = tilemap.FillRegion(x, y).Count;
-        Apply(tilemap, tilemap.Filled(x, y, tile), 0, 0, erase ? "Erase Tiles" : "Fill Tiles");
+        var (tiles, turns) = tilemap.Filled(x, y, tile, turn);
+        Apply(tilemap, tiles, turns, 0, 0, erase ? "Erase Tiles" : "Fill Tiles");
         return count;
     }
 
-    /// <summary>Makes the tile in a cell of the selected tilemap (the layer being painted) the <see cref="BrushTile"/>; false (and no change) for an empty cell.</summary>
+    /// <summary>
+    /// Makes the tile in a cell of the selected tilemap (the layer being painted) the <see cref="BrushTile"/>, and its
+    /// turn the <see cref="BrushTurn"/>; false (and no change) for an empty cell.
+    /// </summary>
     public bool PickTile(int x, int y)
     {
         var tilemap = PaintTarget ?? throw NothingToPaint();
         if (tilemap.GetTile(x, y) is not (var tile and >= 0))
             return false;
         BrushTile = tile;
+        BrushTurn = tilemap.GetTurn(x, y);
         return true;
     }
 
@@ -287,17 +312,18 @@ public sealed partial class SceneViewModel
     /// </summary>
     internal TileStroke? BeginTileStroke(bool erase = false) =>
         sceneDocuments.Scene is { } document && PaintTarget is { } tilemap
-            ? new TileStroke(document, tilemap, erase ? -1 : BrushTile, Property(tilemap, nameof(Tilemap.Tiles)), Property(tilemap.Entity!.Transform, nameof(Transform.Position)))
+            ? new TileStroke(document, projectSession.Components, tilemap, erase ? -1 : BrushTile, erase ? TileTurn.None : BrushTurn)
             : null;
 
-    // Puts new tiles on the map, moving the entity back by the cells added left of and above the old grid, as one step.
-    private void Apply(Tilemap tilemap, IReadOnlyList<string> tiles, int shiftX, int shiftY, string description)
+    // Puts new tiles (and their turns) on the map, moving the entity back by the cells added left of and above the old
+    // grid, as one step.
+    private void Apply(Tilemap tilemap, IReadOnlyList<string> tiles, IReadOnlyList<string> turns, int shiftX, int shiftY, string description)
     {
-        if (sceneDocuments.Scene is not { } document || tiles.SequenceEqual(tilemap.Tiles))
+        if (sceneDocuments.Scene is not { } document || (tiles.SequenceEqual(tilemap.Tiles) && turns.SequenceEqual(tilemap.Turns)))
             return;
         document.History.Seal();
         using (document.History.BeginGroup(description))
-            TileStroke.Put(document, tilemap, tiles, shiftX, shiftY, Property(tilemap, nameof(Tilemap.Tiles)), Property(tilemap.Entity!.Transform, nameof(Transform.Position)));
+            TileStroke.Put(document, projectSession.Components, tilemap, tiles, turns, shiftX, shiftY);
         document.History.Seal();
     }
 
@@ -308,20 +334,20 @@ public sealed partial class SceneViewModel
     public sealed class TileStroke
     {
         private readonly SceneDocument _document;
+        private readonly ComponentRegistry _components;
         private readonly Tilemap _tilemap;
         private readonly int _tile;
-        private readonly PropertyDescriptor _tiles;
-        private readonly PropertyDescriptor _position;
+        private readonly TileTurn _turn;
         private readonly EditHistory.EditGroup _group;
         private (int X, int Y)? _last;
 
-        internal TileStroke(SceneDocument document, Tilemap tilemap, int tile, PropertyDescriptor tiles, PropertyDescriptor position)
+        internal TileStroke(SceneDocument document, ComponentRegistry components, Tilemap tilemap, int tile, TileTurn turn)
         {
             _document = document;
+            _components = components;
             _tilemap = tilemap;
             _tile = tile;
-            _tiles = tiles;
-            _position = position;
+            _turn = turn;
             document.History.Seal();
             _group = document.History.BeginGroup(tile < 0 ? "Erase Tiles" : "Paint Tiles");
         }
@@ -351,10 +377,10 @@ public sealed partial class SceneViewModel
                 var t = steps == 0 ? 1 : (double)i / steps;
                 var cx = (int)Math.Round(fromX + (x - fromX) * t) + shiftX;
                 var cy = (int)Math.Round(fromY + (y - fromY) * t) + shiftY;
-                if (_tilemap.GetTile(cx, cy) == _tile)
+                if (_tilemap.GetTile(cx, cy) == _tile && _tilemap.GetTurn(cx, cy) == _turn)
                     continue;
-                var (tiles, sx, sy) = _tilemap.Painted(cx, cy, _tile);
-                Put(_document, _tilemap, tiles, sx, sy, _tiles, _position);
+                var (tiles, turns, sx, sy) = _tilemap.PaintedRect(cx, cy, cx, cy, _tile, _turn);
+                Put(_document, _components, _tilemap, tiles, turns, sx, sy);
                 shiftX += sx;
                 shiftY += sy;
             }
@@ -369,10 +395,16 @@ public sealed partial class SceneViewModel
             _document.History.Seal();
         }
 
-        internal static void Put(SceneDocument document, Tilemap tilemap, IReadOnlyList<string> tiles, int shiftX, int shiftY,
-            PropertyDescriptor tilesProperty, PropertyDescriptor positionProperty)
+        internal static void Put(SceneDocument document, ComponentRegistry components, Tilemap tilemap, IReadOnlyList<string> tiles,
+            IReadOnlyList<string> turns, int shiftX, int shiftY)
         {
-            document.Execute(new SetPropertyEdit(tilemap, tilesProperty, tiles));
+            PropertyDescriptor Property(Component component, string name) => components.Get(component.GetType()).Properties.Single(p => p.Name == name);
+            var positionProperty = Property(tilemap.Entity!.Transform, nameof(Transform.Position));
+            if (!tiles.SequenceEqual(tilemap.Tiles))
+                document.Execute(new SetPropertyEdit(tilemap, Property(tilemap, nameof(Tilemap.Tiles)), tiles));
+            // A map that turns nothing gets no edit of its turns, so its undo steps are as they were.
+            if (!turns.SequenceEqual(tilemap.Turns))
+                document.Execute(new SetPropertyEdit(tilemap, Property(tilemap, nameof(Tilemap.Turns)), turns));
             if (shiftX == 0 && shiftY == 0)
                 return;
             var transform = tilemap.Entity!.Transform;

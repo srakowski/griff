@@ -227,6 +227,7 @@ public sealed class PropertyDescriptor
         Distance = property.PropertyType == typeof(float) ? property.GetCustomAttribute<DistanceAttribute>() : null;
         EntityName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<EntityNameAttribute>() : null;
         PlainText = property.GetCustomAttribute<PlainTextAttribute>();
+        OmitsWhenEmpty = property.IsDefined(typeof(OmitWhenEmptyAttribute));
         ActionName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<ActionNameAttribute>() : null;
         OutputName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<OutputNameAttribute>() : null;
         Editor = property.GetCustomAttribute<FieldEditorAttribute>()
@@ -287,6 +288,12 @@ public sealed class PropertyDescriptor
     /// for a field that has a picker or an editor of its own, or should.
     /// </summary>
     public PlainTextAttribute? PlainText { get; }
+
+    /// <summary>From <see cref="OmitWhenEmptyAttribute"/>: scene files leave it out while it's empty.</summary>
+    public bool OmitsWhenEmpty { get; }
+
+    /// <summary>True if scene files leave it out with <paramref name="value"/>: it <see cref="OmitsWhenEmpty"/>, and that's empty.</summary>
+    public bool IsOmitted(object? value) => OmitsWhenEmpty && OmitWhenEmptyAttribute.IsEmpty(value);
 
     // What a string names by its name alone, unmarked: one called Font, Prefab, Scene or Message, or ending in one
     // ("TitleFont", "BulletPrefab", "NextScene", "WinMessage"), names a font, prefab, scene or message.

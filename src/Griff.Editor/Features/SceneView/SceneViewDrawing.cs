@@ -590,6 +590,19 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
 
         dc.Pop();
 
+        // A turned brush shows its tile turned in the cell under the cursor, faintly, so you see which way it will go down.
+        if (input.HoverCell is var (gx, gy) && model.IsPainting && !input.Erasing && input.RectangleFrom is null &&
+            model.BrushTurn != TileTurn.None && TileImage(tilemap, model.BrushTile) is { } ghost)
+        {
+            var (center, size) = tilemap.PictureOf(gx, gy);
+            var world = tilemap.Entity!.Transform.WorldMatrix;
+            var a = viewport.ToScreen(Vector2.Transform(center - size / 2, world));
+            var b = viewport.ToScreen(Vector2.Transform(center + size / 2, world));
+            dc.PushOpacity(0.6);
+            DrawTurned(dc, ghost, new Rect(a, b), model.BrushTurn);
+            dc.Pop();
+        }
+
         // Palette, top left: a tab for each tileset (the one shown picked out) and + to add one, then its tiles.
         var layout = TilePaletteLayout.Of(palette, tilemap, style.Measure);
         var panel = layout.Panel;
@@ -614,7 +627,8 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
             rect.Inflate(-2, -2);
             if (TileImage(tilemap, tile) is { } image)
             {
-                dc.DrawImage(image, rect);
+                // The brush's tile is shown turned as it will paint.
+                DrawTurned(dc, image, rect, tile == model.BrushTile ? model.BrushTurn : TileTurn.None);
             }
             else
             {
@@ -660,6 +674,26 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
 
         var hint = style.Text(palette.Hint, "Brush.Text.Secondary");
         dc.DrawText(hint, new Point(panel.Left + 6, layout.AddLayer.Bottom + 4));
+    }
+
+    // A tile's picture in `rect`, turned or flipped as `turn` says (see Tilemap.Turns): on the screen, y runs down, so a
+    // clockwise quarter turn is a positive angle.
+    private static void DrawTurned(DrawingContext dc, ImageSource image, Rect rect, TileTurn turn)
+    {
+        if (turn == TileTurn.None)
+        {
+            dc.DrawImage(image, rect);
+            return;
+        }
+
+        var (x, y) = (rect.X + rect.Width / 2, rect.Y + rect.Height / 2);
+        var matrix = Matrix.Identity;
+        if (turn.IsFlipped())
+            matrix.ScaleAt(-1, 1, x, y);
+        matrix.RotateAt(90 * turn.Quarters(), x, y);
+        dc.PushTransform(new MatrixTransform(matrix));
+        dc.DrawImage(image, rect);
+        dc.Pop();
     }
 
     private void DrawMarker(DrawingContext dc, Entity entity)

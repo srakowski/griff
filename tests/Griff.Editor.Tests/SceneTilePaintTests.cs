@@ -312,4 +312,54 @@ public class SceneTilePaintTests
             Assert.Null(handles.HandleFrame());
         });
     }
+
+    [Fact]
+    public void ATurnedBrush_PaintsTurnedTiles_UndoneWithThem_AndPickTakesTheTurn()
+    {
+        EditorHost.Run(services =>
+        {
+            var (document, _, model, map) = Open(services);
+            var palette = services.GetRequiredService<TilePalette>();
+            model.BrushTile = 2;
+            Assert.Equal(TileTurn.None, model.BrushTurn);
+
+            // Z turns the brush a quarter clockwise, and the palette's hint says so.
+            model.TurnBrush();
+            Assert.Equal(TileTurn.Turn90, palette.Turn);
+            Assert.StartsWith("Brush (turned 90°):", palette.Hint);
+
+            model.PaintTile(1, 1);
+            Assert.Equal(["1111", "12.1", "1111"], map.Tiles);
+            Assert.Equal(["", ".1"], map.Turns);
+            document.History.Undo();
+            Assert.Equal(["1111", "1..1", "1111"], map.Tiles);
+            Assert.Empty(map.Turns);
+
+            // X flips it left to right as it looks: turned a quarter clockwise, mirrored, it's three quarters, mirrored.
+            model.FlipBrush();
+            Assert.Equal(TileTurn.Turn270 | TileTurn.FlipX, model.BrushTurn);
+            Assert.Equal("flipped, turned 270°", palette.TurnText);
+
+            // A rectangle past the left edge grows the grid, and the turns move along with the tiles.
+            model.PaintRectangle(-1, 0, -1, 0);
+            Assert.Equal(["21111", ".1..1", ".1111"], map.Tiles);
+            Assert.Equal(["7"], map.Turns);
+
+            model.BrushTurn = TileTurn.Turn180;
+            Assert.Equal(2, model.FillTiles(2, 1));
+            Assert.Equal(["7", "..22"], map.Turns);
+
+            // Ctrl-clicking a painted cell picks its turn along with its tile; erasing it takes its turn away.
+            model.BrushTurn = TileTurn.None;
+            Assert.True(model.PickTile(0, 0));
+            Assert.Equal((2, TileTurn.Turn270 | TileTurn.FlipX), (model.BrushTile, model.BrushTurn));
+            model.PaintTile(0, 0, erase: true);
+            Assert.Equal(["", "..22"], map.Turns);
+
+            // Shift+X turns it upside down.
+            model.BrushTurn = TileTurn.None;
+            model.FlipBrush(upsideDown: true);
+            Assert.Equal(TileTurn.FlipY, model.BrushTurn);
+        });
+    }
 }

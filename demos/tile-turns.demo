@@ -1,0 +1,61 @@
+title: Turned and flipped tiles
+intro: A tilemap's cells can now hold their tiles turned a quarter at a time, or flipped, so one picture of a belt runs every way.
+project: Empty | Belts
+write: Tiles/belts.png | tile-turns/belts.png
+
+chapter: One picture of a belt | Drawn pointing right
+create: Tilemap
+set: Transform.Position = -4, 3, 0
+pickimage: Tilemap.Image = Tiles/belts.png
+set: Tilemap.Columns = 6
+set: Tilemap.Tint = #FFFFFF
+look: 0, -0.5, 4.5
+click: tiles:Rectangle
+click: tiles:4
+scenedrag: -3.5, 2.5 > 3.5, -3.5
+expecttile: Tilemap 7, 6 = 4
+say: Here's a factory floor, and a tileset with a conveyor belt drawn once, pointing right, in four frames. Until now, a belt going down, left or up needed its own frames drawn for each way.
+click: tiles:0
+scenedrag: -2.5, 1.5 > 1.5, 1.5
+expecttile: Tilemap 5, 1 = 0
+explain: world:-3, 2, 2, 1 | The top run | The top of the loop runs right, as the belt is drawn.
+
+chapter: Turn the brush | Z turns it a quarter
+key: Z
+explain: tiles:0 | Turned in the palette | Z turns the brush a quarter clockwise. The palette shows the belt turned, and the hint under it says so. Shift+Z turns it back.
+scenehover: 2.5, 0.5
+explain: world:2, 1, 3, 0 | Where it goes | The cell under the pointer shows the turned tile faintly, so you see which way it will go down.
+scenedrag: 2.5, 1.5 > 2.5, -1.5
+expecttile: Tilemap 6, 4 = 0
+key: Z
+scenedrag: 2.5, -2.5 > -1.5, -2.5
+key: Z
+scenedrag: -2.5, -2.5 > -2.5, 0.5
+expecttile: Tilemap 1, 2 = 0
+explain: world:-3, 2, 3, -3 | A loop from one picture | Turned again for the bottom, and again for the left side: one belt, painted four ways. The brush, the rectangle and the fill all paint turned.
+
+chapter: Flips | X mirrors it
+key: Z
+key: B
+click: tiles:5
+key: X
+sceneclick: -1.5, 2.5
+key: X
+key: Shift+X
+sceneclick: 0.5, 2.5
+expectvalue: Tilemap.Tilemap.Turns = ..4.6\n......1\n.3....1\n.3....1\n.3....1\n.322222
+explain: world:-2, 3, 1, 2 | Flipped | X flips the brush left to right, and Shift+X upside down. This sign is drawn pointing right with its mark at the top: flipped, it points left; upside down, its mark is at the bottom.
+explain: field:Tilemap.Turns | Turns | The turns are a grid of their own, lined up with the tiles: a dot as drawn, 1 to 3 for quarter turns, 4 to 7 flipped. A map that turns nothing has none, and saves exactly as it did before.
+key: Ctrl+Z
+expecttile: Tilemap 4, 0 = 4
+expectvalue: Tilemap.Tilemap.Turns = ..4\n......1\n.3....1\n.3....1\n.3....1\n.322222
+say: Undo takes a turn back with its tile.
+
+chapter: Moving belts | Animated tiles turn too
+click: editor:Tilemap.Animated Tiles:add
+expectvalue: Tilemap.Tilemap.AnimatedTiles = 0-3 @4
+play
+wait: 2
+explain: world:-3, 2, 3, -3 | Round the loop | Animated tiles turn with their cells, so the belt runs round the whole loop. Slope tiles collide turned as well.
+stop
+say: Scripts lay tiles turned with SetTile and a TileTurn, read a cell's turn with GetTurn and change it with SetTurn, and agents set a map's Turns like any other property.

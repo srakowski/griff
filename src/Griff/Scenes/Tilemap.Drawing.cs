@@ -70,6 +70,7 @@ public sealed partial class Tilemap
         (fromX, toX) = (Math.Max(0, fromX), Math.Min(Width - 1, toX));
         (fromY, toY) = (Math.Max(0, fromY), Math.Min(Height - 1, toY));
         var depth = -1;
+        var turned = _turns.Length > 0;
         if (Shape != TileShape.Isometric)
         {
             for (var y = fromY; y <= toY; y++)
@@ -121,6 +122,9 @@ public sealed partial class Tilemap
 
             var (center, size) = PictureOf(x, y);
             var matrix = Matrix4x4.CreateScale(size.X * seamless, size.Y * seamless, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0) * world;
+            // A turned cell turns its picture round its middle first (see Turns).
+            if (turned && TurnAt(x, y) is var turn and not TileTurn.None)
+                matrix = turn.Matrix() * matrix;
             draws.Add(new SpriteDraw(matrix, tileset.Image, tint, entity) { Source = tileset.Rect(shown) });
         }
 

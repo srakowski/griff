@@ -276,9 +276,9 @@ public static class Shadows
     // One cell's sides, as AddTiles says.
     private static void AddTile(List<ShadowEdge> edges, Tilemap tilemap, in Matrix4x4 world, float half, int x, int y)
     {
-        if (tilemap.GetTile(x, y) is not (var tile and >= 0))
+        if (tilemap.GetTile(x, y) < 0)
             return;
-        var slope = tilemap.SlopeOf(tile);
+        var slope = tilemap.SlopeAt(x, y);
         if (!tilemap.IsBlocked(x, y) && slope == 0)
             return;
         var center = tilemap.CellCenter(x, y);

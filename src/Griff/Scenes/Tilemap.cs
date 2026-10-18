@@ -6,16 +6,18 @@ namespace Griff.Scenes;
 /// A grid of tiles from one or more tileset images, drawn and (optionally) collided with as a whole. The grid starts
 /// at the entity's position and runs right and down, on an isometric map (see <see cref="Shape"/>) as diamonds
 /// running down to the right and down to the left, and on a hex map as rows of hexagons. Paint it in the Scene view, edit <see cref="Tiles"/> as text in the
-/// inspector, or change it from scripts with <see cref="SetTile"/>, <see cref="FillRect"/> and <see cref="FloodFill"/>.
+/// inspector, or change it from scripts with <see cref="SetTile(int, int, int)"/>, <see cref="FillRect(int, int, int, int, int)"/>
+/// and <see cref="FloodFill(int, int, int)"/>, each of which can also lay its tile turned or flipped (see <see cref="Turns"/>).
 /// A tilemap with no <see cref="Image"/> on an entity inside another tilemap's is one of its layers (see
 /// <see cref="LayerOf"/>), painted on its own: it uses that map's tilesets, tile size and tile settings, while its
-/// <see cref="Tiles"/>, <see cref="Tint"/>, <see cref="Order"/> and collision (<see cref="Solid"/>, <see cref="Layer"/>,
+/// <see cref="Tiles"/> (and <see cref="Turns"/>), <see cref="Tint"/>, <see cref="Order"/> and collision (<see cref="Solid"/>, <see cref="Layer"/>,
 /// <see cref="IgnoreLayers"/>) are its own.
 /// </summary>
 /// <remarks>
 /// Each row of <see cref="Tiles"/> is a line of characters, one per cell, top row first: <c>.</c> is empty and
 /// <c>0-9</c>, <c>a-z</c>, <c>A-Z</c> pick tiles 0–61; tiles from 62 on are accented letters, then CJK characters
-/// (see <see cref="CharOf"/>). Rows are saved one per line, so levels diff line by line in git.
+/// (see <see cref="CharOf(int)"/>). Rows are saved one per line, so levels diff line by line in git. How each cell's
+/// tile is turned or flipped is a grid of its own, <see cref="Turns"/>, lined up with it.
 /// </remarks>
 [Category("Rendering")]
 [ComponentName("Tilemap")]
@@ -375,7 +377,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
     public IReadOnlyList<(int X, int Y, bool Rising)> SlopeCells()
     {
         CheckCaches();
-        return _slopes ??= Cells().Where(c => SlopeOf(c.Tile) != 0).Select(c => (c.X, c.Y, SlopeOf(c.Tile) > 0)).ToList();
+        return _slopes ??= Cells().Where(c => SlopeAt(c.X, c.Y) != 0).Select(c => (c.X, c.Y, SlopeAt(c.X, c.Y) > 0)).ToList();
     }
 
     // Drops the caches that depend on the tile settings when they (or the map they come from) have changed.
@@ -428,7 +430,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
             // Copied so nobody else holds the array; the map only ever replaces it, which keeps undo snapshots intact.
             var tiles = value?.ToArray() ?? [];
             if (Solid && Entity is { Scene.Step: > 0, IsActive: true } entity)
-                VacateChanged(entity.Scene!, tiles);
+                VacateChanged(entity.Scene!, _tiles, tiles);
             _tiles = tiles;
             _runs = null;
             _slopes = null;
@@ -436,14 +438,39 @@ public sealed partial class Tilemap : Component, ISortsInParts
         }
     }
 
-    // While the game runs, tiles changing might take away what holds up a body asleep on them: where the rows that changed
-    // are, to wake what's there.
-    private void VacateChanged(Scene scene, string[] tiles)
+    /// <summary>
+    /// How each cell's tile is turned or flipped, a line a row lined up with <see cref="Tiles"/>: a character per cell,
+    /// <c>.</c> as drawn, <c>1</c>, <c>2</c> and <c>3</c> turned a quarter, a half and three quarters clockwise, and
+    /// <c>4</c> to <c>7</c> the same mirrored left to right first (<c>4</c> just mirrored, <c>6</c> upside down; see
+    /// <see cref="TileTurn"/>). Animated tiles turn with their cells, and slope tiles collide turned. Set it with
+    /// <see cref="SetTile(int, int, int, TileTurn)"/> or by turning the brush while painting (Z, X); empty, as it is for
+    /// a map that turns nothing, draws every tile as it is. Quarter turns suit square maps; flips and half turns suit
+    /// every shape.
+    /// </summary>
+    [PlainText("a line a row, a character a cell: painted in the Scene view by turning the brush with Z and X")]
+    [OmitWhenEmpty]
+    public IReadOnlyList<string> Turns
+    {
+        get => _turns;
+        set
+        {
+            var turns = TrimTurns(value ?? []);
+            if (Solid && Entity is { Scene.Step: > 0, IsActive: true } entity)
+                VacateChanged(entity.Scene!, _turns, turns);
+            _turns = turns;
+            _slopes = null;
+            _collisionRuns = null;
+        }
+    }
+
+    // While the game runs, tiles (or their turns) changing might take away what holds up a body asleep on them: where the
+    // rows that changed are, to wake what's there.
+    private void VacateChanged(Scene scene, string[] before, string[] after)
     {
         var (first, last) = (-1, -1);
-        for (var y = 0; y < Math.Max(tiles.Length, _tiles.Length); y++)
+        for (var y = 0; y < Math.Max(after.Length, before.Length); y++)
         {
-            if (y < tiles.Length && y < _tiles.Length && string.Equals(tiles[y], _tiles[y], StringComparison.Ordinal))
+            if (y < after.Length && y < before.Length && string.Equals(after[y], before[y], StringComparison.Ordinal))
                 continue;
             first = first < 0 ? y : first;
             last = y;
@@ -509,16 +536,11 @@ public sealed partial class Tilemap : Component, ISortsInParts
         y >= 0 && y < _tiles.Length && x >= 0 && x < _tiles[y].Length ? TileOf(_tiles[y][x]) : -1;
 
     /// <summary>
-    /// Sets the tile at column <paramref name="x"/>, row <paramref name="y"/>; -1 clears it. The grid grows to fit,
-    /// and empty space at the right and bottom is trimmed.
+    /// Sets the tile at column <paramref name="x"/>, row <paramref name="y"/>, as drawn (not turned: see
+    /// <see cref="SetTile(int, int, int, TileTurn)"/>); -1 clears it. The grid grows to fit, and empty space at the right
+    /// and bottom is trimmed.
     /// </summary>
-    public void SetTile(int x, int y, int tile)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(x);
-        ArgumentOutOfRangeException.ThrowIfNegative(y);
-        if (GetTile(x, y) != tile)
-            Tiles = Painted(x, y, tile).Tiles;
-    }
+    public void SetTile(int x, int y, int tile) => SetTile(x, y, tile, TileTurn.None);
 
     /// <summary>
     /// The grid with one cell changed, leaving this map alone. Cells left of or above the grid are allowed: the grid
@@ -530,20 +552,15 @@ public sealed partial class Tilemap : Component, ISortsInParts
     /// <summary>
     /// Sets every cell in the rectangle between cells (<paramref name="fromX"/>, <paramref name="fromY"/>) and
     /// (<paramref name="toX"/>, <paramref name="toY"/>), corners included and either way round; -1 clears them. The grid
-    /// grows to fit, like <see cref="SetTile"/>.
+    /// grows to fit, like <see cref="SetTile(int, int, int)"/>.
     /// </summary>
-    public void FillRect(int fromX, int fromY, int toX, int toY, int tile)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(Math.Min(fromX, toX), nameof(fromX));
-        ArgumentOutOfRangeException.ThrowIfNegative(Math.Min(fromY, toY), nameof(fromY));
-        Tiles = PaintedRect(fromX, fromY, toX, toY, tile).Tiles;
-    }
+    public void FillRect(int fromX, int fromY, int toX, int toY, int tile) => FillRect(fromX, fromY, toX, toY, tile, TileTurn.None);
 
     /// <summary>
     /// Fills the area around cell (<paramref name="x"/>, <paramref name="y"/>) with <paramref name="tile"/>, like a paint
     /// bucket (see <see cref="FillRegion"/> for what it reaches); -1 clears it.
     /// </summary>
-    public void FloodFill(int x, int y, int tile) => Tiles = Filled(x, y, tile);
+    public void FloodFill(int x, int y, int tile) => FloodFill(x, y, tile, TileTurn.None);
 
     /// <summary>
     /// The grid with every cell in the rectangle between two corner cells (either way round) set to
@@ -1012,7 +1029,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
 
     /// <summary>Horizontal runs of non-empty cells, for collision. Cached until the tiles change.</summary>
     public IReadOnlyList<(int X, int Y, int Length)> Runs() =>
-        _runs ??= FindRuns(_tiles, c => TileOf(c) >= 0 ? 0 : -1).Select(r => (r.X, r.Y, r.Length)).ToList();
+        _runs ??= FindRuns(_tiles, (c, _, _) => TileOf(c) >= 0 ? 0 : -1).Select(r => (r.X, r.Y, r.Length)).ToList();
 
     /// <summary>
     /// Horizontal runs of tiles that collide, split where solid tiles meet one-way tiles. Background tiles are left out.
@@ -1021,7 +1038,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
     public IReadOnlyList<(int X, int Y, int Length, bool OneWay)> CollisionRuns()
     {
         CheckCaches();
-        return _collisionRuns ??= FindRuns(_tiles, c => CollisionOf(TileOf(c)))
+        return _collisionRuns ??= FindRuns(_tiles, (c, x, y) => CollisionAt(x, y, TileOf(c)))
             .Select(r => (r.X, r.Y, r.Length, r.Kind == 1)).ToList();
     }
 
@@ -1029,7 +1046,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
     /// True if cell (<paramref name="x"/>, <paramref name="y"/>) is a wall for <see cref="FindPath"/>: a solid tile on a
     /// <see cref="Solid"/> map. Empty, background, ladder and one-way tiles can be walked through.
     /// </summary>
-    public bool IsBlocked(int x, int y) => Solid && GetTile(x, y) is var tile and >= 0 && CollisionOf(tile) == 0;
+    public bool IsBlocked(int x, int y) => Solid && GetTile(x, y) is var tile and >= 0 && CollisionAt(x, y, tile) == 0;
 
     /// <summary>
     /// Whether bodies meet its cells as boxes, as they meet colliders (with one-way and slope tiles): a square map's. Other
@@ -1288,7 +1305,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
         return firsts;
     }
 
-    /// <summary>The tile a character stands for, or -1 for empty (and anything unrecognized); see <see cref="CharOf"/>.</summary>
+    /// <summary>The tile a character stands for, or -1 for empty (and anything unrecognized); see <see cref="CharOf(int)"/>.</summary>
     public static int TileOf(char c) => c switch
     {
         >= '0' and <= '9' => c - '0',
@@ -1319,14 +1336,11 @@ public sealed partial class Tilemap : Component, ISortsInParts
         _ => (char)(0x4E00 + tile - 460),
     };
 
-    // 0 = solid, 1 = one-way, -1 = not a box (empty, background, a ladder, or a slope, which collides by its own shape).
-    private int CollisionOf(int tile) => tile < 0 || IsBackground(tile) || IsLadder(tile) || SlopeOf(tile) != 0 ? -1 : IsOneWay(tile) ? 1 : 0;
-
     // What Tilesets() was worked out from, and the answer.
     private sealed record TilesetCache(string? Image, int Columns, int Rows, string[] More, string[] Placeholders, IReadOnlyList<Tileset> Tilesets);
 
     // Runs of cells with the same non-negative kind; a change of kind ends a run.
-    private static List<(int X, int Y, int Length, int Kind)> FindRuns(string[] tiles, Func<char, int> kindOf)
+    private static List<(int X, int Y, int Length, int Kind)> FindRuns(string[] tiles, Func<char, int, int, int> kindOf)
     {
         var runs = new List<(int, int, int, int)>();
         for (var y = 0; y < tiles.Length; y++)
@@ -1336,7 +1350,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
             var runKind = -1;
             for (var x = 0; x <= row.Length; x++)
             {
-                var kind = x < row.Length ? kindOf(row[x]) : -1;
+                var kind = x < row.Length ? kindOf(row[x], x, y) : -1;
                 if (kind == runKind)
                     continue;
                 if (start >= 0)

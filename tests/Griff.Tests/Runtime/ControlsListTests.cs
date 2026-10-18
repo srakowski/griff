@@ -180,16 +180,16 @@ public class ControlsListTests
         Tick(game);
         var first = list.Rows[0];
 
-        _input.Bind("Rotate", Key.R);
+        _input.Bind("Demolish", Key.X);
         Tick(game, 2);
 
-        Assert.Equal(["DropTool", "Build", "Rotate"], list.Listed);
+        Assert.Equal(["DropTool", "Build", "Demolish"], list.Listed);
         Assert.Equal(3, list.Entity!.Children.Count);
         Assert.Null(first.Scene);
 
         list.Hide = "Build";
         Tick(game, 2);
-        Assert.Equal(["DropTool", "Rotate"], list.Entity.Children.Select(c => c.Name));
+        Assert.Equal(["DropTool", "Demolish"], list.Entity.Children.Select(c => c.Name));
     }
 
     [Fact]

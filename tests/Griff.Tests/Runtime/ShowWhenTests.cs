@@ -165,4 +165,28 @@ public sealed class ShowWhenTests
         Assert.False(SaveData.LastsOneRun("runner"));
         Assert.False(SaveData.LastsOneRun("Contracts"));
     }
+
+    [Fact]
+    public void Flags_JoinedWithOr_ShowItWhileAnyHolds()
+    {
+        var game = new Game(Hud(), _input);
+        var show = Contracts(game).GetComponent<ShowWhen>()!;
+        show.NeedsFlag = "run.Contracts OR run.Work or not run.Started";
+        Tick(game);
+        // Not started yet: the last holds.
+        Assert.True(Contracts(game).IsActive);
+
+        game.SetFlag("run.Started");
+        Tick(game);
+        Assert.False(Contracts(game).IsActive);
+
+        game.SetFlag("run.Work");
+        Tick(game);
+        Assert.True(Contracts(game).IsActive);
+        Assert.Equal("Shown only while run.Contracts is set or run.Work is set or run.Started isn't set.", show.SetupNote());
+        Assert.True(game.FlagHolds("x or run.Work"));
+        Assert.False(game.FlagHolds("x or y"));
+        // "or" inside a name isn't a join.
+        Assert.False(game.FlagHolds("Ordered"));
+    }
 }

@@ -687,9 +687,27 @@ internal sealed class LevelSystem : GameSystem, IVolleys, IDialogues, IFlags
 
     public bool FlagHolds(string? needs)
     {
-        var name = needs.AsSpan().Trim();
-        if (name.Length == 0)
+        var rest = needs.AsSpan().Trim();
+        if (rest.Length == 0)
             return true;
+
+        // "A or B" holds when either does; each part can be "not" one.
+        while (rest.Length > 0)
+        {
+            var or = rest.IndexOf(" or ", StringComparison.OrdinalIgnoreCase);
+            if (OneHolds(or < 0 ? rest : rest[..or]))
+                return true;
+            rest = or < 0 ? default : rest[(or + 4)..];
+        }
+
+        return false;
+    }
+
+    private bool OneHolds(ReadOnlySpan<char> name)
+    {
+        name = name.Trim();
+        if (name.Length == 0)
+            return false;
         var not = false;
         if (name[0] == '!')
         {

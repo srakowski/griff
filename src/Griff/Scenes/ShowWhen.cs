@@ -20,7 +20,7 @@ public sealed class ShowWhen : Component
     /// <summary>
     /// The flag that has to be set for the entity to show, e.g. "run.Contracts" (set by a trigger's Set Flag, a dialogue's
     /// "[set run.Contracts]" or a script's <c>Game.SetFlag</c>), or "not Tutorial" to show it only while that isn't set.
-    /// Empty leaves the entity as it is.
+    /// Several joined with "or" show it while any holds: "run.Contracts or run.Work". Empty leaves the entity as it is.
     /// </summary>
     [Names(NameKind.Flag, Condition = true)]
     public string? NeedsFlag { get; set; }
@@ -28,8 +28,12 @@ public sealed class ShowWhen : Component
     public override string? SetupNote() =>
         string.IsNullOrWhiteSpace(NeedsFlag) ? null : $"Shown only while {Condition(NeedsFlag.Trim())}.";
 
-    // "run.Contracts" reads "run.Contracts is set"; "not Tutorial", "Tutorial isn't set".
-    private static string Condition(string needs)
+    // "run.Contracts" reads "run.Contracts is set"; "not Tutorial", "Tutorial isn't set"; "A or B", "A is set or B is set".
+    private static string Condition(string needs) =>
+        string.Join(" or ", System.Text.RegularExpressions.Regex.Split(needs, @"\s+or\s+", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            .Select(p => One(p.Trim())));
+
+    private static string One(string needs)
     {
         if (needs.StartsWith('!'))
             return $"{needs[1..].TrimStart()} isn't set";

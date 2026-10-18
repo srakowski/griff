@@ -168,6 +168,10 @@ public sealed partial class KnownNames : IProjectNames
         var text = (value as string ?? "").Trim();
         if (text.Length == 0)
             return [];
+        // A flag a condition needs can be one of several: "run.Contracts or run.Work".
+        if (kind is { Kind: NameKind.Flag, Condition: true, Defines: false })
+            return [.. System.Text.RegularExpressions.Regex.Split(text, @"\s+or\s+", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                .Select(p => p.Trim()).Where(p => p.Length > 0)];
         return kind.Many ? CollisionLayers.Parse(text) : [text];
     }
 

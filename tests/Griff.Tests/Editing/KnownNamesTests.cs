@@ -227,6 +227,9 @@ public sealed class KnownNamesTests : IDisposable
         Assert.Empty(names.Unmatched(needs, "not PowerOn"));
         Assert.Empty(names.Unmatched(needs, "!opened"));
         Assert.Equal(["not Lost"], names.Unmatched(needs, "not Lost"));
+        // Several joined with "or" are each checked.
+        Assert.Empty(names.Unmatched(needs, "PowerOn or not Opened"));
+        Assert.Equal(["Lost"], names.Unmatched(needs, "PowerOn OR Lost"));
         Assert.Equal("Nothing sets the flag \"Lost\": no trigger's Set Flag, dialogue's [set] or script's SetFlag", KnownNames.Problem(needs, ["not Lost"]));
 
         // Kinds go with kinds of their own scope.

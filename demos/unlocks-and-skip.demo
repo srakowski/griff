@@ -21,6 +21,13 @@ add: ShowWhen
 set: ShowWhen.NeedsFlag = run.Contracts
 explain: field:ShowWhen.NeedsFlag | Needs Flag | Show When shows its entity only while its flag is set, and hides it, with everything inside it, otherwise. A hidden button can't be clicked, and its shortcut does nothing.
 say: In the Scene view it shows as ever, so it can be laid out. It's only hidden while the game runs.
+deselect
+create: Button
+rename: Contracts Group
+set: Transform.Position = -5, 3, 0
+add: ShowWhen
+set: ShowWhen.NeedsFlag = run.Contracts or run.Work
+explain: field:ShowWhen.NeedsFlag | Or | Several flags joined by or: this group's icon shows once any of its tools is unlocked.
 
 chapter: A skip button | Dialogue Stop
 deselect
@@ -40,7 +47,8 @@ waitgone: Contracts | 2
 say: The tour is on its first line, and Contracts is hidden.
 tap: E
 waitfor: Contracts | 3
-say: The second line set run.Contracts, and the button appears.
+waitfor: Contracts Group | 3
+say: The second line set run.Contracts, and the button appears, and so does the group's icon: run.Contracts or run.Work holds.
 tap: K
 waitgone: Dialogue Box | 3
 expectvalue: Tour.Dialogue.IsDone = true

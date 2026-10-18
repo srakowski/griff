@@ -1378,10 +1378,13 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
         await ui.SetNumber(component, label, value, axis.Label);
     }
 
-    // A property of the first entity with that name, as text: colors as hex, numbers invariant. Null if it isn't there.
+    // A property of the first entity with that name (or "Row/Switch": the one inside it with that name), as text: colors
+    // as hex, numbers invariant. Null if it isn't there.
     private string? PropertyText(string entityName, string componentName, string fieldName, string? axis = null)
     {
-        var component = workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == entityName)?.Components
+        var path = entityName.Split('/', StringSplitOptions.TrimEntries);
+        var entity = Inside(workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == path[0]), path);
+        var component = entity?.Components
             .FirstOrDefault(c => c.GetType().Name.Equals(componentName, StringComparison.OrdinalIgnoreCase));
         var property = component is null ? null : workspace.Components.Get(component.GetType()).Properties
             .FirstOrDefault(p => p.Name.Equals(fieldName.Replace(" ", ""), StringComparison.OrdinalIgnoreCase));
@@ -1633,11 +1636,23 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
         var game = RunningGame;
         var camera = Griff.Runtime.Views.FindCamera(game.Scene)?.Transform.WorldPosition ?? System.Numerics.Vector3.Zero;
         // In a network game, a player's name ("Player 1") is their character.
-        var entity = game.Scene.Entities.Where(e => e.Name == name && e.IsActive)
-            .OrderBy(e => System.Numerics.Vector3.Distance(e.Transform.WorldPosition, camera)).FirstOrDefault()
-            ?? game.Network.Players.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Avatar
+        var path = name.Split('/', StringSplitOptions.TrimEntries);
+        var entity = game.Scene.Entities.Where(e => e.Name == path[0] && e.IsActive)
+            .OrderBy(e => System.Numerics.Vector3.Distance(e.Transform.WorldPosition, camera)).FirstOrDefault() is { } found
+                ? Inside(found, path)
+                : null;
+        entity ??= path.Length > 1 ? null : game.Network.Players.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Avatar;
+        entity = entity
             ?? throw new InvalidOperationException($"No {name} in the running game.");
         return MiddleOf(entity) + offset;
+    }
+
+    // "Row/Switch": the entity named after the first part, then the one inside it named after each next part.
+    private static Griff.Scenes.Entity? Inside(Griff.Scenes.Entity? entity, string[] path)
+    {
+        foreach (var inner in path.Skip(1))
+            entity = entity?.Children.FirstOrDefault(c => c.Name == inner);
+        return entity;
     }
 
     private static System.Numerics.Vector2 MiddleOf(Griff.Scenes.Entity entity) =>

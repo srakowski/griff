@@ -106,8 +106,16 @@ internal sealed partial class DemoUi
         if (definition is { IsYesNo: true })
         {
             var wanted = value.Trim().ToLowerInvariant() is "yes" or "true" or "y" or "1";
-            if (Descendants<CheckBox>(picked).FirstOrDefault() is { } box && box.IsChecked != wanted)
-                await Click(box);
+            // The picked cell's box only shows it: F2 edits the cell, Space ticks or unticks, Enter keeps it.
+            if (Tables.Rows.FirstOrDefault(r => r.Name.Equals(row, StringComparison.OrdinalIgnoreCase))?.Cells[index - 1].Text is var shown &&
+                (shown == "yes") != wanted)
+            {
+                await input.Press(Key.F2, showBadge: false);
+                await Settle(80);
+                await input.Press(Key.Space);
+                await Settle(80);
+                await input.Press(Key.Enter, showBadge: false);
+            }
         }
         else
         {
@@ -122,7 +130,7 @@ internal sealed partial class DemoUi
         await Settle(150);
         var now = index == 0 ? null : Tables.Rows.FirstOrDefault(r => r.Name.Equals(row, StringComparison.OrdinalIgnoreCase))?.Cells[index - 1].Text;
         var done = index == 0 ? Tables.Rows.Any(r => r.Name == value.Trim()) : string.Equals(now, value.Trim(), StringComparison.OrdinalIgnoreCase)
-            || definition is { IsYesNo: true } && now == (value.Trim().ToLowerInvariant() is "yes" or "true" or "y" or "1" ? "yes" : "no");
+            || definition is { IsYesNo: true } && (now is null or "" ? "no" : now) == (value.Trim().ToLowerInvariant() is "yes" or "true" or "y" or "1" ? "yes" : "no");
         // A value the column refuses is meant to be refused (the demo shows what it says).
         var refused = definition is not null && !definition.Column.TryRead(value, out _, out _);
         if (!done && !refused)

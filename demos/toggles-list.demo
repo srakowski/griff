@@ -10,13 +10,13 @@ click: tables:header:Value
 click: tables:column:name
 key: Ctrl+A
 type: On\n
-columntype: On = yes or no
+columntype: On = yes/no
 cell: Row 1 > Name = Rain
 cell: Rain > On = yes
 click: tables:addrow
 cell: Row 2 > Name = Smoke
 cell: Smoke > On = no
-expecttable: 2 rows, 1 columns
+expecttable: 2 rows, 1 column
 say: A table of fires: the events that slow the game down, with a column for whether each starts on.
 
 chapter: A switch for each row | Toggles List
@@ -34,13 +34,11 @@ set: TogglesList.SaveAs = fire.{row}
 chapter: Play | Flip Smoke on
 play
 wait: 1
-expectvalue: Rain.Toggle.IsOn = true
-expectvalue: Smoke.Toggle.IsOn = false
+expectvalue: Rain/Switch.Toggle.IsOn = true
+expectvalue: Smoke/Switch.Toggle.IsOn = false
 say: Rain starts on and Smoke off, as the table says.
-tap: Down
-tap: Down
-tap: Enter
+gameclick: Smoke/Switch
 wait: 0.5
-expectvalue: Smoke.Toggle.IsOn = true
+expectvalue: Smoke/Switch.Toggle.IsOn = true
 say: Flipping Smoke is remembered under fire.Smoke, so next time the game starts it is on.
 stop

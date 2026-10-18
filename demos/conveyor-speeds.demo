@@ -1,0 +1,51 @@
+title: A slow chute onto a fast belt
+intro: Conveyor cells can go at their own speeds: a slow chute drops crates onto a fast belt in the same line, changing speed at the join with no pause.
+
+project: Empty | Chutes
+
+chapter: The line | A chute at half a cell a second, a belt at three
+create: Empty
+rename: Line
+add: Conveyor
+set: Conveyor.Belts = 0 -3 down 0.5\n0 -2 down 0.5\n0 -1 down 0.5\n-3 0 right 3\n-2 0 right 3\n-1 0 right 3\n0 0 right 3\n1 0 right 3\n2 0 right 3\n3 0 right 3
+explain: field:Conveyor.Belts | Belts | A number after a cell's way is its own speed in cells a second: the chute coming down column zero goes at half a cell a second, the belt along row zero at three.
+set: Conveyor.Spacing = 0.25
+set: Conveyor.MovingArrows = true
+explain: field:Conveyor.MovingArrows | Moving Arrows | Each cell's arrows slide at its own speed, slow on the chute and fast on the belt.
+look: 0, 1, 5
+
+chapter: Machines | Boxes along the belt, crates down the chute, a bin at the end
+deselect
+create: Empty
+rename: Boxes
+set: Transform.Position.X = -4
+add: Inventory
+set: Inventory.Items = Box
+editorset: Inventory.Items:count:1 = 8
+add: ConveyorPort
+set: ConveyorPort.Kind = Out
+deselect
+create: Empty
+rename: Crates
+set: Transform.Position = 0, 4, 0
+add: Inventory
+set: Inventory.Items = Crate
+editorset: Inventory.Items:count:1 = 8
+add: ConveyorPort
+set: ConveyorPort.Kind = Out
+explain: component:ConveyorPort | Conveyor Port | Crates go onto the top of the chute, boxes onto the start of the belt.
+deselect
+create: Empty
+rename: Bin
+set: Transform.Position.X = 4
+add: ConveyorPort
+explain: component:ConveyorPort | Conveyor Port | The bin at the belt's end takes everything.
+
+chapter: Play | Slow down the chute, fast along the belt
+play
+wait: 4
+say: Boxes race along the belt while crates creep down the chute, then speed up the moment they drop onto the belt, slotting in between the boxes.
+wait: 10
+expectvalue: Line.Conveyor.Count = 0
+say: Everything reached the bin. From a script, SetRunSpeed sets a whole run's speed at once, and an Out port's Withdraw takes back an item it hasn't put on the belt yet.
+stop

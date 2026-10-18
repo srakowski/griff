@@ -52,6 +52,10 @@ public sealed partial class Conveyor
     [NotState("worked out from the belts")]
     private bool _hasLoops;
 
+    // How far each path carries an item in a fixed step: its cell's speed's worth, worked out as a step begins.
+    [NotState("worked out from the speeds as a step begins")]
+    private float[] _nodeStep = [];
+
     // Each path's loop (paths that lead round to each other), -1 for none; how many items each loop holds packed a spacing
     // apart, and (within a fixed step) how many it holds now. A loop takes no more in than that, or it couldn't go round.
     [NotState("worked out from the belts")]
@@ -555,11 +559,8 @@ public sealed partial class Conveyor
         }
     }
 
-    private void TickCarried(float seconds, GridCells grid)
+    private void TickCarried(GridCells grid)
     {
-        var step = Math.Min(Speed * seconds, 1f);
-        if (!(step > 0))
-            step = 0;
         _tick++;
 
         // A loop moves trusting the items it comes back round to move on as far as they can; where that turns out wrong,
@@ -573,7 +574,7 @@ public sealed partial class Conveyor
 
         while (true)
         {
-            MoveCarried(step, loops);
+            MoveCarried(loops);
             if (!loops || !Distrust())
                 break;
             RestoreCarried();
@@ -584,8 +585,8 @@ public sealed partial class Conveyor
     }
 
     // Every path, ends first, moves each of its items on as far as a step takes it, up to the spacing behind the one ahead
-    // and, for the one furthest on, onto the path its way on leads into.
-    private void MoveCarried(float step, bool loops)
+    // and, for the one furthest on, onto the path its way on leads into (going on at that path's speed once it's there).
+    private void MoveCarried(bool loops)
     {
         var spacing = _spacing;
         Array.Clear(_loopHeld);
@@ -600,6 +601,7 @@ public sealed partial class Conveyor
             var items = _carried[k];
             var outs = _nodeOuts[k];
             var split = IsSplit(k);
+            var step = _nodeStep[k];
             var j = 0;
             while (j < items.Count)
             {
@@ -638,16 +640,20 @@ public sealed partial class Conveyor
                         {
                             var tail = ahead[^1];
                             var trusted = loops && (_trust[k] >> o & 1) != 0 && tail.Moved != _tick;
-                            limit = Math.Min(limit, 1 + tail.At + (trusted ? step : 0) - spacing);
+                            limit = Math.Min(limit, 1 + tail.At + (trusted ? _nodeStep[target] : 0) - spacing);
                         }
 
-                        if (!MayEnter(target, k, step) || LoopShut(target, k))
+                        if (!MayEnter(target, k) || LoopShut(target, k))
                             limit = Math.Min(limit, 1);
                         limit = Math.Min(limit, 1 + EntryCap(target));
                     }
                 }
 
-                var now = Math.Max(was, Math.Min(was + step, limit));
+                var reach = was + step;
+                // Past the edge into a path of another speed, the rest of the step goes at that speed.
+                if (reach > 1 && target >= 0 && _nodeStep[target] != step)
+                    reach = 1 + (reach - 1) * _nodeStep[target] / step;
+                var now = Math.Max(was, Math.Min(reach, limit));
                 (carried.Still, carried.Moved) = (now <= was, _tick);
                 if (now > 1 && target >= 0)
                 {
@@ -705,7 +711,7 @@ public sealed partial class Conveyor
 
     // Whether path `from`'s item comes into `to` now: where two paths merge into it, the one it took from last waits while
     // another has one at its edge about to come in, so they take turns.
-    private bool MayEnter(int to, int from, float step)
+    private bool MayEnter(int to, int from)
     {
         var feeders = _nodeFeeders[to];
         if (feeders.Length < 2 || _pathLastIn[to] != Array.IndexOf(feeders, from) + 1)
@@ -715,7 +721,7 @@ public sealed partial class Conveyor
             if (other == from || _carried[other].Count == 0)
                 continue;
             var front = _carried[other][0];
-            if (front.At >= 1 - step - Near && Heads(other, front) == to && !LoopShut(to, other))
+            if (front.At >= 1 - _nodeStep[other] - Near && Heads(other, front) == to && !LoopShut(to, other))
                 return false;
         }
 

@@ -263,6 +263,38 @@ public class ConveyorTests
         Assert.Empty(output.Waiting);
     }
 
+    [Fact]
+    public void An_out_port_gives_back_an_item_it_was_handed_before_it_is_on_a_belt()
+    {
+        var (game, scene, belts) = Factory();
+        var output = Port(scene, "Out", 2, 2, ConveyorPortKind.Out).GetComponent<ConveyorPort>()!;
+        var sent = new List<string>();
+        output.Sent += (_, item) => sent.Add(item);
+        output.Holds = 6;
+        foreach (var item in new[] { "Deck 1", "Deck 2", "Deck 3" })
+            Assert.True(output.Give(item));
+
+        // No belt to put them on: Deck 2 goes back to the tray, and never onto a belt.
+        RunFor(game, 0.5);
+        Assert.True(output.Withdraw("Deck 2"));
+        Assert.Equal(["Deck 1", "Deck 3"], output.Waiting);
+        Assert.False(output.Withdraw("Deck 2"));
+        belts.LayPath([(2, 2), (8, 2)]);
+        RunFor(game, 3);
+        Assert.Equal(["Deck 1", "Deck 3"], sent);
+        Assert.Empty(output.Waiting);
+
+        // By its first word it takes back the one handed it last; Clear takes back the rest, first first.
+        foreach (var item in new[] { "Box 1", "Deck 4", "Box 2", "Report" })
+            output.Give(item);
+        Assert.True(output.Withdraw("box"));
+        Assert.Equal(["Box 1", "Deck 4", "Report"], output.Waiting);
+        Assert.Equal(["Box 1", "Deck 4", "Report"], output.Clear());
+        Assert.Empty(output.Waiting);
+        RunFor(game, 6);
+        Assert.Equal(["Deck 1", "Deck 3"], sent);
+    }
+
     // A line with a merge, a splitter and ports, fed and emptied with no code, so only game time moves it.
     private static Game Plant(float scale, float fastForward)
     {

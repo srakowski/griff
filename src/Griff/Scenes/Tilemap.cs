@@ -420,6 +420,14 @@ public sealed partial class Tilemap : Component, ISortsInParts
     [DoNotSerialize]
     public float? BeltTravel { get; set; }
 
+    /// <summary>
+    /// How far the belts on cells of their own speed have moved, by cell, as <see cref="BeltTravel"/> (which the rest
+    /// step with). Set by the conveyor; null while all its cells go at one speed.
+    /// </summary>
+    [DoNotSerialize]
+    [field: NotState("set by the conveyor each step")]
+    public IReadOnlyDictionary<(int X, int Y), float>? BeltTravels { get; set; }
+
     /// <summary>The collision layer of the map's tiles, like <see cref="Collider.Layer"/>. Empty is "Default".</summary>
     [Names(NameKind.Layer, Defines = true)]
     public string? Layer { get; set; }
@@ -958,14 +966,16 @@ public sealed partial class Tilemap : Component, ISortsInParts
     /// The tile to draw for a cell painted with <paramref name="tile"/> at <see cref="AnimationTime"/>: itself, or the
     /// frame its <see cref="AnimatedTiles"/> run has reached.
     /// </summary>
-    public int ShownTile(int tile)
+    public int ShownTile(int tile) => ShownTile(tile, BeltTravel);
+
+    private int ShownTile(int tile, float? beltTravel)
     {
         foreach (var animation in BaseMap._animations)
         {
             if (tile < animation.First || tile > animation.Last)
                 continue;
             var length = animation.Last - animation.First + 1;
-            var step = BeltTravel is { } travel
+            var step = beltTravel is { } travel
                 ? (long)MathF.Floor(Math.Clamp(travel, 0, 1) * length) % length
                 : (long)MathF.Floor(Math.Max(0, AnimationTime) * animation.FramesPerSecond);
             return animation.First + (int)((tile - animation.First + step) % length);
@@ -988,7 +998,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
             tile = groups[group] + mask;
         }
 
-        return ShownTile(tile);
+        return BeltTravels is { } own && own.TryGetValue((x, y), out var travel) ? ShownTile(tile, travel) : ShownTile(tile);
 
         bool Joins(int cx, int cy) => AutoGroupOf(groups, GetTile(cx, cy)) == group;
     }

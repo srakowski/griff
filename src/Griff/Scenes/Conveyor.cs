@@ -29,6 +29,12 @@ public enum ConveyorCellKind
 /// </summary>
 public readonly record struct ConveyorCell(int X, int Y, int WayX, int WayY, ConveyorCellKind Kind)
 {
+    /// <summary>
+    /// Cells a second it carries items at, for a slow chute or a fast belt in the same line; 0 (the default) for the
+    /// conveyor's <see cref="Conveyor.Speed"/>.
+    /// </summary>
+    public float Speed { get; init; }
+
     /// <summary>Its column and row.</summary>
     public (int X, int Y) Cell => (X, Y);
 
@@ -41,8 +47,9 @@ public readonly record struct ConveyorCell(int X, int Y, int WayX, int WayY, Con
 
 /// <summary>
 /// Belts on a grid that carry items: a factory's lines from machine to machine. Each cell of <see cref="Belts"/> points
-/// one way and holds one item at a time; items glide along at <see cref="Speed"/> cells a second while the cell ahead is
-/// free and wait when it isn't, so a full end backs the line up. With a <see cref="Spacing"/> items glide on smoothly
+/// one way and holds one item at a time; items glide along at <see cref="Speed"/> cells a second (or a cell's own speed,
+/// for a slow chute dropping onto a fast belt) while the cell ahead is free and wait when it isn't, so a full end backs
+/// the line up. With a <see cref="Spacing"/> items glide on smoothly
 /// several to a cell, each that far behind the one ahead, and bunch up into a pile at a full end. A belt that runs into
 /// another's side merges, the two taking turns; a <see cref="ConveyorCellKind.Split"/> cell hands items to the belts
 /// leading out of it in turn (by item, with <see cref="Filters"/>), and an <see cref="ConveyorCellKind.Under"/> cell lets
@@ -66,6 +73,7 @@ public readonly record struct ConveyorCell(int X, int Y, int WayX, int WayY, Con
 /// belts.ReachedEnd += (_, cell, item) => Log($"{item} waits at {cell}");
 /// belts.Spacing = 0.25f;                  // up to four items a cell, gliding a quarter cell apart
 /// belts.Filter(10, 4, "Deck");            // the splitter before (10, 4) sends decks that way, the rest elsewhere
+/// belts.SetRunSpeed(9, 6, 0.5f);          // the run through (9, 6) carries at half a cell a second: a chute
 /// </code></example>
 [Category("Gameplay")]
 [WorksWith(typeof(Tilemap), Note = "lies on its cells")]
@@ -113,6 +121,18 @@ public sealed partial class Conveyor : Component, IDrawable
     // for an item between cells' middles).
     private double _owed;
     private double _travel;
+
+    // With cells of their own speeds: the fixed steps the line has moved in (for drawing their belts moving), whether
+    // any cell has one, and how far each cell carries an item in a fixed step, worked out as a step begins.
+    private long _ranTicks;
+    [NotState("worked out from the belts")]
+    private bool _ownSpeeds;
+    [NotState("worked out from the speeds as a step begins")]
+    private float[] _cellStep = [];
+    [NotState("worked out from the speeds as a step begins")]
+    private float _tickLength;
+    [NotState("filled for the belt tiles as a step ends")]
+    private Dictionary<(int X, int Y), float>? _beltTravels;
     [NotState("put down as soon as the belts are laid")]
     private List<(float X, float Y, string Item)> _unplaced = [];
 
@@ -173,8 +193,10 @@ public sealed partial class Conveyor : Component, IDrawable
     /// <summary>
     /// Its cells, one a row: the column and row (counted as a tilemap's are, row 0 at the top), the way it carries
     /// (right, left, up or down) and, for one that isn't a plain belt, crossing or split, e.g. "4 2 right",
-    /// "5 2 right crossing", "9 2 down split". Lay them from a script with <see cref="Lay(int, int, int, int, ConveyorCellKind)"/>
-    /// and <see cref="LayPath"/>.
+    /// "5 2 right crossing", "9 2 down split". A number after the way is the cell's own speed in cells a second, for a
+    /// slow chute or a fast run in the same line: "4 2 right 0.5", "9 2 down split 3". Lay them from a script with
+    /// <see cref="Lay(int, int, int, int, ConveyorCellKind)"/> and <see cref="LayPath"/>, and set speeds with
+    /// <see cref="SetSpeed(int, int, float)"/> and <see cref="SetRunSpeed"/>.
     /// </summary>
     [PlainText("cells laid a row each, as a tilemap's rows are, and by scripts as the game runs")]
     public IReadOnlyList<string> Belts
@@ -193,7 +215,11 @@ public sealed partial class Conveyor : Component, IDrawable
         }
     }
 
-    /// <summary>Cells an item moves a second, up to one a step of the game.</summary>
+    /// <summary>
+    /// Cells an item moves a second, up to one a step of the game: every cell's but those with a speed of their own (a
+    /// number in its <see cref="Belts"/> row). An item crossing from a cell of one speed into another's changes speed at
+    /// the edge between them.
+    /// </summary>
     public float Speed { get; set; } = 2;
 
     /// <summary>
@@ -422,7 +448,7 @@ public sealed partial class Conveyor : Component, IDrawable
     /// <summary>
     /// Lays a cell at column <paramref name="x"/>, row <paramref name="y"/> carrying the way (<paramref name="wayX"/>,
     /// <paramref name="wayY"/>): (1, 0) right, (0, 1) up, (-1, 0) left, (0, -1) down. A cell already there is turned (an
-    /// item on it stays).
+    /// item on it stays, and its speed).
     /// </summary>
     public void Lay(int x, int y, int wayX, int wayY, ConveyorCellKind kind = ConveyorCellKind.Belt)
     {
@@ -431,7 +457,7 @@ public sealed partial class Conveyor : Component, IDrawable
         var cells = _belts.ToList();
         var cell = new ConveyorCell(x, y, wayX, wayY, kind);
         if (_at.TryGetValue((x, y), out var at))
-            cells[at] = cell;
+            cells[at] = cell with { Speed = cells[at].Speed };
         else
             cells.Add(cell);
         Relay(cells);
@@ -443,7 +469,8 @@ public sealed partial class Conveyor : Component, IDrawable
 
     /// <summary>
     /// Lays <paramref name="cells"/> all at once (each as <see cref="Lay(int, int, int, int, ConveyorCellKind)"/> does,
-    /// turning a cell already there): a line from a <see cref="LineTool"/>, gaps and all.
+    /// turning a cell already there, which keeps its speed unless the new one has one): a line from a
+    /// <see cref="LineTool"/>, gaps and all.
     /// </summary>
     public void Lay(IEnumerable<ConveyorCell> cells)
     {
@@ -455,7 +482,7 @@ public sealed partial class Conveyor : Component, IDrawable
             if (WayIndex(cell.WayX, cell.WayY) < 0)
                 throw new ArgumentException($"A belt carries right (1, 0), up (0, 1), left (-1, 0) or down (0, -1), not {cell.Way}.");
             if (places.TryGetValue(cell.Cell, out var at))
-                all[at] = cell;
+                all[at] = cell.Speed > 0 ? cell : cell with { Speed = all[at].Speed };
             else
             {
                 places[cell.Cell] = all.Count;
@@ -470,9 +497,12 @@ public sealed partial class Conveyor : Component, IDrawable
     /// Lays a belt through <paramref name="points"/>, each cell carrying on to the next: between two points that aren't
     /// next to each other it goes along the row first, then up or down the column, so the corners of a line are its points,
     /// e.g. <c>LayPath([(2, 4), (9, 4), (9, 8)])</c>. The last cell carries on the way the one before it does (or
-    /// <paramref name="lastWay"/>). Cells already there are turned to follow it.
+    /// <paramref name="lastWay"/>). Cells already there are turned to follow it. With a <paramref name="speed"/> every
+    /// cell of it carries at that many cells a second (a slow chute, a fast belt); 0 keeps their speeds, the conveyor's
+    /// <see cref="Speed"/> for new ones.
     /// </summary>
-    public void LayPath(IReadOnlyList<(int X, int Y)> points, ConveyorCellKind kind = ConveyorCellKind.Belt, (int X, int Y)? lastWay = null)
+    public void LayPath(IReadOnlyList<(int X, int Y)> points, ConveyorCellKind kind = ConveyorCellKind.Belt, (int X, int Y)? lastWay = null,
+        float speed = 0)
     {
         ArgumentNullException.ThrowIfNull(points);
         if (lastWay is { } given && WayIndex(given.X, given.Y) < 0)
@@ -504,9 +534,9 @@ public sealed partial class Conveyor : Component, IDrawable
                 way = (path[i + 1].X - path[i].X, path[i].Y - path[i + 1].Y);
             else if (lastWay is null && i == 0)
                 way = (1, 0);
-            var cell = new ConveyorCell(path[i].X, path[i].Y, way.X, way.Y, kind);
+            var cell = new ConveyorCell(path[i].X, path[i].Y, way.X, way.Y, kind) { Speed = speed };
             if (places.TryGetValue(path[i], out var at))
-                cells[at] = cell;
+                cells[at] = speed > 0 ? cell : cell with { Speed = cells[at].Speed };
             else
             {
                 places[path[i]] = cells.Count;
@@ -542,6 +572,69 @@ public sealed partial class Conveyor : Component, IDrawable
 
     /// <summary>The cell at column <paramref name="x"/>, row <paramref name="y"/>, or null if there's none.</summary>
     public ConveyorCell? CellAt(int x, int y) => _at.TryGetValue((x, y), out var at) ? _belts[at] : null;
+
+    /// <summary>
+    /// Cells a second the cell at column <paramref name="x"/>, row <paramref name="y"/> carries items at: its own speed,
+    /// else the conveyor's <see cref="Speed"/>; 0 if there's no cell there.
+    /// </summary>
+    public float SpeedAt(int x, int y) => _at.TryGetValue((x, y), out var at) ? _belts[at].Speed > 0 ? _belts[at].Speed : Speed : 0;
+
+    /// <summary>
+    /// Gives the cell at column <paramref name="x"/>, row <paramref name="y"/> a speed of its own, in cells a second (0
+    /// for the conveyor's <see cref="Speed"/> again): false if there's no cell there. An item on it goes on from where it is.
+    /// </summary>
+    public bool SetSpeed(int x, int y, float speed) => SetSpeed([(x, y)], speed) > 0;
+
+    /// <summary>Gives each of <paramref name="cells"/> a speed of its own (see <see cref="SetSpeed(int, int, float)"/>): returns how many there were.</summary>
+    public int SetSpeed(IEnumerable<(int X, int Y)> cells, float speed)
+    {
+        ArgumentNullException.ThrowIfNull(cells);
+        speed = float.IsFinite(speed) && speed > 0 ? speed : 0;
+        var all = _belts.ToList();
+        var set = 0;
+        foreach (var cell in cells)
+        {
+            if (!_at.TryGetValue(cell, out var at))
+                continue;
+            all[at] = all[at] with { Speed = speed };
+            set++;
+        }
+
+        if (set > 0)
+            Relay(all);
+        return set;
+    }
+
+    /// <summary>
+    /// Gives the run through the cell at column <paramref name="x"/>, row <paramref name="y"/> a speed of its own (see
+    /// <see cref="SetSpeed(int, int, float)"/>): the cells leading into it and on from it one to one, up to a splitter, a
+    /// merge, or a cell going at another speed than it does. Returns how many cells that was.
+    /// </summary>
+    public int SetRunSpeed(int x, int y, float speed) => SetSpeed(RunThrough(x, y), speed);
+
+    /// <summary>
+    /// The run through the cell at column <paramref name="x"/>, row <paramref name="y"/>, from its first cell to its last:
+    /// the cells leading into it and on from it one to one, up to a splitter, a merge, or a cell going at another speed.
+    /// </summary>
+    public IReadOnlyList<(int X, int Y)> RunThrough(int x, int y)
+    {
+        if (!_at.TryGetValue((x, y), out var start))
+            return [];
+        var speed = _belts[start].Speed;
+        var seen = new HashSet<int> { start };
+        var run = new List<int> { start };
+        bool Joins(int c) => _belts[c].Kind != ConveyorCellKind.Split && _belts[c].Speed == speed && seen.Add(c);
+        // Back while the one cell feeding it carries only into it, then on while it carries into one fed only by it.
+        for (var c = start; _feeders[c].Length == 1 && _outs[_feeders[c][0]].Length == 1 && Joins(_feeders[c][0]);)
+            run.Insert(0, c = _feeders[c][0]);
+        if (_belts[start].Kind != ConveyorCellKind.Split)
+        {
+            for (var c = start; _outs[c].Length == 1 && _feeders[_outs[c][0]].Length == 1 && Joins(_outs[c][0]);)
+                run.Add(c = _outs[c][0]);
+        }
+
+        return [.. run.Select(c => _belts[c].Cell)];
+    }
 
     /// <summary>True if a belt or splitter (not a crossing or an under) is at the cell: what stops a grid mover while it's <see cref="Solid"/>.</summary>
     public bool BlocksWalking((int X, int Y) cell) =>
@@ -695,12 +788,13 @@ public sealed partial class Conveyor : Component, IDrawable
         ticks = Math.Min(ticks, MostTicksPerStep);
         var grid = Grid;
         GatherPorts(ports, grid);
+        WorkOutSteps(tick);
         _givenRows = null;
         if (IsSpaced)
         {
             StartCarrying(grid);
             for (var t = 0; t < ticks; t++)
-                TickCarried(tick, grid);
+                TickCarried(grid);
             ItemsChanged();
         }
         else
@@ -712,17 +806,83 @@ public sealed partial class Conveyor : Component, IDrawable
             }
 
             for (var t = 0; t < ticks; t++)
-                Tick(tick, grid);
+                Tick(grid);
         }
 
-        // The belts move a step's worth with the items, a cell's worth kept, for their art.
+        // The belts move a step's worth with the items, a cell's worth kept, for their art; those of cells with their own
+        // speeds as far as that speed has taken them.
         var step = Math.Min(Speed * tick, 1f);
         if (step > 0)
             _travel = (_travel + (double)step * ticks) % 1;
+        _ranTicks += ticks;
         if (BeltTileMap() is { } belts)
+        {
             belts.BeltTravel = (float)_travel;
+            belts.BeltTravels = _ownSpeeds ? OwnTravels() : null;
+        }
+
         if (Entity?.Scene is { } scene)
             _movedIn = scene.Step;
+    }
+
+    // How far each cell carries an item in a fixed step of `tick` seconds: its own speed's worth, else Speed's, up to a
+    // cell; and each path's, with a Spacing (an under cell's tunnel as fast as the belt leading into it).
+    private void WorkOutSteps(float tick)
+    {
+        _tickLength = tick;
+        if (_cellStep.Length != _belts.Length)
+            _cellStep = new float[_belts.Length];
+        var step = StepOf(Speed, tick);
+        for (var i = 0; i < _belts.Length; i++)
+            _cellStep[i] = _belts[i].Speed > 0 ? StepOf(_belts[i].Speed, tick) : step;
+        if (_nodeStep.Length != _nodeCell.Length)
+            _nodeStep = new float[_nodeCell.Length];
+        for (var k = 0; k < _nodeStep.Length; k++)
+            _nodeStep[k] = k < _belts.Length ? _cellStep[k] : TunnelStep(k, step);
+    }
+
+    private static float StepOf(float speed, float tick)
+    {
+        var step = Math.Min(speed * tick, 1f);
+        return step > 0 ? step : 0;
+    }
+
+    // How far an under cell's tunnel carries in a fixed step: as far as the belt leading into it (through any tunnels
+    // before it), else the one it leads into, else `step`.
+    private float TunnelStep(int node, float step)
+    {
+        foreach (var links in (ReadOnlySpan<int[][]>)[_nodeFeeders, _nodeOuts])
+        {
+            var k = node;
+            for (var hops = 0; hops < _nodeCell.Length && k >= _belts.Length && links[k].Length > 0; hops++)
+                k = links[k][0];
+            if (k < _belts.Length)
+                return _cellStep[k];
+        }
+
+        return step;
+    }
+
+    // How far the belt on cell `i` has moved, a cell's worth kept, for its art.
+    private double TravelOf(int i)
+    {
+        if (!_ownSpeeds || _belts[i].Speed <= 0 || i >= _cellStep.Length)
+            return _travel;
+        return _ranTicks * (double)_cellStep[i] % 1;
+    }
+
+    // How far each cell with its own speed has moved, for Belt Tiles.
+    private Dictionary<(int X, int Y), float> OwnTravels()
+    {
+        _beltTravels ??= [];
+        _beltTravels.Clear();
+        for (var i = 0; i < _belts.Length; i++)
+        {
+            if (_belts[i].Speed > 0)
+                _beltTravels[_belts[i].Cell] = (float)TravelOf(i);
+        }
+
+        return _beltTravels;
     }
 
     // The tilemap BeltTiles names, found again only when the scene's entities or the name have changed.
@@ -741,12 +901,8 @@ public sealed partial class Conveyor : Component, IDrawable
 
     internal void RaiseReachedEnd((int X, int Y) cell, string item) => ReachedEnd?.Invoke(this, cell, item);
 
-    private void Tick(float seconds, GridCells grid)
+    private void Tick(GridCells grid)
     {
-        var step = Math.Min(Speed * seconds, 1f);
-        if (!(step > 0))
-            step = 0;
-
         // Every item goes on toward its cell's middle, and one there already past it, by as far as it would go if it can
         // move on; one that reaches it with nowhere to go is at an end.
         _arrivedAtEnds.Clear();
@@ -755,7 +911,7 @@ public sealed partial class Conveyor : Component, IDrawable
             if (_items[i] is null)
                 continue;
             var was = _left[i];
-            _left[i] -= step;
+            _left[i] = _ownSpeeds ? Glide(i, was) : was - _cellStep[i];
             if (was > Near && _left[i] <= Near && _outs[i].Length == 0)
                 _arrivedAtEnds.Add(i);
         }
@@ -799,6 +955,22 @@ public sealed partial class Conveyor : Component, IDrawable
             if (_left[i] <= Near)
                 _left[i] = 0;
         }
+    }
+
+    // How far the item on cell `i`, `left` from its middle, still has to go after a fixed step: while it's in the half of
+    // the cell it came from it goes at that cell's speed, then at its own.
+    private float Glide(int i, float left)
+    {
+        var own = _cellStep[i];
+        if (!(left > 0.5f) || _came[i] == 0)
+            return left - own;
+        var (wx, wy) = Ways[_came[i] - 1];
+        var behind = _at.TryGetValue((_belts[i].X - wx, _belts[i].Y + wy), out var back) ? _cellStep[back] : own;
+        var first = left - 0.5f;
+        if (behind == own || behind < first)
+            return left - behind;
+        // It crosses the edge in this step: the rest of the step at its own speed.
+        return 0.5f - own * (1 - first / behind);
     }
 
     // The item on cell `i`, at its middle, goes on if it can: a belt into the cell ahead, a splitter into the next of its
@@ -917,7 +1089,11 @@ public sealed partial class Conveyor : Component, IDrawable
     private void Shift(int from, int to)
     {
         var (dx, dy) = (_belts[to].X - _belts[from].X, _belts[from].Y - _belts[to].Y);
-        (_items[to], _left[to], _came[to], _from[to]) = (_items[from], 1 + Math.Min(_left[from], 0), (byte)(WayIndex(dx, dy) + 1), _from[from]);
+        var left = 1 + Math.Min(_left[from], 0);
+        // Gone past the edge into the cell ahead in the step, it went on at that cell's speed.
+        if (left < 0.5f && _cellStep[to] != _cellStep[from] && _cellStep[from] > 0)
+            left = 0.5f - (0.5f - left) * _cellStep[to] / _cellStep[from];
+        (_items[to], _left[to], _came[to], _from[to]) = (_items[from], left, (byte)(WayIndex(dx, dy) + 1), _from[from]);
         (_items[from], _left[from], _came[from]) = (null, 0, 0);
         ItemsChanged();
         var feeders = _feeders[to];
@@ -986,14 +1162,14 @@ public sealed partial class Conveyor : Component, IDrawable
             var crossing = drawing.Tint(this, Color.Lerp(BeltColor, Color.White, 0.25f));
             var under = drawing.Tint(this, Color.Lerp(BeltColor, Color.Black, 0.35f));
             var thick = drawing.LineWidth;
-            // Moving, two arrows a cell slide along as far as the items have gone, wrapping round the cell.
-            var moved = MovingArrows ? (float)(_travel % 0.5) : -1;
             for (var i = 0; i < _belts.Length; i++)
             {
                 var cell = _belts[i];
                 var center = grid.Center(cell.Cell);
                 if (!Seen(center))
                     continue;
+                // Moving, two arrows a cell slide along as far as the items have gone, wrapping round the cell.
+                var moved = MovingArrows ? (float)(TravelOf(i) % 0.5) : -1;
                 drawing.Quad(center, new Vector2(across, up) * 0.9f, cell.Kind is ConveyorCellKind.Crossing or ConveyorCellKind.Under ? crossing : belt);
                 var way = grid.InWorld(new Vector2(cell.WayX, cell.WayY));
                 if (cell.Kind == ConveyorCellKind.Under)
@@ -1095,8 +1271,10 @@ public sealed partial class Conveyor : Component, IDrawable
     {
         var at = new Dictionary<(int X, int Y), int>(cells.Count);
         var kept = new List<ConveyorCell>(cells.Count);
-        foreach (var cell in cells)
+        foreach (var laid in cells)
         {
+            // A speed that isn't a number of cells a second is the conveyor's.
+            var cell = float.IsFinite(laid.Speed) && laid.Speed > 0 ? laid : laid with { Speed = 0 };
             if (at.TryGetValue(cell.Cell, out var already))
                 kept[already] = cell;
             else
@@ -1120,8 +1298,10 @@ public sealed partial class Conveyor : Component, IDrawable
 
         var carried = KeepCarried();
         (_belts, _at, _items, _left, _came, _lastIn, _nextOut, _from) = ([.. kept], at, items, left, came, lastIn, nextOut, from);
+        _ownSpeeds = kept.Exists(c => c.Speed > 0);
         Link();
         LinkNodes();
+        WorkOutSteps(_tickLength);
         PutBackCarried(carried);
         PlaceUnplaced();
         _beltRows = null;
@@ -1249,16 +1429,18 @@ public sealed partial class Conveyor : Component, IDrawable
     {
         var way = WayIndex(cell.WayX, cell.WayY) switch { 0 => "right", 1 => "up", 2 => "left", _ => "down" };
         var row = string.Create(CultureInfo.InvariantCulture, $"{cell.X} {cell.Y} {way}");
-        return cell.Kind switch
+        row = cell.Kind switch
         {
             ConveyorCellKind.Crossing => row + " crossing",
             ConveyorCellKind.Split => row + " split",
             ConveyorCellKind.Under => row + " under",
             _ => row,
         };
+        return cell.Speed > 0 ? string.Create(CultureInfo.InvariantCulture, $"{row} {cell.Speed:R}") : row;
     }
 
-    // "4 2 right", "5 2 down crossing", "9 2 up split" (or >, <, ^ and v for the ways); null for a row that doesn't read.
+    // "4 2 right", "5 2 down crossing", "9 2 up split" (or >, <, ^ and v for the ways), each with its own speed after the
+    // way if it has one ("4 2 right 0.5", "9 2 up split 3"); null for a row that doesn't read.
     private static ConveyorCell? ReadCell(string? row)
     {
         var parts = (row ?? "").Split([' ', ',', '\t'], StringSplitOptions.RemoveEmptyEntries);
@@ -1275,14 +1457,25 @@ public sealed partial class Conveyor : Component, IDrawable
         };
         if (way is not { } w)
             return null;
-        var kind = parts.Length < 4 ? ConveyorCellKind.Belt : parts[3].ToLowerInvariant() switch
+        var (kind, speed) = (ConveyorCellKind.Belt, 0f);
+        foreach (var part in parts.AsSpan(3))
         {
-            "crossing" or "cross" => ConveyorCellKind.Crossing,
-            "split" or "splitter" => ConveyorCellKind.Split,
-            "under" or "tunnel" => ConveyorCellKind.Under,
-            _ => ConveyorCellKind.Belt,
-        };
-        return new ConveyorCell(x, y, w.X, w.Y, kind);
+            if (float.TryParse(part.TrimStart('@'), NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
+            {
+                speed = float.IsFinite(number) && number > 0 ? number : 0;
+                continue;
+            }
+
+            kind = part.ToLowerInvariant() switch
+            {
+                "crossing" or "cross" => ConveyorCellKind.Crossing,
+                "split" or "splitter" => ConveyorCellKind.Split,
+                "under" or "tunnel" => ConveyorCellKind.Under,
+                _ => kind,
+            };
+        }
+
+        return new ConveyorCell(x, y, w.X, w.Y, kind) { Speed = speed };
     }
 
     // "4 2 Deck": the cell, then the item (the rest of the row); "4.25 2 Deck" is a quarter cell right of its middle.
@@ -1373,7 +1566,10 @@ public sealed class ConveyorPort : Component
     /// </summary>
     public bool Blocked { get; internal set; }
 
-    /// <summary>What a script has handed an Out port with <see cref="Give"/> that isn't on the belt yet, first first.</summary>
+    /// <summary>
+    /// What a script has handed an Out port with <see cref="Give"/> that isn't on the belt yet, first first (<see cref="Withdraw"/>
+    /// takes one back).
+    /// </summary>
     public IReadOnlyList<string> Waiting => _toGive;
 
     /// <summary>True if an Out port with <see cref="Holds"/> has that many items waiting: its machine can stop making more until there's room.</summary>
@@ -1396,6 +1592,32 @@ public sealed class ConveyorPort : Component
             return false;
         _toGive.Add(item.Trim());
         return true;
+    }
+
+    /// <summary>
+    /// Takes back <paramref name="item"/> an Out port was handed with <see cref="Give"/> before it's on the belt (the one
+    /// handed it last, if several are waiting; its first word counts too: "Deck" takes back a "Deck 17"), to go back to
+    /// the machine's tray or onto a cart: false if none is waiting. It's never <see cref="Sent"/>.
+    /// </summary>
+    public bool Withdraw(string item)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(item);
+        var name = item.Trim();
+        var at = _toGive.FindLastIndex(w => string.Equals(w, name, StringComparison.OrdinalIgnoreCase));
+        if (at < 0)
+            at = _toGive.FindLastIndex(w => Conveyor.Lets(name, w));
+        if (at < 0)
+            return false;
+        _toGive.RemoveAt(at);
+        return true;
+    }
+
+    /// <summary>Takes back everything an Out port is <see cref="Waiting"/> to put on the belt: returns those items, first first.</summary>
+    public IReadOnlyList<string> Clear()
+    {
+        var items = _toGive.ToList();
+        _toGive.Clear();
+        return items;
     }
 
     /// <summary>True if <see cref="Items"/> lets it take or put <paramref name="item"/> (its first word counts too: "Deck" lets "Deck 17" by).</summary>

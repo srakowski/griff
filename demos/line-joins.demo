@@ -1,0 +1,56 @@
+title: Lines that join up
+intro: A line dragged from another's end carries it on, and one dragged into a line's side merges into it.
+project: Empty | Joins
+write: Tiles/lines.png | line-tool/lines.png
+
+# The floor and its line tiles, as in the Lines with corners demo.
+create: Tilemap
+set: Transform.Position = -4, 3, 0
+pickimage: Tilemap.Image = Tiles/lines.png
+set: Tilemap.Columns = 3
+set: Tilemap.Tint = #FFFFFF
+set: Tilemap.Solid = false
+look: 0, -0.5, 4.5
+click: tiles:Rectangle
+click: tiles:0
+scenedrag: -3.5, 2.5 > 3.5, -3.5
+expecttile: Tilemap 7, 6 = 0
+add: Line Tiles
+click: editor:LineTiles.StraightTile:tiles
+click: editor:LineTiles.StraightTile:tile:1
+click: editor:LineTiles.CornerTile:tiles
+click: editor:LineTiles.CornerTile:tile:2
+expectvalue: Tilemap.LineTiles.CornerTile = 2
+
+chapter: Carry a line on | Joins on the Line Tiles
+click: tiles:Line
+scenedrag: -2.5, 1.5 > 0.5, 1.5
+expecttile: Tilemap 4, 1 = 1
+say: A belt laid with the Line tool, running right. Dragged on from its end, each line used to go down on its own, so the old end stayed a straight piece.
+set: LineTiles.Joins = true
+expectvalue: Tilemap.LineTiles.Joins = true
+explain: field:LineTiles.Joins | Joins | With Joins ticked, a line dragged from another's end carries it on, and one ended on a line's side merges into it.
+scenedrag: 0.5, 1.5 > 0.5, -1.5
+expecttile: Tilemap 4, 1 = 2
+expecttile: Tilemap 4, 4 = 1
+explain: world:0, 2, 1, 1 | The old end | Now the old end turns to feed the new run: it's a corner, and the two are one line.
+
+chapter: Merge into a side | Ended on a line
+scenedrag: 3.5, 0.5 > 0.5, 0.5
+expecttile: Tilemap 4, 2 = 1
+expecttile: Tilemap 5, 2 = 1
+explain: world:0, 1, 4, 0 | Merged | Ended on the side of a line, the new line stops short of it: that cell stays as it was, pointing on down, and the cell before it points in. A Join Tile on the Line Tiles would show the joint.
+
+chapter: In the game | A Line Tool with Joins
+select: Main Camera
+add: Line Tool
+pick: LineTool.Tiles = Tilemap
+set: LineTool.Joins = true
+expectvalue: Main Camera.LineTool.Joins = true
+explain: component:LineTool | Line Tool | A Line Tool joins the same way with its own Joins ticked. On a conveyor, a line dragged out of a belt's side splits off it, that belt becoming a splitter.
+play
+gamedrag: 0.5, -1.5, 3.5, -1.5
+expecttile: Tilemap 4, 4 = 2
+expecttile: Tilemap 7, 4 = 1
+say: Dragged on from the end in the game, the old end turns the corner, and the line carries on to the right.
+stop

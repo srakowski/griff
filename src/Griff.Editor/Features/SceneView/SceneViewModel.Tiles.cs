@@ -304,14 +304,22 @@ public sealed partial class SceneViewModel
     /// layer of) it lays their straight piece, corners at the corner and their start and end pieces at the ends; without,
     /// the <see cref="BrushTile"/> pointing along the line. A single cell points the way the <see cref="BrushTurn"/> turns
     /// a tile drawn pointing right (Z turns it). <paramref name="erase"/> clears the line's cells instead. Like painting,
-    /// a line reaching past the left or top edge grows the grid that way. Returns the cells it laid, in order.
+    /// a line reaching past the left or top edge grows the grid that way. With <see cref="LineTiles.Joins"/> ticked it
+    /// joins the line onto those already painted (see <see cref="LineTiles.Join"/>): an old end it carries on, a side it
+    /// merges into or splits off. Returns the cells it laid, in order (joined, each saying how).
     /// </summary>
     public IReadOnlyList<LineCell> PaintLine(int fromX, int fromY, int toX, int toY, bool acrossFirst = true, bool erase = false)
     {
         var line = LineDrag.Path((fromX, fromY), (toX, toY), acrossFirst, (fromX, fromY) == (toX, toY) ? SingleWay : null);
+        if (!erase)
+            line = JoinLine(line);
         PaintLine(line, erase);
         return line;
     }
+
+    // A line joined onto the lines already on the tilemap being painted, if its Line Tiles join lines.
+    internal IReadOnlyList<LineCell> JoinLine(IReadOnlyList<LineCell> line) =>
+        PaintTarget is { } tilemap && LineTiles.For(tilemap) is { Joins: true } pieces ? pieces.Join(line, tilemap) : line;
 
     // The way a single cell of a line points: where the brush's turn takes a tile drawn pointing right.
     internal (int X, int Y) SingleWay => BrushTurn.Apply(Vector2.UnitX) is var way ? ((int)MathF.Round(way.X), (int)MathF.Round(way.Y)) : (1, 0);
@@ -325,12 +333,23 @@ public sealed partial class SceneViewModel
         document.History.Seal();
         using (document.History.BeginGroup(erase ? "Erase Line" : "Paint Line"))
         {
-            // Cells painted left of or above the grid grow it, moving the cells after them along.
+            // Cells painted left of or above the grid grow it, moving the cells after them along. The pieces of lines it
+            // joins (worked out first) change after it, and the cells it merges into or splits off aren't its own.
+            IReadOnlyList<(int X, int Y, int Tile, TileTurn Turn)> joined =
+                erase || LineTiles.For(tilemap) is not { } pieces ? [] : pieces.JoinedPieces(line, tilemap);
             var (shiftX, shiftY) = (0, 0);
-            for (var i = 0; i < line.Count; i++)
+            for (var i = 0; i < line.Count + joined.Count; i++)
             {
-                var (tile, turn) = erase ? (-1, TileTurn.None) : LineTile(tilemap, line, i);
-                var (x, y) = (line[i].X + shiftX, line[i].Y + shiftY);
+                int cx, cy, tile;
+                TileTurn turn;
+                if (i >= line.Count)
+                    (cx, cy, tile, turn) = joined[i - line.Count];
+                else if (line[i].OnOtherLine && !erase)
+                    continue;
+                else
+                    (cx, cy, (tile, turn)) = (line[i].X, line[i].Y, erase ? (-1, TileTurn.None) : LineTile(tilemap, line, i));
+
+                var (x, y) = (cx + shiftX, cy + shiftY);
                 if (tilemap.GetTile(x, y) == tile && tilemap.GetTurn(x, y) == turn)
                     continue;
                 var (tiles, turns, sx, sy) = tilemap.PaintedRect(x, y, x, y, tile, turn);

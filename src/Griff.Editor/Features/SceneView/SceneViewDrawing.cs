@@ -597,16 +597,19 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
 
         dc.Pop();
 
-        // A line being dragged out shows its tiles, faintly, turned as they'll go down: straight pieces and corners.
+        // A line being dragged out shows its tiles, faintly, turned as they'll go down: straight pieces and corners, and
+        // the pieces of the lines it joins as they'll become.
         if (!input.Erasing)
         {
             var world = tilemap.Entity!.Transform.WorldMatrix;
-            for (var i = 0; i < line.Count; i++)
+            var pieces = line.Select((cell, i) => (cell, i)).Where(c => !c.cell.OnOtherLine)
+                .Select(c => model.LineTile(tilemap, line, c.i) is var (tile, turn) ? (c.cell.X, c.cell.Y, tile, turn) : default)
+                .Concat(LineTiles.For(tilemap)?.JoinedPieces(line, tilemap) ?? []);
+            foreach (var (x, y, tile, turn) in pieces)
             {
-                var (tile, turn) = model.LineTile(tilemap, line, i);
                 if (TileImage(tilemap, tile) is not { } piece)
                     continue;
-                var (center, size) = tilemap.PictureOf(line[i].X, line[i].Y);
+                var (center, size) = tilemap.PictureOf(x, y);
                 var box = new Rect(viewport.ToScreen(Vector2.Transform(center - size / 2, world)), viewport.ToScreen(Vector2.Transform(center + size / 2, world)));
                 dc.PushOpacity(0.6);
                 DrawTurned(dc, piece, box, turn);

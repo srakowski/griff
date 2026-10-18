@@ -21,8 +21,46 @@ public readonly record struct LineCell(int X, int Y, int WayX, int WayY, int InX
     /// <summary>True where the line turns: it comes in one way and leaves another.</summary>
     public bool IsCorner => InX != WayX || InY != WayY;
 
+    /// <summary>How it joins a line already there (see <see cref="LineDrag.Join"/>): none for a line laid on its own.</summary>
+    public LineJoin Join { get; init; }
+
+    /// <summary>
+    /// True for a cell of a line already there that this one merges into or splits off: it isn't laid with the line (a
+    /// split's cell becomes a splitter, keeping its way).
+    /// </summary>
+    public bool OnOtherLine => (Join & (LineJoin.Merge | LineJoin.Split)) != 0;
+
     /// <summary>The cell as a <see cref="Conveyor"/>'s, carrying the way the line runs.</summary>
     public ConveyorCell ToConveyor(ConveyorCellKind kind = ConveyorCellKind.Belt) => new(X, Y, WayX, WayY, kind);
+}
+
+/// <summary>How a cell of a line joins a line already there (see <see cref="LineDrag.Join"/>).</summary>
+[Flags]
+public enum LineJoin
+{
+    /// <summary>It doesn't: a line laid on its own.</summary>
+    None = 0,
+
+    /// <summary>
+    /// The line's first cell, carrying on a line already there that runs into it (dragged from its end): it comes in the
+    /// way that line does, so it's laid as a straight piece or a corner, not a start, and a belt there keeps its kind.
+    /// </summary>
+    Continues = 1,
+
+    /// <summary>The line's last cell, running into a line already there: laid as a straight piece, not an end.</summary>
+    Feeds = 2,
+
+    /// <summary>
+    /// A cell of a line already there that the new line runs into (dragged onto its side, or its start): it stays as it
+    /// is, and the cell before it points into it, a merge.
+    /// </summary>
+    Merge = 4,
+
+    /// <summary>
+    /// A cell of a line already there that the new line leaves from the side (dragged out of its side): it keeps its way,
+    /// and on a <see cref="Conveyor"/> becomes a splitter handing items to both.
+    /// </summary>
+    Split = 8,
 }
 
 /// <summary>Which way a single cell of a line points: the way R turns it, clockwise.</summary>
@@ -159,6 +197,70 @@ public sealed class LineDrag
         return cells;
     }
 
+    /// <summary>
+    /// <paramref name="line"/> joined onto the lines already laid, whose ways <paramref name="wayAt"/> gives (null for a
+    /// cell with none): dragged from a line's end (or the cell it runs into) its first cell <see cref="LineJoin.Continues"/>
+    /// it, coming in the way that line does; dragged out of a line's side, that cell <see cref="LineJoin.Split"/>s, keeping
+    /// its way; ended on a line, that cell is a <see cref="LineJoin.Merge"/> (it keeps its way, and the cell before it
+    /// points into it); and a last cell pointing into a line <see cref="LineJoin.Feeds"/> it. Cells it crosses in between are
+    /// laid over and turned, as without joins.
+    /// </summary>
+    public static IReadOnlyList<LineCell> Join(IReadOnlyList<LineCell> line, Func<(int X, int Y), (int X, int Y)?> wayAt)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        ArgumentNullException.ThrowIfNull(wayAt);
+        if (line.Count == 0)
+            return line;
+        var cells = line.ToArray();
+        var own = cells.Select(c => c.Cell).ToHashSet();
+
+        // A way already there, not counting the cells this line lays over.
+        (int X, int Y)? There((int X, int Y) cell) => own.Contains(cell) ? null : wayAt(cell);
+
+        // The first cell: a line's end it carries on, or a line's side it splits off.
+        var first = cells[0];
+        if (wayAt(first.Cell) is { } was)
+        {
+            var ahead = Next(first.Cell, was);
+            var leavesSide = cells.Length > 1 && first.WayX * was.X + first.WayY * was.Y == 0;
+            var fed = Feeder(first.Cell, was);
+            if (leavesSide && There(ahead) is { } on && Next(ahead, on) != first.Cell)
+                cells[0] = first with { WayX = was.X, WayY = was.Y, InX = (fed ?? was).X, InY = (fed ?? was).Y, Join = LineJoin.Split };
+            else if (fed is { } feeder)
+                cells[0] = first with { InX = feeder.X, InY = feeder.Y, Join = LineJoin.Continues };
+        }
+        else if (Feeder(first.Cell, first.Way) is { } feeding)
+            cells[0] = first with { InX = feeding.X, InY = feeding.Y, Join = LineJoin.Continues };
+
+        // The last cell: on a line it merges into (unless that line runs straight back at it), or pointing into one.
+        var n = cells.Length - 1;
+        var last = cells[n];
+        if (n > 0 && wayAt(last.Cell) is { } into && (into.X, into.Y) != (-cells[n - 1].WayX, -cells[n - 1].WayY) && !cells[n - 1].OnOtherLine)
+        {
+            cells[n] = last with { WayX = into.X, WayY = into.Y, InX = cells[n - 1].WayX, InY = cells[n - 1].WayY, Join = LineJoin.Merge };
+            cells[n - 1] = cells[n - 1] with { Join = cells[n - 1].Join | LineJoin.Feeds };
+        }
+        else if (!last.OnOtherLine && There(Next(last.Cell, last.Way)) is { } onto && Next(Next(last.Cell, last.Way), onto) != last.Cell)
+            cells[n] = last with { Join = last.Join | LineJoin.Feeds };
+
+        return cells;
+
+        // The way of the cell already there that runs into this one, the one behind it (going `way`) first.
+        (int X, int Y)? Feeder((int X, int Y) cell, (int X, int Y) way)
+        {
+            foreach (var from in (ReadOnlySpan<(int X, int Y)>)[way, (way.Y, -way.X), (-way.Y, way.X)])
+            {
+                var behind = (cell.X - from.X, cell.Y + from.Y);
+                if (There(behind) == from)
+                    return from;
+            }
+
+            return null;
+        }
+
+        static (int X, int Y) Next((int X, int Y) cell, (int X, int Y) way) => (cell.X + way.X, cell.Y - way.Y);
+    }
+
     /// <summary>The way (x right, y up) a <see cref="LineWay"/> points.</summary>
     public static (int X, int Y) StepOf(LineWay way) => way switch
     {
@@ -211,9 +313,32 @@ public sealed class LineTiles : Component
     public int EndTile { get; set; } = -1;
 
     /// <summary>
+    /// The piece for a straight cell another line runs into from the side (a merge), drawn pointing right with the other
+    /// line coming in from the bottom. None leaves the straight piece there.
+    /// </summary>
+    [TileNumbers]
+    public int JoinTile { get; set; } = -1;
+
+    /// <summary>
+    /// The piece for a straight cell another line leaves from the side (a split), drawn pointing right with the other line
+    /// going out at the bottom. None leaves the straight piece there.
+    /// </summary>
+    [TileNumbers]
+    public int SplitTile { get; set; } = -1;
+
+    /// <summary>
+    /// True for the editor's Line tool to join a line onto these pieces already on the map, as a <see cref="LineTool"/>
+    /// with <see cref="LineTool.Joins"/> does: dragged from a line's end it carries it on (the old end becomes a straight
+    /// piece or a corner), ended on a line's side it merges in (that cell stays, with the <see cref="JoinTile"/>), and
+    /// dragged out of a line's side it splits off (that cell stays, with the <see cref="SplitTile"/>). Unticked, a line is
+    /// painted on its own, over what's there.
+    /// </summary>
+    public bool Joins { get; set; }
+
+    /// <summary>
     /// The tile, and its turn, for cell <paramref name="index"/> of <paramref name="line"/>: the corner at a corner, the
-    /// start and end pieces at its ends (a line of more than one cell), else the straight piece; -1 for the tile if it has
-    /// none.
+    /// start and end pieces at its ends (a line of more than one cell, unless that end joins a line already there), else
+    /// the straight piece; -1 for the tile if it has none.
     /// </summary>
     public (int Tile, TileTurn Turn) TileFor(IReadOnlyList<LineCell> line, int index)
     {
@@ -221,30 +346,137 @@ public sealed class LineTiles : Component
         var cell = line[index];
         if (cell.IsCorner && CornerTile >= 0)
             return (CornerTile, TileTurns.Corner(cell.In, cell.Way));
-        if (line.Count > 1 && index == 0 && StartTile >= 0)
+        if (line.Count > 1 && index == 0 && StartTile >= 0 && (cell.Join & LineJoin.Continues) == 0)
             return (StartTile, TileTurns.Pointing(cell.WayX, cell.WayY));
-        if (line.Count > 1 && index == line.Count - 1 && EndTile >= 0)
+        if (line.Count > 1 && index == line.Count - 1 && EndTile >= 0 && (cell.Join & LineJoin.Feeds) == 0)
             return (EndTile, TileTurns.Pointing(cell.InX, cell.InY));
         return (StraightTile, TileTurns.Pointing(cell.WayX, cell.WayY));
     }
 
     /// <summary>
     /// Lays <paramref name="line"/>'s cells that fit on its tilemap (cells of this map), each with its tile turned to
-    /// follow the line. Cells left of or above the grid are skipped; the grid grows right and down to fit.
+    /// follow the line. Cells left of or above the grid are skipped; the grid grows right and down to fit. A line joined
+    /// onto those already there (see <see cref="Join"/>) leaves the cells it merges into or splits off, and turns the
+    /// pieces it joins into those of a joined line (see <see cref="JoinedPieces"/>).
     /// </summary>
     public void Lay(IReadOnlyList<LineCell> line)
     {
         ArgumentNullException.ThrowIfNull(line);
         if (Entity?.GetComponent<Tilemap>() is not { } map)
             return;
+        var joined = JoinedPieces(line, map);
         for (var i = 0; i < line.Count; i++)
         {
             var cell = line[i];
-            if (!cell.Fits || cell.X < 0 || cell.Y < 0 || TileFor(line, i) is not (>= 0 and var tile, var turn))
+            if (!cell.Fits || cell.OnOtherLine || cell.X < 0 || cell.Y < 0 || TileFor(line, i) is not (>= 0 and var tile, var turn))
                 continue;
             map.SetTile(cell.X, cell.Y, tile, turn);
         }
+
+        foreach (var (x, y, tile, turn) in joined)
+            map.SetTile(x, y, tile, turn);
     }
+
+    /// <summary>
+    /// <paramref name="line"/> joined onto the lines of these pieces already on <paramref name="map"/> (its own tilemap if
+    /// not given), as <see cref="LineDrag.Join"/> joins it, reading each line's way from its pieces.
+    /// </summary>
+    public IReadOnlyList<LineCell> Join(IReadOnlyList<LineCell> line, Tilemap? map = null)
+    {
+        map ??= Entity?.GetComponent<Tilemap>();
+        return map is null ? line : LineDrag.Join(line, c => WayOf(c.X, c.Y, map));
+    }
+
+    /// <summary>
+    /// The way the line runs through the piece in cell (<paramref name="x"/>, <paramref name="y"/>) of
+    /// <paramref name="map"/> (its own tilemap if not given), x right and y up, or null if it holds none of these pieces.
+    /// </summary>
+    public (int X, int Y)? WayOf(int x, int y, Tilemap? map = null) =>
+        PieceAt(map ?? Entity?.GetComponent<Tilemap>(), x, y) is var (piece, turn) ? Way(turn.Apply(piece == Piece.Corner ? -Vector2.UnitY : Vector2.UnitX)) : null;
+
+    /// <summary>
+    /// The pieces already on <paramref name="map"/> (its own tilemap if not given) that change when the joined
+    /// <paramref name="line"/> is laid, as they'll be: an old end it carries on becomes a straight piece, the start of a
+    /// line it runs into a straight piece or a corner, a straight piece it merges into its <see cref="JoinTile"/> and one
+    /// it splits off its <see cref="SplitTile"/>. Worked out before the line is laid.
+    /// </summary>
+    public IReadOnlyList<(int X, int Y, int Tile, TileTurn Turn)> JoinedPieces(IReadOnlyList<LineCell> line, Tilemap? map = null)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        map ??= Entity?.GetComponent<Tilemap>();
+        var pieces = new List<(int X, int Y, int Tile, TileTurn Turn)>();
+        if (map is null)
+            return pieces;
+        for (var i = 0; i < line.Count; i++)
+        {
+            var cell = line[i];
+            if (!cell.Fits)
+                continue;
+
+            // The old end of the line it carries on is an end no more.
+            if (i == 0 && (cell.Join & LineJoin.Continues) != 0 && (cell.X - cell.InX, cell.Y + cell.InY) is var (bx, by) &&
+                PieceAt(map, bx, by) is (Piece.End, var endTurn) && StraightTile >= 0)
+                pieces.Add((bx, by, StraightTile, endTurn));
+
+            // The piece it runs into: a start turns to take it in, a straight piece shows it joining at the side.
+            if ((cell.Join & LineJoin.Feeds) != 0 && (cell.X + cell.WayX, cell.Y - cell.WayY) is var (tx, ty) &&
+                PieceAt(map, tx, ty) is var (piece, turn) && WayOf(tx, ty, map) is { } way)
+            {
+                var side = cell.WayX * way.X + cell.WayY * way.Y == 0;
+                if (piece == Piece.Start && side && CornerTile >= 0)
+                    pieces.Add((tx, ty, CornerTile, TileTurns.Corner(cell.Way, way)));
+                else if (piece == Piece.Start && StraightTile >= 0)
+                    pieces.Add((tx, ty, StraightTile, turn));
+                else if (piece == Piece.Straight && side && JoinTile >= 0)
+                    pieces.Add((tx, ty, JoinTile, Turning(way, cell.Way)));
+            }
+
+            // A straight piece it leaves from the side.
+            if ((cell.Join & LineJoin.Split) != 0 && i + 1 < line.Count && SplitTile >= 0 && PieceAt(map, cell.X, cell.Y) is (Piece.Straight, _))
+            {
+                var outWay = (line[i + 1].X - cell.X, cell.Y - line[i + 1].Y);
+                pieces.Add((cell.X, cell.Y, SplitTile, Turning(cell.Way, (-outWay.Item1, -outWay.Item2))));
+            }
+        }
+
+        return pieces;
+    }
+
+    // The pieces of a line, as a cell's tile says which it is.
+    private enum Piece
+    {
+        Straight,
+        Corner,
+        Start,
+        End,
+        Join,
+        Split,
+    }
+
+    private (Piece Piece, TileTurn Turn)? PieceAt(Tilemap? map, int x, int y)
+    {
+        if (map is null || map.GetTile(x, y) is not (>= 0 and var tile))
+            return null;
+        Piece? piece = tile == StraightTile ? Piece.Straight : tile == CornerTile ? Piece.Corner : tile == StartTile ? Piece.Start :
+            tile == EndTile ? Piece.End : tile == JoinTile ? Piece.Join : tile == SplitTile ? Piece.Split : null;
+        return piece is { } p ? (p, map.GetTurn(x, y)) : null;
+    }
+
+    // The turn that takes a piece drawn pointing right, with its other line at the bottom moving up, to point `way` with
+    // the other line moving `up`.
+    private static TileTurn Turning((int X, int Y) way, (int X, int Y) up)
+    {
+        for (var turn = 0; turn < 8; turn++)
+        {
+            var t = (TileTurn)turn;
+            if (Way(t.Apply(Vector2.UnitX)) == way && Way(t.Apply(Vector2.UnitY)) == up)
+                return t;
+        }
+
+        return TileTurns.Pointing(way.X, way.Y);
+    }
+
+    private static (int X, int Y) Way(Vector2 v) => ((int)MathF.Round(v.X), (int)MathF.Round(v.Y));
 
     /// <summary>The Line Tiles that go with <paramref name="map"/>: on its own entity, or on the map it's a layer of.</summary>
     public static LineTiles? For(Tilemap? map) =>
@@ -258,7 +490,9 @@ public sealed class LineTiles : Component
 /// <see cref="BlockedColor"/> where it can't. Letting go lays the cells that fit on a <see cref="Conveyor"/> as belts
 /// and on a <see cref="Tiles"/> map with its <see cref="LineTiles"/>, and raises <see cref="Placed"/>, so a script can
 /// lay something else (build orders, walls) or charge for it. R (the Rotate action) turns a single cell, or swaps the
-/// corner while dragging; a right-click (Command) or untick <see cref="Controllable"/> drops the line.
+/// corner while dragging; a right-click (Command) or untick <see cref="Controllable"/> drops the line. With
+/// <see cref="Joins"/>, a line dragged from another's end carries it on, and one dragged into or out of a line's side
+/// merges or splits.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -325,6 +559,15 @@ public sealed class LineTool : Component
     /// <summary>Which way a single cell points (a click without dragging). The Rotate action turns it a quarter clockwise.</summary>
     public LineWay Way { get; set; }
 
+    /// <summary>
+    /// True to join a line onto those already laid (its <see cref="Conveyor"/>'s belts, else its <see cref="Tiles"/>' pieces):
+    /// dragged from a line's end it carries that line on (the old end turns to feed it, keeping its kind and speed, and
+    /// its tile becomes a straight piece or a corner); dragged out of a line's side it splits off it (that belt becomes a
+    /// splitter); and ended on a line's side it merges in (that belt stays as it is, the cell before it pointing in). The
+    /// ghost shows the join. Unticked, each line is laid on its own, turning the belts it's laid over.
+    /// </summary>
+    public bool Joins { get; set; }
+
     /// <summary>The input action held to drag a line, e.g. "Select" (the left mouse button).</summary>
     [Names(NameKind.Action)]
     public string? Action { get; set; } = "Select";
@@ -389,8 +632,8 @@ public sealed class LineTool : Component
     public event Action<LineTool, IReadOnlyList<LineCell>>? Dragging;
 
     /// <summary>
-    /// Raised when a line is let go, after its belts and tiles are laid, with the cells that fit (the ones laid). Not raised
-    /// when none fit.
+    /// Raised when a line is let go, after its belts and tiles are laid, with the cells that fit (the ones laid: with
+    /// <see cref="Joins"/>, not a belt it merges into, which stays as it is). Not raised when none fit.
     /// </summary>
     public event Action<LineTool, IReadOnlyList<LineCell>>? Placed;
 
@@ -440,11 +683,33 @@ public sealed class LineTool : Component
     /// the column with <paramref name="acrossFirst"/> false), each cell saying whether it <see cref="LineCell.Fits"/>.
     /// </summary>
     public IReadOnlyList<LineCell> Line((int X, int Y) from, (int X, int Y) to, bool acrossFirst = true) =>
-        Check(LineDrag.Path(from, to, acrossFirst, from == to ? LineDrag.StepOf(Way) : null));
+        Check(Join(LineDrag.Path(from, to, acrossFirst, from == to ? LineDrag.StepOf(Way) : null)));
+
+    /// <summary>
+    /// <paramref name="line"/> joined onto the lines already laid, as <see cref="Joins"/> says (see
+    /// <see cref="LineDrag.Join"/>): its <see cref="Conveyor"/>'s belts, else its <see cref="Tiles"/>' pieces. Without
+    /// <see cref="Joins"/>, the line as it is.
+    /// </summary>
+    public IReadOnlyList<LineCell> Join(IReadOnlyList<LineCell> line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        if (!Joins)
+            return line;
+        if (FindConveyor() is { } conveyor)
+            return LineDrag.Join(line, c => conveyor.CellAt(c.X, c.Y)?.Way);
+        if (FindTiles() is { Entity: { } tilesEntity } tiles && tilesEntity.GetComponent<Tilemap>() is { } tilesMap)
+        {
+            var (grid, theirs) = (Grid, GridCells.Of(tilesMap));
+            return LineDrag.Join(line, c => theirs.CellAt(grid.Center(c)) is var (x, y) ? tiles.WayOf(x, y, tilesMap) : null);
+        }
+
+        return line;
+    }
 
     /// <summary>
     /// Lays the cells of <paramref name="line"/> that fit, as letting go does: belts on its <see cref="Conveyor"/> and
-    /// tiles on its <see cref="Tiles"/> map. It doesn't raise <see cref="Placed"/>.
+    /// tiles on its <see cref="Tiles"/> map. It doesn't raise <see cref="Placed"/>. A joined line (see <see cref="Join"/>)
+    /// leaves a cell it merges into, turns one it splits off into a splitter and keeps the kind of the end it carries on.
     /// </summary>
     public void Lay(IReadOnlyList<LineCell> line)
     {
@@ -453,7 +718,14 @@ public sealed class LineTool : Component
         if (fits.Count == 0)
             return;
         if (FindConveyor() is { } conveyor)
-            conveyor.Lay(fits.Select(c => c.ToConveyor(BeltKind)));
+        {
+            conveyor.Lay(fits.Where(c => (c.Join & LineJoin.Merge) == 0).Select(Belt));
+
+            // A split's belt becomes a splitter, keeping its way; the end a line carries on keeps its kind.
+            ConveyorCell Belt(LineCell c) => conveyor.CellAt(c.X, c.Y) is not { } was ? c.ToConveyor(BeltKind)
+                : (c.Join & LineJoin.Split) != 0 ? was with { Kind = ConveyorCellKind.Split }
+                : c.ToConveyor((c.Join & LineJoin.Continues) != 0 ? was.Kind : BeltKind);
+        }
         if (FindTiles() is { Entity: { } tilesEntity } tiles && tilesEntity.GetComponent<Tilemap>() is { } tilesMap)
         {
             // Cells of its grid, as cells of the tiles' map (the same, unless that map lies elsewhere).

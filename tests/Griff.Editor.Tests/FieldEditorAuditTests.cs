@@ -139,6 +139,8 @@ public sealed partial class FieldEditorAuditTests
         LineTiles.CornerTile: TileNumbers
         LineTiles.StartTile: TileNumbers
         LineTiles.EndTile: TileNumbers
+        LineTiles.JoinTile: TileNumbers
+        LineTiles.SplitTile: TileNumbers
         Minigame.Scene: Names:Scene
         Minigame.WonMessage: Names:Message
         Minigame.LostMessage: Names:Message

@@ -63,7 +63,7 @@ internal sealed partial class SelectionSystem
         {
             if (tool.Hover is { } cell)
                 drag.MoveTo(cell);
-            tool.Cells = tool.Check(drag.Cells(LineDrag.StepOf(tool.Way)));
+            tool.Cells = tool.Check(tool.Join(drag.Cells(LineDrag.StepOf(tool.Way))));
             if (!before.SequenceEqual(tool.Cells))
                 tool.RaiseDragging();
 
@@ -71,7 +71,7 @@ internal sealed partial class SelectionSystem
             if (action is null || !input.IsDown(action))
             {
                 tool.Drag = null;
-                var laid = tool.Cells.Where(c => c.Fits).ToList();
+                var laid = tool.Cells.Where(c => c.Fits && (c.Join & LineJoin.Merge) == 0).ToList();
                 if (laid.Count > 0)
                 {
                     tool.Lay(laid);
@@ -110,7 +110,8 @@ internal sealed partial class SelectionSystem
             {
                 var color = cell.Fits ? tool.GhostColor : tool.BlockedColor;
                 var center = grid.Center(cell.Cell);
-                draws.Add(FrameDrawing.Quad(center, size * 0.92f, color));
+                // A belt the line merges into or splits off is tinted smaller, its arrow its own way: the join.
+                draws.Add(FrameDrawing.Quad(center, size * (cell.OnOtherLine ? 0.6f : 0.92f), color));
                 var way = grid.InWorld(new Vector2(cell.WayX, cell.WayY));
                 if (way.LengthSquared() < 1e-8f)
                     continue;

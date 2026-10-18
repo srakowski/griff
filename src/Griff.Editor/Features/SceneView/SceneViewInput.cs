@@ -107,8 +107,8 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
     /// <summary>Whether painting now erases: the stroke's, rectangle's or line's way, or Shift held.</summary>
     public bool Erasing => Stroke?.Erasing ?? (RectangleFrom is not null || Line is not null ? RectangleErases : Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
 
-    /// <summary>The cells of the line being dragged out with the Line tool, or empty.</summary>
-    public IReadOnlyList<LineCell> LineCells => Line?.Cells(model.SingleWay) ?? [];
+    /// <summary>The cells of the line being dragged out with the Line tool (joined onto the map's lines, if its Line Tiles join), or empty.</summary>
+    public IReadOnlyList<LineCell> LineCells => Line is null ? [] : RectangleErases ? Line.Cells(model.SingleWay) : model.JoinLine(Line.Cells(model.SingleWay));
 
     // The tilemap whose palette shows, and the one clicks paint (none with the Select tool).
     private Tilemap? PaintTarget => model.PaintTarget;

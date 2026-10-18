@@ -405,4 +405,27 @@ public class SceneTilePaintTests
             Assert.Empty(map.Turns);
         });
     }
+
+    [Fact]
+    public void TheLineTool_JoinsALineOntoOnePainted_WhenItsLineTilesJoin()
+    {
+        EditorHost.Run(services =>
+        {
+            var (document, _, model, map) = Open(services);
+            services.GetRequiredService<TilePalette>().Tool = TileTool.Line;
+            var tiles = map.Entity!.AddComponent<LineTiles>();
+            (tiles.StraightTile, tiles.CornerTile, tiles.StartTile, tiles.EndTile, tiles.Joins) = (3, 4, 5, 6, true);
+            model.PaintLine(0, 0, 1, 0);
+            Assert.Equal(6, map.GetTile(1, 0));
+
+            // Dragged on from its end and down: the old end is a corner now, and the new end the end.
+            var line = model.PaintLine(1, 0, 1, 2);
+            Assert.Equal(LineJoin.Continues, line[0].Join);
+            Assert.Equal((4, TileTurn.None), (map.GetTile(1, 0), map.GetTurn(1, 0)));
+            Assert.Equal((6, TileTurn.Turn90), (map.GetTile(1, 2), map.GetTurn(1, 2)));
+            Assert.Equal(5, map.GetTile(0, 0));
+            document.History.Undo();
+            Assert.Equal(6, map.GetTile(1, 0));
+        });
+    }
 }

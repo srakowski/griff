@@ -26,7 +26,7 @@ expectvalue: Tilemap.LineTiles.CornerTile = 2
 explain: component:LineTiles | Line Tiles | Line Tiles on the map say which tile is the straight piece and which the corner. Ends can have pieces of their own too.
 
 chapter: The Line tool | L, then drag
-key: L
+click: tiles:Line
 explain: tiles:Line | Line | L picks the Line tool under the palette.
 scenedrag: -2.5, 1.5 > 1.5, -1.5
 expecttile: Tilemap 1, 1 = 1
@@ -49,7 +49,7 @@ explain: component:LineTool | Line Tool | A Line Tool lets the player lay lines 
 play
 gamehover: -2.5, -2.5
 tap: R
-explain: world:-3, -2, -2, -3 | Turned | Over the floor, a ghost shows the cell the line would start on. R turns a single cell, and a click lays it.
+explain: gameworld:-3, -2, -2, -3 | Turned | Over the floor, a ghost shows the cell the line would start on. R turns a single cell, and a click lays it.
 gamedrag: -0.5, -1.5, 2.5, -3.5
 expecttile: Tilemap 3, 4 = 1
 expecttile: Tilemap 6, 4 = 2

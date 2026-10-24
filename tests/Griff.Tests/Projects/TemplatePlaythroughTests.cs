@@ -31,14 +31,15 @@ public sealed class TemplatePlaythroughTests
     // when buttons got a Binding Slot (the same without it), and again when they got Over Panels
     // (the same without it). Every template with a panel changed when panels got Popup (the same without it). Every template
     // changed when cameras got Kick By and Kick Time, and those with a button, a text or a layout when buttons got Hover
-    // Grow, Press Shrink and Pop Time, texts a Count Time and layouts Slide (the same without them).
+    // Grow, Press Shrink and Pop Time, texts a Count Time and layouts Slide (the same without them). Those with a particle
+    // emitter changed when emitters got Columns, Rows, Frame, Frames and Animate Frames (the same without them).
     private static readonly Dictionary<string, string> Expected = new()
     {
         ["Adventure"] = "7258030A457A42AB",
         ["Arcade"] = "AC524DFE2658F43A",
-        ["BunnyMark"] = "A5BEF16D7BF97BBE",
+        ["BunnyMark"] = "2B9B7D7A22F5D507",
         ["Cards"] = "DE15D25C141124FE",
-        ["Contraption"] = "091CD1D02D87901E",
+        ["Contraption"] = "A4B892CD5B9F7517",
         ["Empty"] = "98B3C3C0DD0EDC30",
         ["FallingBlocks"] = "E61393E68FFDB018",
         ["Fighter"] = "B9C585D2F39326A4",
@@ -51,7 +52,7 @@ public sealed class TemplatePlaythroughTests
         ["Puzzle"] = "2F4335F63B665064",
         ["Rhythm"] = "8B576A27B3972153",
         ["Roguelike"] = "C68DFF378F6A4F56",
-        ["RpgStats"] = "C1C9D8EE303C1325",
+        ["RpgStats"] = "C7B34BBB8D5389A2",
         ["Sandbox"] = "02BFCC42E9143C45",
         ["Shooter"] = "4603359188E97A74",
         ["Strategy"] = "D8DB81B2F90FB3AC",

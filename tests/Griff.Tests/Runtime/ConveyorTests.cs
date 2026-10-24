@@ -12,6 +12,7 @@ namespace Griff.Tests.Runtime;
 /// round, ports into and out of machines, the same line at any game speed and after a rewind, belts as walls to grid
 /// movers (crossings not), laying them from a script, and hundreds of items drawn and moved cheaply.
 /// </summary>
+[Collection(TimingCollection.Name)]
 public class ConveyorTests
 {
     private const float Frame = 1 / 60f;

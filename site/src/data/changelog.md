@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.20 - 2026-10-24
+
 - Lines laid by dragging join the ones already there, with **Joins** ticked on a **Line Tool** (or on **Line Tiles**, for the Scene view's Line tool): dragged from a belt's end it carries the belt on, the old end turning to feed it (keeping its kind and speed) with a straight or corner tile, so the two are one line with one start and one end; ended on a belt's side it merges in, leaving that belt as it is; dragged out of a belt's side it splits off, that belt becoming a splitter. The ghost shows the join, and the optional **Join Tile** and **Split Tile** draw a merge and a split.
 - A **ParticleEmitter** can draw frames of a sprite sheet: **Columns** and **Rows** cut the image as a Sprite's do, **Frame** shows one, and **Frames** (`0-1`, `3-4, 7`) lets each particle pick one at random as it's born (from the game's random, so a rewind or a networked game repeats), or with **Animate Frames** step through them over its life. Left alone, particles draw the whole image as before.
 - Conveyor cells can go at their own speeds, for a slow chute dropping onto a fast belt in the same line: a number after a **Belts** row's way (`4 2 right 0.5`), or `LayPath(points, speed: 0.5f)`, `SetSpeed` and `SetRunSpeed` from a script. An item changes speed at the edge between two cells with no pause, with one item a cell or a **Spacing**, still the same at 16x and after a rewind, and **Moving Arrows** and **Belt Tiles** step at each cell's speed. An Out **Conveyor Port** gives back an item it's still holding with `Withdraw("Deck 2")` (it's never sent), or all of them with `Clear()`.
